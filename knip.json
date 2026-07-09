@@ -1,0 +1,14 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["server.js", "migrations.js"],
+  "project": ["*.js", "routes/**/*.js"],
+  "ignore": [
+    "demos/**",
+    "backfill-*.js",
+    "tests/**",
+    "align-*.js",
+    "script.js",
+    "public/**"
+  ],
+  "ignoreDependencies": []
+}

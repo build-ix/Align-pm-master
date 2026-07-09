@@ -1,0 +1,27 @@
+name: Align Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+      - run: npx vitest run tests/unit/
+
+      # Integration tests need the server running — skip in CI for now
+      # To enable: start the server in background, then run integration tests
+      # - run: |
+      #     node server.js &
+      #     sleep 3
+      #     SERVER_RUNNING=1 npx vitest run tests/integration/

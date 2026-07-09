@@ -1,0 +1,965 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Align — Authentication & Sign-In Styles
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Full-screen auth overlay ────────────────────────────────────────────── */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  background-image: url('assets/drafting-bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: auth-fade-in 0.3s ease;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Dark mode: dark drafting background */
+html[data-theme="dark"] .auth-overlay {
+  background: #0a0a12;
+  background-image: url('assets/drafting-bg-dark.png');
+  background-size: cover;
+  background-position: center;
+}
+
+/* Lock body scroll when auth overlay is open */
+body.auth-overlay-open {
+  overflow: hidden !important;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes auth-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Logo / Brand ────────────────────────────────────────────────────────── */
+.auth-brand {
+  text-align: center;
+  user-select: none;
+}
+.auth-logo-wrap {
+  display: inline-block;
+  padding: 8px;
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+  margin-bottom: 8px;
+  position: relative;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  pointer-events: none;
+}
+.auth-logo-wrap::before {
+  content: none;
+}
+.auth-logo {
+  display: block;
+  height: 140px;
+  width: auto;
+  max-width: 100%;
+  pointer-events: none;
+}
+
+/* Light mode: show light logo, hide dark */
+.auth-logo-dark { display: none; }
+.auth-logo-light { display: block; }
+
+/* Dark mode: show dark logo, hide light */
+html[data-theme="dark"] .auth-logo-light { display: none; }
+html[data-theme="dark"] .auth-logo-dark { display: block; }
+.auth-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--ink, #111827);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin: 0;
+}
+.auth-subtitle {
+  font-size: 0.85rem;
+  color: var(--muted, #6b7280);
+  margin-top: 4px;
+}
+.auth-invite-note {
+  font-size: 0.7rem;
+  color: var(--muted, #9ca3af);
+  margin-top: 2px;
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* ── Setup form ────────────────────────────────────────────── */
+.auth-input-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink, #111827);
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+.auth-input-hint {
+  font-size: 0.7rem;
+  color: var(--brand, #1a5fd4);
+  margin-top: 2px;
+  margin-bottom: 0;
+}
+
+/* ── User list (sign-in cards) ───────────────────────────────────────────── */
+.auth-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.auth-user-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: var(--radius-lg, 16px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.auth-user-card:hover {
+  border-color: var(--brand-light, #3b82f6);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.06));
+  transform: translateY(-1px);
+}
+.auth-user-card:active {
+  transform: scale(0.985);
+}
+
+.auth-user-card.selected {
+  border-color: var(--brand, #1a5fd4);
+  background: rgba(26,95,212,0.04);
+  box-shadow: 0 0 0 3px rgba(26,95,212,0.10);
+}
+
+.auth-user-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand, #1a5fd4) 0%, var(--brand-light, #3b82f6) 100%);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(26,95,212,0.2);
+}
+.auth-user-avatar.admin {
+  background: linear-gradient(135deg, #92400e 0%, #d97706 100%);
+  box-shadow: 0 2px 6px rgba(217,119,6,0.25);
+}
+
+.auth-user-info {
+  flex: 1;
+  min-width: 0;
+}
+.auth-user-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink, #111827);
+  line-height: 1.2;
+}
+.auth-user-email {
+  font-size: 0.78rem;
+  color: var(--muted, #6b7280);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auth-user-role {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 3px;
+}
+.auth-user-role.admin {
+  background: #fef3c7;
+  color: #92400e;
+}
+.auth-user-role.user {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+/* ── PIN entry ───────────────────────────────────────────────────────────── */
+.auth-pin-section {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  animation: auth-slide-up 0.2s ease;
+}
+
+.auth-pin-section.active {
+  display: flex;
+}
+
+@keyframes auth-slide-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.auth-pin-back {
+  background: none;
+  border: none;
+  color: var(--brand, #1a5fd4);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: left;
+  align-self: flex-start;
+  font-family: var(--font);
+}
+.auth-pin-back:hover {
+  color: var(--brand-dark, #1347a8);
+}
+
+.auth-pin-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink, #111827);
+  text-align: center;
+}
+
+.auth-pin-inputs {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.auth-pin-digit {
+  width: 48px;
+  height: 56px;
+  border: 2px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+  color: var(--ink, #111827);
+  background: var(--card, #fff);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.auth-pin-digit:focus {
+  border-color: var(--brand, #1a5fd4);
+  box-shadow: 0 0 0 3px rgba(26,95,212,0.12);
+}
+.auth-pin-digit.error {
+  border-color: var(--danger, #dc2626);
+  animation: auth-shake 0.4s ease;
+}
+
+@keyframes auth-shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+
+.auth-pin-error {
+  font-size: 0.8rem;
+  color: var(--danger, #dc2626);
+  text-align: center;
+  font-weight: 600;
+  display: none;
+}
+.auth-pin-error.visible {
+  display: block;
+}
+
+/* ── Forgot PIN? link ──────────────────────────────────────────────────── */
+.auth-pin-forgot {
+  font-size: 0.78rem;
+  text-align: center;
+  color: var(--muted, #6b7280);
+  margin: 0;
+}
+.auth-pin-forgot a {
+  color: var(--muted, #6b7280);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  font-weight: 500;
+}
+.auth-pin-forgot a:hover {
+  color: var(--brand, #1a5fd4);
+}
+
+/* ── Inline wordmark logo (no images, theme-aware) ───────────────────── */
+.auth-wordmark {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 0;
+  line-height: 1;
+  position: relative;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+.auth-wordmark-a {
+  font-family: 'Arial Black', Impact, 'Helvetica Neue', sans-serif;
+  font-weight: 900;
+  font-size: 120px;
+  color: #E8641B;
+  line-height: 0.75;
+  letter-spacing: -4px;
+}
+.auth-wordmark-lign {
+  font-family: 'Arial Black', Impact, 'Helvetica Neue', sans-serif;
+  font-weight: 900;
+  font-size: 42px;
+  color: var(--ink, #1c1c1e);
+  margin-left: 2px;
+  padding-bottom: 8px;
+}
+/* Crossbar underline */
+.auth-wordmark::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 9px;
+  background: #D4500A;
+  border-radius: 3px;
+}
+/* Dark mode: white LIGN */
+html[data-theme="dark"] .auth-wordmark-lign {
+  color: #ffffff;
+}
+
+/* ── Create admin form (first run) ────────────────────────────────────────── */
+.auth-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-form-row {
+  display: flex;
+  gap: 10px;
+}
+
+.auth-input {
+  flex: 1;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 1rem;
+  background: var(--card, #fff);
+  color: var(--ink, #111827);
+  outline: none;
+  font-family: var(--font);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.auth-input::placeholder {
+  color: var(--muted-light, #9ca3af);
+}
+.auth-input:focus {
+  border-color: var(--brand, #1a5fd4);
+  box-shadow: 0 0 0 3px rgba(26,95,212,0.10);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.auth-btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+  transition: all 0.15s ease;
+  text-align: center;
+}
+.auth-btn:active {
+  transform: scale(0.97);
+}
+
+.auth-btn.primary {
+  background: var(--brand, #1a5fd4);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(26,95,212,0.3);
+}
+.auth-btn.primary:hover {
+  background: var(--brand-dark, #1347a8);
+  box-shadow: 0 4px 14px rgba(26,95,212,0.35);
+}
+
+.auth-btn.secondary {
+  background: var(--card, #fff);
+  color: var(--muted, #6b7280);
+  border: 1px solid var(--line, #e5e7eb);
+}
+.auth-btn.secondary:hover {
+  background: var(--bg, #f6f7fa);
+  color: var(--ink, #111827);
+  border-color: var(--muted-light, #9ca3af);
+}
+
+/* ── Manual sign-in toggle ("Not you?") ────────────────────────────────── */
+.auth-manual-signin {
+  text-align: center;
+  margin-top: 4px;
+}
+.auth-manual-toggle {
+  background: none;
+  border: none;
+  color: var(--brand, #1a5fd4);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+  font-family: var(--font);
+}
+.auth-manual-toggle:hover {
+  background: rgba(26,95,212,0.06);
+}
+
+/* ── Manual sign-in panel (replaces user cards) ─────────────────────── */
+.auth-manual-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: auth-slide-up 0.2s ease;
+}
+.auth-manual-panel .auth-pin-label {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted, #8f98a5);
+}
+.auth-manual-panel .auth-input {
+  text-align: center;
+}
+
+/* ── Card view (Dept 2: returning user) ────────────────────────────── */
+.auth-card-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.auth-card-view .auth-manual-toggle {
+  margin-top: 4px;
+}
+
+/* ── Login form (Dept 1: clean username + PIN) ─────────────────────── */
+.auth-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.auth-login-form .auth-input {
+  text-align: center;
+  font-size: 0.95rem;
+}
+.auth-login-form .auth-pin-inputs {
+  justify-content: center;
+}
+
+/* ── General sign-in button ─────────────────────────────────────────── */
+.auth-signin-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: var(--brand, #1a5fd4);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+  box-shadow: 0 2px 12px rgba(26,95,212,0.3);
+  transition: all 0.15s ease;
+  margin-top: 8px;
+}
+.auth-signin-btn:hover {
+  background: var(--brand-dark, #1347a8);
+  box-shadow: 0 4px 18px rgba(26,95,212,0.4);
+  transform: translateY(-1px);
+}
+.auth-signin-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+.auth-signin-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ── User badge in header ────────────────────────────────────────────────── */
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg, #f6f7fa);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 24px;
+  padding: 4px 12px 4px 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font);
+}
+.user-badge:hover {
+  border-color: var(--brand-light, #3b82f6);
+  background: var(--brand-bg, rgba(26,95,212,0.06));
+}
+.user-badge:active {
+  transform: scale(0.97);
+}
+
+.user-badge-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand, #1a5fd4), var(--brand-light, #3b82f6));
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.5px;
+}
+.user-badge-avatar.admin {
+  background: linear-gradient(135deg, #92400e, #d97706);
+}
+
+.user-badge-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink, #111827);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── User menu dropdown ──────────────────────────────────────────────────── */
+.user-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.12);
+  min-width: 180px;
+  padding: 6px;
+  z-index: 60;
+  display: none;
+  animation: auth-menu-in 0.15s ease;
+}
+.user-menu.open {
+  display: block;
+}
+
+@keyframes auth-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink, #111827);
+  cursor: pointer;
+  font-family: var(--font);
+  transition: background 0.12s ease;
+  text-align: left;
+}
+.user-menu-item:hover {
+  background: var(--bg, #f6f7fa);
+}
+.user-menu-item.danger {
+  color: var(--danger, #dc2626);
+}
+.user-menu-item.danger:hover {
+  background: var(--danger-bg, #fef2f2);
+}
+
+.user-menu-divider {
+  height: 1px;
+  background: var(--line, #e5e7eb);
+  margin: 4px 8px;
+}
+
+/* ── User menu header ──────────────────────────────────────────────────── */
+.user-menu-header {
+  padding: 10px 14px 8px;
+}
+.user-menu-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink, #111827);
+  line-height: 1.3;
+}
+.user-menu-email {
+  font-size: 0.75rem;
+  color: var(--muted, #6b7280);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-menu-role-tag {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-top: 3px;
+}
+.user-menu-role-tag.admin {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* ── Users management (Settings → Users) ──────────────────────────────────── */
+.users-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: var(--radius-md, 12px);
+}
+
+.user-row-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand, #1a5fd4), var(--brand-light, #3b82f6));
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.user-row-avatar.admin {
+  background: linear-gradient(135deg, #92400e, #d97706);
+}
+
+.user-row-info {
+  flex: 1;
+  min-width: 0;
+}
+.user-row-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink, #111827);
+}
+.user-row-email {
+  font-size: 0.78rem;
+  color: var(--muted, #6b7280);
+}
+.user-row-role-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-top: 2px;
+}
+.user-row-role-tag.admin {
+  background: #fef3c7;
+  color: #92400e;
+}
+.user-row-role-tag.user {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.user-row-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.user-action-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line, #e5e7eb);
+  border-radius: 8px;
+  background: var(--card, #fff);
+  color: var(--muted, #6b7280);
+  font-size: 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+  font-family: var(--font);
+}
+.user-action-btn:hover {
+  border-color: var(--muted-light, #9ca3af);
+  color: var(--ink, #111827);
+}
+.user-action-btn.danger:hover {
+  background: var(--danger-bg, #fef2f2);
+  border-color: var(--danger, #dc2626);
+  color: var(--danger, #dc2626);
+}
+
+/* ── Invite user form ────────────────────────────────────────────────────── */
+.invite-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--card, #fff);
+  border: 2px solid var(--brand-light, #3b82f6);
+  border-radius: var(--radius-lg, 16px);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-md, 0 4px 12px rgba(0,0,0,0.08));
+  animation: auth-slide-up 0.2s ease;
+}
+
+.invite-form-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink, #111827);
+}
+
+.invite-pin-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 4px;
+  background: var(--bg, #f6f7fa);
+  padding: 8px 14px;
+  border-radius: 8px;
+  color: var(--brand, #1a5fd4);
+  justify-content: center;
+}
+
+.invite-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ── Department 3: Project Picker ─────────────────────────────────────── */
+.pp-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 0;
+  text-align: center;
+}
+.pp-empty-icon {
+  font-size: 3rem;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.pp-empty-text {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink, #e4e4e7);
+  margin: 0;
+}
+.pp-empty-hint {
+  font-size: 0.82rem;
+  color: var(--muted, #8e8e96);
+  margin: 0 0 8px 0;
+  max-width: 260px;
+}
+.pp-create-btn {
+  width: 100%;
+  padding: 14px 20px;
+  background: var(--brand, #3b82f6);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+  box-shadow: 0 2px 12px rgba(59,130,246,0.3);
+  transition: all 0.15s ease;
+}
+.pp-create-btn:hover {
+  background: var(--brand-dark, #2563eb);
+  box-shadow: 0 4px 18px rgba(59,130,246,0.4);
+  transform: translateY(-1px);
+}
+.pp-create-btn:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* ── Project grid ─────────────────────────────────────────────────────── */
+.pp-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.pp-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--card, #2a2a30);
+  border: 1px solid var(--line, #3a3a42);
+  border-radius: var(--radius-lg, 16px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.pp-card:hover {
+  border-color: var(--brand-light, #60a5fa);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0,0,0,0.2));
+  transform: translateY(-1px);
+}
+.pp-card:active {
+  transform: scale(0.985);
+}
+.pp-card-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand, #3b82f6), var(--brand-light, #60a5fa));
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(59,130,246,0.25);
+}
+.pp-card-info {
+  flex: 1;
+  min-width: 0;
+}
+.pp-card-name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink, #e4e4e7);
+  line-height: 1.2;
+}
+.pp-card-address {
+  font-size: 0.78rem;
+  color: var(--muted, #8e8e96);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Create project form ──────────────────────────────────────────────── */
+.pp-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pp-create-form .auth-input {
+  text-align: left;
+}
+
+/* ── Bottom actions (shared by picker + auth screens) ─────────────────── */
+.auth-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.auth-switch-btn {
+  background: none;
+  border: none;
+  color: var(--muted, #8e8e96);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  font-family: var(--font);
+}
+.auth-switch-btn:hover {
+  color: var(--ink, #e4e4e7);
+  background: var(--card, #2a2a30);
+}
+
+/* ── Invite code entry (Step 10) ─────────────────────────────────────── */
+.auth-alt-action {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 0.8rem;
+  color: var(--muted, #6b7280);
+}
+.auth-alt-action a {
+  color: var(--brand, #cc0000);
+  text-decoration: none;
+  font-weight: 600;
+}
+.auth-alt-action a:hover {
+  text-decoration: underline;
+}
+
+.auth-invite-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

@@ -1,0 +1,44 @@
+/* Align Specs — extracted inline styles */
+.sp-wrap { display:flex; flex-direction:column; gap:16px; }
+.sp-empty { text-align:center; padding:32px 16px; color:var(--muted); }
+.sp-empty strong { display:block; font-size:1.1rem; margin-bottom:8px; color:var(--text); }
+.sp-empty p { font-size:0.85rem; margin:0; }
+.sp-stats { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.sp-stat-btn { display:flex; flex-direction:column; align-items:center; padding:10px 16px; border:1px solid var(--line); border-radius:10px; background:var(--card); cursor:pointer; transition:all 0.15s ease; font-family:inherit; font-size:0.8rem; min-width:72px; }
+.sp-stat-btn:hover { border-color:var(--brand-light); background:var(--brand-bg); }
+.sp-stat-btn-active { border-color:var(--brand); background:var(--brand-bg); }
+.sp-stat-count { font-size:1.3rem; font-weight:700; color:var(--text); line-height:1; }
+.sp-stat-label { font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+.sp-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.sp-header-left { display:flex; align-items:center; gap:12px; }
+.sp-title { font-size:1.15rem; font-weight:700; margin:0; color:var(--text); white-space:nowrap; }
+.sp-section-filter { padding:6px 10px; border:1px solid var(--line); border-radius:8px; font-size:0.82rem; font-family:inherit; background:var(--card); color:var(--text); cursor:pointer; }
+.sp-list { display:flex; flex-direction:column; gap:10px; }
+.sp-card { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.sp-card-superseded { opacity:0.6; }
+.sp-card-left { display:flex; align-items:flex-start; gap:10px; flex:1; min-width:0; }
+.sp-status-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+.sp-card-body { flex:1; min-width:0; }
+.sp-card-top { display:flex; align-items:center; gap:8px; }
+.sp-card-title { font-weight:600; color:var(--text); font-size:0.95rem; }
+.sp-version-badge { padding:1px 8px; border-radius:4px; font-size:0.72rem; font-weight:600; background:var(--brand-bg); color:var(--brand); white-space:nowrap; }
+.sp-card-section { margin-top:4px; }
+.sp-section-badge { font-size:0.78rem; color:var(--brand); font-weight:500; }
+.sp-card-desc { font-size:0.82rem; color:var(--muted); margin-top:4px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.sp-card-meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; font-size:0.78rem; color:var(--muted); align-items:center; }
+.sp-card-actions { display:flex; gap:6px; flex-shrink:0; align-items:center; }
+.sp-action-btn { width:30px; height:30px; border:1px solid var(--line); border-radius:6px; background:var(--card); cursor:pointer; font-size:0.9rem; display:flex; align-items:center; justify-content:center; transition:all 0.15s ease; }
+.sp-action-btn:hover { border-color:var(--brand-light); background:var(--brand-bg); }
+.sp-action-supersede:hover { border-color:var(--muted); background:rgba(107,114,128,0.1); }
+.sp-action-restore:hover { border-color:var(--success); background:var(--success-bg); }
+.sp-form-wrap { display:flex; flex-direction:column; gap:14px; }
+.sp-form-header { display:flex; align-items:center; gap:10px; }
+.sp-form-title { font-size:1.1rem; font-weight:700; margin:0; flex:1; color:var(--text); }
+.sp-form-section { display:flex; flex-direction:column; gap:5px; }
+.sp-form-row { display:flex; gap:12px; flex-wrap:wrap; }
+.sp-form-field { display:flex; flex-direction:column; gap:5px; flex:1; min-width:140px; }
+.sp-field-sm { flex:0 0 100px; min-width:auto; }
+.sp-field-label { font-size:0.78rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+.sp-input, .sp-textarea { padding:8px 12px; border:1px solid var(--line); border-radius:8px; font-size:0.9rem; font-family:inherit; background:var(--card); color:var(--text); transition:border-color 0.15s; }
+.sp-input:focus, .sp-textarea:focus { outline:none; border-color:var(--brand-light); box-shadow:0 0 0 3px rgba(26,95,212,0.1); }
+.sp-textarea { resize:vertical; min-height:60px; }

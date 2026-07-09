@@ -1,0 +1,40 @@
+/* Align Budget — extracted inline styles */
+.bg-wrap { display:flex; flex-direction:column; gap:16px; }
+.bg-empty { text-align:center; padding:32px 16px; color:var(--muted); }
+.bg-empty strong { display:block; font-size:1.1rem; margin-bottom:8px; color:var(--text); }
+.bg-empty p { font-size:0.85rem; margin:0; }
+.bg-stats { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.bg-stat-btn { display:flex; flex-direction:column; align-items:center; padding:10px 16px; border:1px solid var(--line); border-radius:10px; background:var(--card); cursor:pointer; transition:all 0.15s ease; font-family:inherit; font-size:0.8rem; min-width:72px; }
+.bg-stat-btn:hover { border-color:var(--brand-light); background:var(--brand-bg); }
+.bg-stat-btn-active { border-color:var(--brand); background:var(--brand-bg); }
+.bg-stat-count { font-size:1.3rem; font-weight:700; color:var(--text); line-height:1; }
+.bg-stat-label { font-size:0.7rem; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; }
+.bg-total-display { margin-left:auto; display:flex; flex-direction:column; align-items:flex-end; }
+.bg-total-label { font-size:0.7rem; font-weight:600; text-transform:uppercase; color:var(--muted); letter-spacing:0.05em; }
+.bg-total-value { font-size:1.4rem; font-weight:800; color:var(--brand); }
+.bg-header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.bg-header-left { display:flex; align-items:center; gap:12px; }
+.bg-title { font-size:1.15rem; font-weight:700; margin:0; color:var(--text); white-space:nowrap; }
+.bg-cat-filter { padding:6px 10px; border:1px solid var(--line); border-radius:8px; font-size:0.82rem; font-family:inherit; background:var(--card); color:var(--text); cursor:pointer; }
+.bg-filtered-total { font-size:0.82rem; color:var(--muted); padding:0 4px; }
+.bg-list { display:flex; flex-direction:column; gap:10px; }
+.bg-card { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.bg-card-left { display:flex; align-items:flex-start; gap:10px; flex:1; min-width:0; }
+.bg-status-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; margin-top:5px; }
+.bg-card-body { flex:1; min-width:0; }
+.bg-card-top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.bg-card-title { font-weight:600; color:var(--text); font-size:0.95rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.bg-amount { font-weight:700; font-size:1rem; color:var(--text); white-space:nowrap; }
+.bg-card-meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:4px; font-size:0.78rem; color:var(--muted); align-items:center; }
+.bg-cat-badge { padding:1px 8px; border-radius:4px; font-size:0.72rem; font-weight:600; white-space:nowrap; }
+.bg-card-actions { display:flex; gap:6px; flex-shrink:0; }
+.bg-form-wrap { display:flex; flex-direction:column; gap:14px; }
+.bg-form-header { display:flex; align-items:center; gap:10px; }
+.bg-form-title { font-size:1.1rem; font-weight:700; margin:0; flex:1; color:var(--text); }
+.bg-form-section { display:flex; flex-direction:column; gap:5px; }
+.bg-form-row { display:flex; gap:12px; flex-wrap:wrap; }
+.bg-form-field { display:flex; flex-direction:column; gap:5px; flex:1; min-width:140px; }
+.bg-field-label { font-size:0.78rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+.bg-input, .bg-textarea { padding:8px 12px; border:1px solid var(--line); border-radius:8px; font-size:0.9rem; font-family:inherit; background:var(--card); color:var(--text); transition:border-color 0.15s; }
+.bg-input:focus, .bg-textarea:focus { outline:none; border-color:var(--brand-light); box-shadow:0 0 0 3px rgba(26,95,212,0.1); }
+.bg-textarea { resize:vertical; min-height:60px; }

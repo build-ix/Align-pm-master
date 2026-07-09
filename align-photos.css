@@ -1,0 +1,52 @@
+/* align-photos.css */
+.ph-wrap{padding:0}
+.ph-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:8px}
+.ph-title{font-size:1rem;font-weight:600;color:var(--ink)}
+.ph-empty{text-align:center;padding:48px 24px;color:var(--muted)}
+.ph-empty strong{display:block;font-size:1rem;margin-bottom:8px;color:var(--ink-body)}
+.ph-date-header{font-size:0.8rem;font-weight:600;color:var(--ink-body);margin:16px 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line-light);display:flex;align-items:center;gap:8px}
+.ph-date-count{font-size:0.7rem;color:var(--muted);font-weight:400}
+.ph-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:20px}
+.ph-thumb{aspect-ratio:1;border-radius:var(--radius-md);overflow:hidden;cursor:pointer;position:relative;background:var(--bg-alt);border:1px solid var(--line);transition:transform .15s,box-shadow .15s}
+.ph-thumb:hover{transform:scale(1.03);box-shadow:var(--shadow-md)}
+.ph-thumb img{width:100%;height:100%;object-fit:cover}
+.ph-thumb-placeholder{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:2rem;color:var(--muted-light)}
+.ph-thumb-overlay{position:absolute;bottom:0;left:0;right:0;padding:6px 8px;background:linear-gradient(transparent,rgba(0,0,0,0.6));opacity:0;transition:opacity .15s}
+.ph-thumb:hover .ph-thumb-overlay{opacity:1}
+.ph-thumb-label{color:#fff;font-size:0.7rem;font-weight:500}
+/* Viewer */
+.ph-view-wrap{padding:0}
+.ph-view-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:8px}
+.ph-view-img{display:flex;justify-content:center;align-items:center;min-height:200px}
+
+/* Selection mode */
+.ph-sel{outline:2px solid var(--brand);outline-offset:-2px}
+.ph-sel .ph-check{display:flex !important}
+.ph-check{display:none;position:absolute;top:4px;right:4px;width:20px;height:20px;border-radius:50%;background:var(--brand);color:#fff;font-size:0.6875rem;align-items:center;justify-content:center;z-index:2}
+.ph-tag{position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,0.7);color:#fff;font-size:0.5625rem;padding:1px 5px;border-radius:3px;font-weight:500;text-transform:uppercase;letter-spacing:0.03em}
+
+/* Categorization dialog */
+.ph-cat-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center}
+.ph-cat-dialog{background:var(--card);border-radius:var(--radius-lg);padding:1.25rem;width:90%;max-width:400px;max-height:80vh;overflow-y:auto}
+.ph-cat-title{font-size:0.9375rem;font-weight:600;color:var(--ink);margin-bottom:0.75rem}
+.ph-cat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem}
+.ph-cat-tile{padding:0.5rem;border:1px solid var(--line);border-radius:var(--radius-md);background:var(--card);color:var(--ink);font-size:0.75rem;cursor:pointer;text-align:center;transition:all 0.15s}
+.ph-cat-tile:hover{border-color:var(--brand);background:var(--brand-bg)}
+
+/* Filter bar chips */
+.ph-filter-chip{padding:0.25rem 0.5rem;border:1px solid var(--line);border-radius:100px;background:var(--card);color:var(--muted);font-size:0.6875rem;cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.ph-filter-chip.active{border-color:var(--brand);background:var(--brand-bg);color:var(--brand);font-weight:600}
+.ph-filter-chip:hover{border-color:var(--brand)}
+
+/* Fullscreen viewer */
+.ph-view-stage{position:relative;display:flex;align-items:center;justify-content:center}
+.ph-view-stage img{user-select:none;-webkit-user-select:none;max-width:100%;max-height:70vh;border-radius:var(--radius-md);display:block;position:relative;z-index:1}
+.ph-view-stage:hover .ph-nav-zone{opacity:1 !important}
+.ph-nav-zone{user-select:none;-webkit-user-select:none;position:absolute;top:0;bottom:0;width:50%;z-index:2;display:flex;align-items:center;cursor:pointer;opacity:0;transition:opacity 0.15s ease}
+.ph-nav-zone-left{left:0;justify-content:flex-start}
+.ph-nav-zone-right{right:0;justify-content:flex-end}
+.ph-nav-zone:hover .ph-nav-arrow{background:rgba(0,0,0,0.8) !important}
+.ph-nav-arrow{background:rgba(0,0,0,0.55);color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.ph-nav-arrow-left{margin-left:8px}
+.ph-nav-arrow-right{margin-right:8px}
+.ph-view-meta{margin-top:0.75rem;font-size:0.8125rem;color:var(--muted);text-align:left;padding:0 0.25rem;font-family:Georgia,Times,serif;letter-spacing:0.01em}

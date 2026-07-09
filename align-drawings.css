@@ -1,0 +1,984 @@
+/* align-drawings.css
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Styles for the Drawings section (AlignDrawings).
+ * Uses the project's CSS variables: --bg, --card, --ink, --muted, --brand, --line, --danger */
+
+.dr-wrap { display: flex; flex-direction: column; gap: 20px; }
+
+/* ── Header ────────────────────────────────────────────────────────────────── */
+.dr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.dr-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--ink, #1b1f24);
+  margin: 0;
+}
+
+/* ── Empty state ───────────────────────────────────────────────────────────── */
+.dr-empty {
+  text-align: center;
+  padding: 40px 20px;
+  background: var(--card, #fff);
+  border: 2px dashed var(--line, #e2e6ea);
+  border-radius: 14px;
+  color: var(--muted, #6b7480);
+}
+.dr-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+}
+.dr-empty strong {
+  display: block;
+  font-size: 1.1rem;
+  color: var(--ink, #1b1f24);
+  margin-bottom: 6px;
+}
+.dr-empty p {
+  font-size: 0.9rem;
+  max-width: 320px;
+  margin: 0 auto;
+}
+
+/* ── Drawings Grid ─────────────────────────────────────────────────────────── */
+.dr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.dr-card {
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e2e6ea);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.dr-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.10);
+  border-color: var(--brand, #1a6fd4);
+}
+
+.dr-thumb {
+  width: 100%;
+  height: 140px;
+  background: var(--bg, #f4f6f8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.dr-thumb-icon {
+  font-size: 3rem;
+}
+.dr-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dr-card-info {
+  padding: 10px 12px;
+}
+.dr-card-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink, #1b1f24);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dr-card-meta {
+  font-size: 0.75rem;
+  color: var(--muted, #6b7480);
+  margin-top: 2px;
+}
+
+/* ── Drawing Viewer ────────────────────────────────────────────────────────── */
+.dr-viewer {
+  background: var(--card, #fff);
+  border: 1px solid var(--line, #e2e6ea);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.dr-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line, #e2e6ea);
+  gap: 12px;
+}
+.dr-viewer-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink, #1b1f24);
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dr-viewer-meta {
+  font-size: 0.8rem;
+  color: var(--muted, #6b7480);
+  flex-shrink: 0;
+}
+.dr-viewer-image {
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f0f0f;
+  min-height: 300px;
+}
+.dr-viewer-image img {
+  max-width: 100%;
+  max-height: 65vh;
+  object-fit: contain;
+}
+.dr-viewer-pdf iframe {
+  width: 100%;
+  height: 70vh;
+  border: none;
+}
+.dr-viewer-unknown {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted, #6b7480);
+}
+.dr-viewer-unknown p {
+  margin-bottom: 14px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * ADD DRAWING MODAL
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Drawing Type Selection ─────────────────────────────────────────────── */
+.dr-type-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dr-type-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink, #1b1f24);
+}
+
+.dr-type-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.dr-type-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 1.5px solid var(--line, #e2e6ea);
+  border-radius: 10px;
+  background: var(--card, #fff);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: center;
+  font-family: var(--font);
+}
+.dr-type-tile:hover {
+  border-color: var(--brand, #1a6fd4);
+  background: rgba(26, 111, 212, 0.04);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+.dr-type-tile:active {
+  transform: scale(0.97);
+}
+
+.dr-type-selected {
+  border-color: var(--brand, #1a6fd4);
+  background: rgba(26, 111, 212, 0.08);
+  box-shadow: 0 0 0 3px rgba(26, 111, 212, 0.12);
+}
+
+.dr-type-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.dr-type-name {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink, #1b1f24);
+  line-height: 1.2;
+}
+
+.dr-type-desc {
+  display: none;
+  font-size: 0.65rem;
+  color: var(--muted, #6b7480);
+  line-height: 1.2;
+}
+
+/* ── Type badge on drawing cards ────────────────────────────────────────── */
+.dr-type-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.dr-type-plan      { background: #dbeafe; color: #1e40af; }
+.dr-type-section   { background: #fce7f3; color: #9d174d; }
+.dr-type-elevation { background: #d1fae5; color: #065f46; }
+.dr-type-detail    { background: #fef3c7; color: #92400e; }
+.dr-type-3d        { background: #ede9fe; color: #5b21b6; }
+
+@media (max-width: 480px) {
+  .dr-type-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.dr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: dr-fade-in 0.2s ease;
+}
+@keyframes dr-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.dr-modal {
+  background: var(--card, #fff);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 520px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: dr-slide-up 0.25s ease;
+}
+@keyframes dr-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.dr-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.dr-modal-header h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--ink, #1b1f24);
+  margin: 0;
+}
+.dr-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.3rem;
+  color: var(--muted, #6b7480);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.dr-modal-close:hover {
+  color: var(--ink, #1b1f24);
+  background: var(--bg, #f4f6f8);
+}
+
+/* ── Drop Zone ─────────────────────────────────────────────────────────────── */
+.dr-drop-zone {
+  border: 2px dashed var(--line, #e2e6ea);
+  border-radius: 14px;
+  padding: 36px 20px;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+}
+.dr-drop-active {
+  border-color: var(--brand, #1a6fd4);
+  background: rgba(26, 111, 212, 0.04);
+}
+
+.dr-drop-icon {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+.dr-drop-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink, #1b1f24);
+  margin-bottom: 8px;
+}
+.dr-drop-or {
+  font-size: 0.85rem;
+  color: var(--muted, #6b7480);
+  margin-bottom: 10px;
+}
+.dr-drop-hint {
+  font-size: 0.75rem;
+  color: var(--muted, #6b7480);
+  margin-top: 12px;
+}
+
+/* ── PDF Splitting Banner ─────────────────────────────────────────────────── */
+.dr-pdf-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #f59e0b;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  color: #92400e;
+}
+.dr-pdf-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+}
+.dr-pdf-pages-label {
+  font-size: 0.8rem;
+  color: var(--muted, #6b7480);
+  padding: 0 4px;
+  margin-bottom: -4px;
+}
+
+/* ── File Preview ──────────────────────────────────────────────────────────── */
+.dr-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 350px;
+  overflow-y: auto;
+}
+.dr-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg, #f4f6f8);
+  border-radius: 12px;
+  padding: 14px;
+}
+.dr-preview-page {
+  border: 1px solid var(--line, #e2e6ea);
+  background: var(--card, #fff);
+}
+.dr-preview-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--line, #e2e6ea);
+}
+.dr-preview-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.dr-preview-icon {
+  font-size: 2rem;
+}
+.dr-preview-info {
+  flex: 1;
+  min-width: 0;
+}
+.dr-preview-info strong {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--ink, #1b1f24);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dr-preview-info span {
+  font-size: 0.8rem;
+  color: var(--muted, #6b7480);
+}
+.dr-preview-change {
+  background: none;
+  border: none;
+  color: var(--brand, #1a6fd4);
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.dr-preview-change:hover {
+  background: rgba(26, 111, 212, 0.08);
+}
+
+/* ── Name Field ────────────────────────────────────────────────────────────── */
+.dr-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dr-name-field label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink, #1b1f24);
+}
+.dr-name-field input {
+  width: 100%;
+}
+
+/* ── Error ─────────────────────────────────────────────────────────────────── */
+.dr-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: var(--danger, #e03e3e);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* ── Uploading spinner ─────────────────────────────────────────────────────── */
+.dr-uploading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--brand, #1a6fd4);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.dr-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--line, #e2e6ea);
+  border-top-color: var(--brand, #1a6fd4);
+  border-radius: 50%;
+  animation: dr-spin 0.6s linear infinite;
+}
+@keyframes dr-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Header actions ─────────────────────────────────────────────────────────── */
+.dr-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Select Multiple toggle — shows active state when select mode is on */
+.dr-select-toggle-btn {
+  padding: 8px 14px;
+  border: 1.5px solid var(--line, #e2e6ea);
+  border-radius: 10px;
+  background: var(--card, #fff);
+  color: var(--muted, #6b7480);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.dr-select-toggle-btn:hover {
+  background: var(--bg, #f4f6f8);
+  border-color: var(--brand, #1a6fd4);
+  color: var(--brand, #1a6fd4);
+}
+.dr-select-toggle-btn.active {
+  background: var(--brand, #1a6fd4);
+  border-color: var(--brand, #1a6fd4);
+  color: #fff;
+}
+
+/* ── Select Mode ───────────────────────────────────────────────────────────── */
+.dr-card.select-mode {
+  position: relative;
+}
+.dr-card-check {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.6);
+  background: rgba(0,0,0,0.25);
+  backdrop-filter: blur(4px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.dr-card.select-mode .dr-card-check {
+  display: flex;
+}
+.dr-card.selected .dr-card-check {
+  background: var(--brand, #1a6fd4);
+  border-color: var(--brand, #1a6fd4);
+}
+.dr-card-check::after {
+  content: '';
+  display: none;
+  width: 6px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.dr-card.selected .dr-card-check::after {
+  display: block;
+}
+.dr-card.select-mode:hover {
+  border-color: var(--brand, #1a6fd4);
+}
+
+/* ── Selection bar (bottom, floats over grid) ──────────────────────────────── */
+.dr-selection-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--card, #fff);
+  border: 1px solid var(--brand, #1a6fd4);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  flex-wrap: wrap;
+}
+.dr-selection-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink, #1b1f24);
+}
+.dr-selection-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Modal Actions ─────────────────────────────────────────────────────────── */
+.dr-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * INTERACTIVE MARKUP VIEWER — Full-screen overlay
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Full-screen overlay backdrop ─────────────────────────────────────────── */
+/* ── Overlay host anchors the viewer to the viewport regardless of parent transforms ── */
+#dr-mv-overlay-host {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #0f0f12;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.dr-mv-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  animation: dr-mv-fade-in 0.2s ease;
+  overflow: hidden;
+}
+@keyframes dr-mv-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── Top bar (floating above the viewport) ────────────────────────────────── */
+.dr-mv-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  flex-shrink: 0;
+  background: rgba(15,15,18,0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  z-index: 10;
+}
+.dr-mv-back-btn {
+  flex-shrink: 0;
+}
+.dr-mv-title {
+  flex: 1;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f0f0f5;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dr-mv-meta {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.45);
+  flex-shrink: 0;
+}
+
+/* ── Markup toggle button (in top bar) ────────────────────────────────────── */
+.dr-mv-markup-toggle {
+  flex-shrink: 0;
+  padding: 7px 16px;
+  border: 1px solid var(--brand, #1a6fd4);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--brand, #1a6fd4);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, transform 0.1s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dr-mv-markup-toggle:hover {
+  background: var(--brand, #1a6fd4);
+  color: #fff;
+}
+.dr-mv-markup-toggle:active {
+  transform: scale(0.96);
+}
+.dr-mv-markup-toggle.active {
+  background: var(--brand, #1a6fd4);
+  color: #fff;
+}
+
+/* ── Toolbar (animated slide-down) ────────────────────────────────────────── */
+.dr-mv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  background: rgba(22,22,28,0.95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  z-index: 9;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s cubic-bezier(0.22, 0.61, 0.36, 1),
+              opacity 0.25s ease,
+              padding 0.3s ease;
+}
+.dr-mv-toolbar.open {
+  max-height: 54px;
+  opacity: 1;
+  padding: 8px 12px;
+}
+
+.dr-mv-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dr-mv-sep {
+  width: 1px;
+  height: 24px;
+  background: rgba(255,255,255,0.1);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+
+.dr-mv-tool-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s, transform 0.1s;
+  color: rgba(255,255,255,0.7);
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.dr-mv-tool-btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.12);
+  color: #fff;
+}
+.dr-mv-tool-btn.active {
+  background: var(--brand, #1a6fd4);
+  color: #fff;
+  border-color: var(--brand, #1a6fd4);
+}
+.dr-mv-tool-btn:active {
+  transform: scale(0.94);
+}
+
+/* Clean-view toggle */
+#dr-mv-toggle {
+  width: auto;
+  padding: 0 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  gap: 4px;
+}
+.dr-mv-toggle-on {
+  color: var(--brand, #1a6fd4);
+  border-color: var(--brand, #1a6fd4);
+}
+.dr-mv-toggle-off {
+  color: rgba(255,255,255,0.4);
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* ── Color swatches ───────────────────────────────────────────────────────── */
+.dr-mv-color-btn {
+  width: 26px;
+  height: 26px;
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: border-color 0.12s, transform 0.1s, box-shadow 0.12s;
+  flex-shrink: 0;
+  padding: 0;
+}
+.dr-mv-color-btn:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.12);
+}
+.dr-mv-color-btn.active {
+  border-color: var(--brand, #1a6fd4);
+  box-shadow: 0 0 0 3px rgba(26,111,212,0.35);
+  transform: scale(1.15);
+}
+.dr-mv-color-outline {
+  border-color: rgba(255,255,255,0.3);
+}
+
+/* ── Line width ───────────────────────────────────────────────────────────── */
+.dr-mv-width-btn {
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, border-color 0.12s;
+}
+.dr-mv-width-btn:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.12);
+}
+.dr-mv-width-btn.active {
+  background: rgba(255,255,255,0.08);
+  border-color: var(--brand, #1a6fd4);
+}
+.dr-mv-width-dot {
+  display: block;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.8);
+}
+
+/* ── Zoom info ────────────────────────────────────────────────────────────── */
+.dr-mv-zoom-info {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  padding: 0 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* Zoom controls group — pushed to the right side of toolbar */
+#dr-mv-zoom-controls {
+  margin-left: auto;
+}
+
+/* ── Viewport & Stage ─────────────────────────────────────────────────────── */
+.dr-mv-viewport {
+  position: relative;
+  overflow: hidden;
+  background: #141418;
+  flex: 1;
+  cursor: grab;
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+.dr-mv-viewport:active {
+  cursor: grabbing;
+}
+
+.dr-mv-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  /* transform set by JS */
+}
+
+/* ── Page index strip ────────────────────────────────────────────────── */
+.dr-mv-page-strip {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px;
+  background: #1a1a1e;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.dr-mv-page-strip::-webkit-scrollbar { display: none; }
+.dr-mv-page-btn {
+  flex-shrink: 0;
+  min-width: 32px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.6);
+  font-size: 0.72rem;
+  font-family: var(--font);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+.dr-mv-page-btn:hover {
+  background: rgba(255,255,255,0.1);
+  color: #fff;
+}
+.dr-mv-page-btn.active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+.dr-mv-image {
+  display: block;
+  max-width: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none; /* clicks go through to canvas */
+}
+
+.dr-mv-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: auto;
+  cursor: grab;
+}
+
+/* ── Text input overlay ───────────────────────────────────────────────────── */
+.dr-mv-text-input {
+  position: fixed;
+  z-index: 600;
+  min-width: 140px;
+  padding: 6px 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: system-ui, -apple-system, sans-serif;
+  border: 2px solid var(--brand, #1a6fd4);
+  border-radius: 8px;
+  background: #fff;
+  color: #1b1f24;
+  outline: none;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  animation: dr-mv-pop-in 0.15s ease;
+}
+@keyframes dr-mv-pop-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .dr-modal {
+    padding: 18px;
+    border-radius: 14px;
+  }
+  .dr-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .dr-thumb {
+    height: 110px;
+  }
+
+  .dr-mv-toolbar {
+    gap: 3px;
+    padding: 6px 8px;
+  }
+  .dr-mv-tool-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 0.95rem;
+  }
+  .dr-mv-color-btn {
+    width: 22px;
+    height: 22px;
+  }
+  .dr-mv-viewport {
+    min-height: 280px;
+  }
+}
+
+/* ── Annotation tools (Link, Image, Punchlist, RFI pins) ───────────────── */
+.dr-anno-tool {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 4px;
+  border-radius: 6px; cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.dr-anno-tool:hover { background: rgba(255,255,255,0.1); }
+.dr-anno-tool.active {
+  background: var(--brand, #1a5fd4);
+  transform: scale(1.1);
+  box-shadow: 0 0 8px rgba(26,95,212,0.4);
+}
+.dr-anno-tool svg { width: 20px; height: 20px; }

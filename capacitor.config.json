@@ -1,0 +1,18 @@
+{
+  "appId": "net.alignprojects.app",
+  "appName": "Align PM",
+  "webDir": ".",
+  "server": {
+    "url": "https://alignprojects.net",
+    "cleartext": false,
+    "allowNavigation": ["alignprojects.net", "*.alignprojects.net"]
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "backgroundColor": "#0a0a12",
+    "allowsLinkPreview": false,
+    "scrollEnabled": true,
+    "overScrollEnabled": false,
+    "limitsNavigationsToAppBoundDomains": ["alignprojects.net"]
+  }
+}

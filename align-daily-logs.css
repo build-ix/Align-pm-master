@@ -1,0 +1,1055 @@
+/* align-daily-logs.css
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Align — Daily Logs (field reports, weather, crew, revisions, PDF export)
+ * All class names use the dlog-* prefix matching align-daily-logs.js
+ * Design tokens only — no hardcoded colors
+ */
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * NAVIGATION BAR
+ * Row 1: prev/next buttons + centered date
+ * Row 2: Export PDF + Edit Day buttons
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.dlog-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
+}
+
+.dlog-nav-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dlog-nav-btn:hover {
+  border-color: var(--brand-light);
+  background: var(--brand-bg);
+}
+
+.dlog-nav-btn:active {
+  transform: scale(0.95);
+}
+
+.dlog-nav-btn:disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.dlog-nav-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  position: relative;
+}
+
+.dlog-nav-date {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+}
+.dlog-nav-date:hover {
+  color: var(--brand);
+  background: var(--brand-bg);
+}
+
+/* ── Calendar dropdown ────────────────────────────────────────────── */
+
+.dlog-calendar {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 12px;
+  min-width: 280px;
+  margin-top: 6px;
+}
+.dlog-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.dlog-cal-nav {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: border-color 0.15s, background 0.15s;
+}
+.dlog-cal-nav:hover {
+  border-color: var(--brand-light);
+  background: var(--brand-bg);
+}
+.dlog-cal-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.dlog-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  text-align: center;
+}
+.dlog-cal-day-header {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  padding: 4px 0;
+}
+.dlog-cal-cell {
+  font-size: 0.85rem;
+  padding: 6px 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.1s;
+  color: var(--ink-muted);
+}
+.dlog-cal-cell.dlog-cal-empty {
+  cursor: default;
+}
+.dlog-cal-cell.dlog-cal-has-log {
+  color: var(--ink);
+  font-weight: 700;
+}
+.dlog-cal-cell.dlog-cal-no-log {
+  color: #999;
+  font-weight: 400;
+}
+.dlog-cal-cell.dlog-cal-future {
+  color: #ccc;
+  pointer-events: none;
+}
+.dlog-cal-cell.dlog-cal-today {
+  box-shadow: inset 0 0 0 2px var(--brand);
+}
+.dlog-cal-cell.dlog-cal-selected {
+  background: var(--brand);
+  color: #fff !important;
+  font-weight: 700;
+}
+.dlog-cal-cell:not(.dlog-cal-empty):not(.dlog-cal-future):hover {
+  background: var(--brand-bg);
+}
+.dlog-cal-cell.dlog-cal-selected:hover {
+  background: var(--brand);
+}
+
+/* ── Actions row (below nav) ─────────────────────────────────────────── */
+
+.dlog-nav-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.dlog-export-pdf-btn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  font-family: var(--font);
+  font-weight: 500;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dlog-export-pdf-btn:hover {
+  border-color: var(--brand-light);
+  background: var(--brand-bg);
+}
+
+.dlog-copy-text-btn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  font-family: var(--font);
+  font-weight: 500;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dlog-copy-text-btn:focus {
+  outline: none;
+}
+
+.dlog-copy-text-btn:hover {
+  border-color: var(--brand-light);
+  background: var(--brand-bg);
+}
+
+.dlog-copy-feedback {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+  opacity: 1;
+  transition: opacity 0.5s ease;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dlog-copy-feedback.fade-out {
+  opacity: 0;
+}
+
+.dlog-edit-day-btn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+  font-family: var(--font);
+  font-weight: 500;
+  border: 1px solid var(--brand-light);
+  border-radius: var(--radius-sm);
+  background: var(--brand-bg);
+  color: var(--brand);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dlog-edit-day-btn.editing {
+  background: var(--brand);
+  color: #fff;
+}
+
+.dlog-edit-day-btn:hover {
+  border-color: var(--brand);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * FORM LAYOUT
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.dlog-form-always {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+/* ── Section labels ───────────────────────────────────────────────────── */
+
+.dlog-section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Weather box ──────────────────────────────────────────────────────── */
+
+.dlog-weather-box {
+  min-height: 48px;
+}
+
+/* ── Field wrapper ────────────────────────────────────────────────────── */
+
+.dlog-field {
+  margin-bottom: 4px;
+}
+
+.dlog-field-sm {
+  flex: 0 0 80px;
+  min-width: 70px;
+}
+
+.dlog-field-desc {
+  flex: 2;
+  min-width: 140px;
+}
+
+.dlog-field-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+/* ── Inputs & textareas ───────────────────────────────────────────────── */
+
+.dlog-input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.dlog-input:focus {
+  outline: none;
+  border-color: var(--brand-light);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+.dlog-input::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+.dlog-textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.45;
+}
+
+/* ── Company rows ─────────────────────────────────────────────────────── */
+
+.dlog-companies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.dlog-company-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  position: relative;
+}
+
+.dlog-company-row:focus-within {
+  border-color: var(--brand-light);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.06);
+}
+
+/* ── Company header: input or locked text ──────────────────────────────── */
+
+.dlog-company-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 36px;
+}
+
+.dlog-company-wrapper {
+  flex: 1;
+  min-width: 120px;
+  position: relative;
+}
+
+.dlog-company-text {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+  display: block;
+  padding: 4px 0;
+}
+
+/* ── Company body: workers row + work performed ────────────────────────── */
+
+.dlog-company-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dlog-workers-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dlog-worker-btn {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dlog-worker-btn:hover {
+  background: var(--bg-alt);
+  border-color: var(--brand-light);
+}
+
+.dlog-worker-btn:active {
+  transform: scale(0.93);
+}
+
+.dlog-workers-field {
+  flex: 1;
+  max-width: 80px;
+}
+
+.dlog-field-full {
+  width: 100%;
+}
+
+/* ── Remove button (top-right corner) ─────────────────────────────────── */
+
+.dlog-company-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.dlog-company-remove:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: var(--danger-bg);
+}
+
+/* ── Company autocomplete dropdown ─────────────────────────────────────── */
+
+.dlog-company-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  max-height: 180px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 4px 0;
+}
+
+.dlog-company-dropdown li {
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.dlog-company-dropdown li:hover,
+.dlog-company-dropdown li.active {
+  background: var(--brand-bg);
+  color: var(--brand);
+}
+
+.dlog-company-dropdown li strong {
+  font-weight: 700;
+}
+
+/* ── Company locked state ─────────────────────────────────────────────── */
+
+.dlog-company-text {
+  display: block;
+  padding: 9px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink);
+  border: 1px solid var(--brand-light);
+  border-radius: var(--radius-sm);
+  background: var(--brand-bg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dlog-company-name.dlog-company-unknown {
+  border-color: var(--danger);
+  background: rgba(239,68,68,0.05);
+}
+
+.dlog-company-add-dir-btn {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-family: var(--font);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.dlog-company-add-dir-btn:hover {
+  background: var(--brand-bg);
+  border-color: var(--brand-light);
+}
+
+.dlog-company-add-dir-btn strong {
+  font-weight: 600;
+}
+
+.dlog-add-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1;
+  margin-right: 2px;
+  vertical-align: middle;
+}
+
+/* ── Add Company button ───────────────────────────────────────────────── */
+
+.dlog-add-company {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-family: var(--font);
+  font-weight: 500;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--brand);
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: background 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dlog-add-company:hover {
+  background: var(--brand-bg);
+  border-color: var(--brand-light);
+}
+
+.dlog-add-company svg {
+  flex-shrink: 0;
+}
+
+/* ── Attachments ──────────────────────────────────────────────────────── */
+
+.dlog-attach-btn {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-family: var(--font);
+  font-weight: 500;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink-body);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dlog-attach-btn:hover {
+  border-color: var(--brand-light);
+  background: var(--brand-bg);
+}
+
+.dlog-attach-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.dlog-attach-empty {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: italic;
+  padding: 8px 0;
+}
+
+.dlog-attach-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dlog-attach-item:hover {
+  border-color: var(--brand-light);
+}
+
+.dlog-attach-item input[type="checkbox"] {
+  accent-color: var(--brand);
+}
+
+.dlog-attach-name {
+  color: var(--ink-body);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Form actions ─────────────────────────────────────────────────────── */
+
+.dlog-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 6px;
+}
+
+.dlog-save-btn {
+  padding: 10px 24px;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  font-weight: 600;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--brand);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dlog-save-btn:hover {
+  background: var(--brand-dark, #2563eb);
+}
+
+.dlog-save-btn:active {
+  transform: scale(0.97);
+}
+
+.dlog-save-btn.done {
+  background: var(--card);
+  color: var(--brand);
+  border: 1px solid var(--brand-light);
+}
+
+.dlog-save-btn.viewing-old {
+  background: var(--warning, #f59e0b);
+  color: #fff;
+}
+
+.dlog-saved-msg {
+  font-size: 0.8rem;
+  color: var(--success, #10b981);
+  font-weight: 500;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * READ-ONLY VIEW (past days)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.dlog-readonly {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+}
+
+.dlog-readonly-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+.dlog-ro-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.dlog-ro-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.6fr 2fr;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.dlog-ro-row:last-child {
+  border-bottom: none;
+}
+
+.dlog-ro-header {
+  background: var(--bg-alt);
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.dlog-ro-header span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dlog-ro-text {
+  font-size: 0.85rem;
+  color: var(--ink-body);
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+.dlog-ro-attach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dlog-ro-attach-item {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink-body);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * CHANGE LOG (revision history)
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+.dlog-history-header {
+  padding: 14px 0 10px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 14px;
+}
+
+.dlog-history-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.dlog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dlog-empty {
+  text-align: center;
+  padding: 36px 24px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+/* ── Revision cards ───────────────────────────────────────────────────── */
+
+.dlog-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+
+.dlog-card:hover {
+  border-color: var(--brand-light);
+  box-shadow: var(--shadow-xs);
+}
+
+.dlog-card-current {
+  border-color: var(--brand-light);
+  border-left: 3px solid var(--brand);
+}
+
+.dlog-card-old {
+  opacity: 0.85;
+}
+
+.dlog-card-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.dlog-card-byline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.dlog-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.dlog-card-companies {
+  margin-top: 6px;
+}
+
+.dlog-comp-line {
+  margin-bottom: 2px;
+}
+
+.dlog-comp-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-left: 2px;
+}
+
+.dlog-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+
+.dlog-export-btn,
+.dlog-delete-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.dlog-export-btn:hover {
+  border-color: var(--brand-light);
+  background: var(--brand-bg);
+}
+
+.dlog-delete-btn:hover {
+  border-color: var(--danger);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * RESPONSIVE
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+@media (max-width: 520px) {
+  .dlog-nav {
+    gap: 4px;
+    padding: 6px 0 10px;
+    flex-wrap: nowrap;
+  }
+
+  .dlog-nav-btn {
+    width: 30px;
+    height: 30px;
+  }
+  .dlog-nav-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .dlog-nav-center {
+    gap: 4px;
+    flex: 1;
+  }
+
+  .dlog-nav-date {
+    font-size: 0.72rem;
+    white-space: nowrap;
+    padding: 2px 4px;
+  }
+
+  .dlog-calendar {
+    left: 0;
+    transform: none;
+    min-width: 250px;
+  }
+
+  .dlog-export-pdf-btn {
+    padding: 5px 8px;
+    font-size: 0.68rem;
+    flex-shrink: 0;
+  }
+
+  .dlog-copy-text-btn {
+    padding: 5px 8px;
+    font-size: 0.68rem;
+    flex-shrink: 0;
+  }
+
+  .dlog-edit-day-btn {
+    padding: 5px 8px;
+    font-size: 0.68rem;
+    flex-shrink: 0;
+  }
+
+  .dlog-company-row {
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .dlog-field-sm {
+    flex: 0 0 auto;
+    width: 100px;
+  }
+
+  .dlog-field-desc {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .dlog-company-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    margin-top: 0;
+  }
+
+  .dlog-ro-row {
+    grid-template-columns: 1fr 0.8fr;
+    font-size: 0.72rem;
+    padding: 6px 10px;
+  }
+
+  .dlog-ro-row span:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .dlog-card {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dlog-card-actions {
+    margin-left: 0;
+    align-self: flex-end;
+  }
+
+  .dlog-save-btn {
+    width: 100%;
+  }
+
+  .dlog-form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+@media (min-width: 768px) {
+  .dlog-company-row {
+    flex-wrap: nowrap;
+  }
+
+  .dlog-card {
+    padding: 16px 20px;
+  }
+
+  .dlog-save-btn {
+    padding: 10px 32px;
+  }
+}

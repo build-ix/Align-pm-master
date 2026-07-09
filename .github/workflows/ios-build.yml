@@ -1,0 +1,110 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ios-app]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Capacitor (iOS-only deps, skip server)
+        run: |
+          npm install \
+            @capacitor/core@^8.4.1 \
+            @capacitor/cli@^8.4.1 \
+            @capacitor/ios@^8.4.1 \
+            @capacitor/camera@^8.2.1 \
+            @capacitor/filesystem@^8.1.2 \
+            @capacitor/haptics@^8.0.2 \
+            @capacitor/push-notifications@^8.1.1 \
+            @capacitor/splash-screen@^8.0.1 \
+            @capacitor/status-bar@^8.0.2 \
+            @capacitor/assets
+
+      - name: Generate native iOS project
+        run: |
+          npx cap add ios
+          npx cap sync ios
+
+      - name: Write export options
+        run: |
+          cat > ios/App/exportOptions.plist << 'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store</string>
+              <key>teamID</key>
+              <string>${{ secrets.APPLE_TEAM_ID }}</string>
+              <key>signingStyle</key>
+              <string>automatic</string>
+              <key>uploadBitcode</key>
+              <false/>
+              <key>uploadSymbols</key>
+              <true/>
+          </dict>
+          </plist>
+          PLIST
+
+      - name: Install CocoaPods
+        run: |
+          if ! command -v pod &> /dev/null; then
+            brew install cocoapods
+          fi
+
+      - name: Install Pods
+        run: |
+          cd ios/App && pod install --repo-update && cd ../..
+
+      - name: Generate app icon assets
+        run: |
+          npx capacitor-assets generate \
+            --iconBackgroundColor '#0a0a12' \
+            --iconBackgroundColorDark '#0a0a12' \
+            --assetPath assets/
+
+      - name: Build and archive
+        run: |
+          cd ios/App
+          xcodebuild archive \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -archivePath ./build/App.xcarchive \
+            -configuration Release \
+            CODE_SIGN_STYLE=Auto \
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Export .ipa
+        run: |
+          cd ios/App
+          xcodebuild -exportArchive \
+            -archivePath ./build/App.xcarchive \
+            -exportOptionsPlist exportOptions.plist \
+            -exportPath ./build
+
+      - name: Upload to App Store Connect
+        run: |
+          xcrun altool --upload-app \
+            -f ios/App/build/App.ipa \
+            -t ios \
+            -u "${{ secrets.APPLE_ID }}" \
+            -p "${{ secrets.APPLE_APP_PASSWORD }}"
+
+      - name: Upload .ipa artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Align-PM.ipa
+          path: ios/App/build/App.ipa

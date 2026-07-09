@@ -1,0 +1,23 @@
+# Server-side code — iOS app loads from live server, bundles only frontend
+server.js
+migrations.js
+align-crypto.js
+align-sessions.js
+align-auth-middleware.js
+align-invites.js
+*.db
+*.db-wal
+*.db-shm
+
+# Tests and dev tools
+tests/
+test-*.js
+vitest.config.js
+
+# Build artifacts
+node_modules/
+*.log
+
+# Internal docs
+.hermes/
+.hermes/**
