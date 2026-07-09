@@ -1,7 +1,7 @@
 {
   "appId": "net.alignprojects.app",
   "appName": "Align PM",
-  "webDir": ".",
+  "webDir": "www",
   "server": {
     "url": "https://alignprojects.net",
     "cleartext": false,
