@@ -74,12 +74,11 @@ jobs:
 
       - name: Import distribution certificate
         run: |
-          KEYCHAIN_PATH=~/Library/Keychains/signing.keychain-db
           security create-keychain -p temp123 signing.keychain
           security default-keychain -s signing.keychain
           security unlock-keychain -p temp123 signing.keychain
           echo "${{ secrets.DISTRIBUTION_CERT_P12 }}" | base64 -d > /tmp/cert.p12
-          security import /tmp/cert.p12 -k signing.keychain -P "${{ secrets.DISTRIBUTION_CERT_PASSWORD }}" -T /usr/bin/codesign -T /usr/bin/xcodebuild
+          security import /tmp/cert.p12 -k signing.keychain -P "" -T /usr/bin/codesign -T /usr/bin/xcodebuild
           security set-key-partition-list -S apple-tool:,apple: -s -k temp123 signing.keychain
           rm /tmp/cert.p12
 
