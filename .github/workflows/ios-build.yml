@@ -36,8 +36,14 @@ jobs:
       - name: Generate native iOS project
         run: |
           mkdir -p /tmp/empty-webdir
-          npx cap add ios --web-dir /tmp/empty-webdir
-          npx cap sync ios --web-dir /tmp/empty-webdir
+          node -e "
+            const fs=require('fs');
+            const c=JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
+            c.webDir='/tmp/empty-webdir';
+            fs.writeFileSync('capacitor.config.json',JSON.stringify(c,null,2));
+          "
+          npx cap add ios
+          npx cap sync ios
 
       - name: Write export options
         run: |
