@@ -82,6 +82,7 @@ jobs:
             -archivePath ./build/App.xcarchive \
             -configuration Release \
             CODE_SIGN_STYLE=Auto \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
             -allowProvisioningUpdates \
             -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
