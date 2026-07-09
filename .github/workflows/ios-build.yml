@@ -59,16 +59,6 @@ jobs:
           </plist>
           PLIST
 
-      - name: Install CocoaPods
-        run: |
-          if ! command -v pod &> /dev/null; then
-            brew install cocoapods
-          fi
-
-      - name: Install Pods
-        run: |
-          cd ios/App && pod install --repo-update && cd ../..
-
       - name: Generate app icon assets
         run: |
           npx capacitor-assets generate \
@@ -80,7 +70,7 @@ jobs:
         run: |
           cd ios/App
           xcodebuild archive \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme App \
             -archivePath ./build/App.xcarchive \
             -configuration Release \
