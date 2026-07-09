@@ -78,6 +78,7 @@ jobs:
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
+            -destination 'generic/platform=iOS' \
             -archivePath ./build/App.xcarchive \
             -configuration Release \
             CODE_SIGN_STYLE=Auto \
