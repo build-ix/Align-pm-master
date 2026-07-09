@@ -35,8 +35,9 @@ jobs:
 
       - name: Generate native iOS project
         run: |
-          npx cap add ios
-          npx cap sync ios
+          mkdir -p /tmp/empty-webdir
+          npx cap add ios --web-dir /tmp/empty-webdir
+          npx cap sync ios --web-dir /tmp/empty-webdir
 
       - name: Write export options
         run: |
