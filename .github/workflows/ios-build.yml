@@ -66,6 +66,12 @@ jobs:
             --iconBackgroundColorDark '#0a0a12' \
             --assetPath assets/
 
+      - name: Write App Store Connect API key
+        run: |
+          mkdir -p ~/private_keys
+          echo "${{ secrets.APP_STORE_CONNECT_API_KEY }}" > ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
+          chmod 600 ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
+
       - name: Build and archive
         run: |
           cd ios/App
@@ -76,7 +82,10 @@ jobs:
             -configuration Release \
             CODE_SIGN_STYLE=Auto \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
-            -allowProvisioningUpdates
+            -allowProvisioningUpdates \
+            -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
       - name: Export .ipa
         run: |
