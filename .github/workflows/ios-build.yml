@@ -75,7 +75,8 @@ jobs:
             -archivePath ./build/App.xcarchive \
             -configuration Release \
             CODE_SIGN_STYLE=Auto \
-            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }}
+            DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            -allowProvisioningUpdates
 
       - name: Export .ipa
         run: |
