@@ -16,6 +16,7 @@ vitest.config.js
 
 # Build artifacts
 node_modules/
+ios/
 *.log
 
 # Internal docs
