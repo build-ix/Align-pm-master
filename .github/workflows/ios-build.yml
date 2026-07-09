@@ -35,11 +35,10 @@ jobs:
 
       - name: Generate native iOS project
         run: |
-          mkdir -p /tmp/empty-webdir
           node -e "
             const fs=require('fs');
             const c=JSON.parse(fs.readFileSync('capacitor.config.json','utf8'));
-            c.webDir='/tmp/empty-webdir';
+            c.webDir='/tmp/nonexistent-webdir';
             fs.writeFileSync('capacitor.config.json',JSON.stringify(c,null,2));
           "
           npx cap add ios
