@@ -1,0 +1,11 @@
+--- a/server.js
++++ b/server.js
+@@ -475,6 +475,11 @@
+   res.json({ items: rows });
+ });
+ 
++// ── Feature flags ──
++app.get('/api/flags', (_req, res) => {
++  res.json({ devPanel: true, offlineBanner: true, newTileGrid: true });
++});
++

@@ -1134,3 +1134,11 @@ html[data-theme="dark"] .logo-dark { display: block; }
 #app { transition: opacity 0.12s ease; }
 #app.route-exit { opacity: 0; }
 #app.route-enter { opacity: 1; }
+
+/* ── Offline Banner ─────────────────────────────────────────────── */
+.offline-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9998;
+  background: #ef4444; color: #fff; text-align: center;
+  padding: 6px 12px; font-size: 0.8rem; font-weight: 500;
+  display: none;
+}

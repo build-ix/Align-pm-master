@@ -474,6 +474,11 @@ app.get('/api/client-errors', requireAuth, (req, res) => {
   res.json({ items: rows });
 });
 
+// ── Feature flags ──
+app.get('/api/flags', (_req, res) => {
+  res.json({ devPanel: true, offlineBanner: true, newTileGrid: true });
+});
+
 // ── Session: bootstrap payload for the SPA router ──
 app.get('/api/session', requireAuth, (req, res) => {
   const user = safeUser(req.user);
