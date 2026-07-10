@@ -127,11 +127,13 @@
         return data;
       });
     }).then(function (data) {
-      // Store token and hydrate session
-      if (window.Store) {
+      // Store token securely (iOS Keychain + localStorage mirror)
+      if (window.TokenStore) {
+        window.TokenStore.save(data.token);
+      } else if (window.Store) {
         window.Store.persistToken(data.token);
-        window.Store.hydrate(data);
       }
+      if (window.Store) window.Store.hydrate(data);
       // Navigate to project select
       if (window.Router) window.Router.navigate('projects');
     }).catch(function (err) {

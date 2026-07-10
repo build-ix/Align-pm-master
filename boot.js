@@ -27,7 +27,20 @@
   }
 
   function boot() {
-    var token = window.Store && window.Store.loadToken();
+    var token = null;
+    // Use secure token store (iOS Keychain + localStorage mirror)
+    if (window.TokenStore) {
+      window.TokenStore.load().then(function(t) { 
+        token = t;
+        _continueBoot(token);
+      });
+    } else {
+      token = window.Store && window.Store.loadToken();
+      _continueBoot(token);
+    }
+  }
+
+  function _continueBoot(token) {
 
     if (!token) {
       window._routerBooted = true;
