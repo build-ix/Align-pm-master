@@ -1,102 +1,40 @@
 /* align-sw.js — Align Service Worker
- * Offline-first: caches app shell on install, serves from cache when offline.
- * Stale-while-revalidate for all static assets.
+ * Network-first for JS/CSS (must not serve stale code)
+ * Network-first for HTML (must see version bumps)
+ * Cache-first for images/fonts (safe to cache aggressively)
+ * Network-only for API (data freshness)
  */
 
-var CACHE = 'align-v51';
-var SHELL = [
-  '/',
-  '/index.html',
-  '/styles.css',
-  '/align-storage.css',
-  '/align-files.css',
-  '/align-drawings.css',
-  '/align-daily-logs.css',
-  '/align-punchlist.css',
-  '/align-contacts.css',
-  '/align-tasks.css',
-  '/align-photos.css',
-  '/align-auth.css',
-  '/align-schedule.css',
-  '/align-specs.css',
-  '/align-budget.css',
-  '/align-procurement.css',
-  '/align-rfis.css',
-  '/align-api.js',
-  '/align-errors.js',
-  '/align-sync.js',
-  '/align-vitals.js',
-  '/align-a11y.js',
-  '/align-storage.js',
-  '/align-boot.js',
-  '/align-files.js',
-  '/align-projects.js',
-  '/align-drawings.js',
-  '/align-drawing-annotations.js',
-  '/align-daily-logs.js',
-  '/align-punchlist.js',
-  '/align-schedule.js',
-  '/align-rfis.js',
-  '/align-budget.js',
-  '/align-specs.js',
-  '/align-procurement.js',
-  '/align-contacts.js',
-  '/align-tasks.js',
-  '/align-photos.js',
-  '/align-auth.js',
-  '/align-settings.js',
-  '/script.js'
-];
+var CACHE = 'align-v52';
 
-// Install: pre-cache app shell
-self.addEventListener('install', function (ev) {
-  // Activate immediately — don't wait for old SW to release
+// Install: pre-cache nothing — load on demand
+self.addEventListener('install', function () {
   self.skipWaiting();
-  ev.waitUntil(
-    caches.open(CACHE).then(function (cache) {
-      return cache.addAll(SHELL).catch(function (err) {
-        // Don't fail install if some files are missing
-        console.warn('[SW] Cache addAll partial fail:', err);
-      });
-    }).then(function () {
-      return self.skipWaiting();
-    })
-  );
 });
 
-// Activate: clean old caches
+// Activate: clean old caches, claim clients immediately
 self.addEventListener('activate', function (ev) {
   ev.waitUntil(
     caches.keys().then(function (keys) {
-      return Promise.all(
-        keys.filter(function (k) { return k !== CACHE; })
-          .map(function (k) { return caches.delete(k); })
-      );
+      return Promise.all(keys.map(function (k) { return caches.delete(k); }));
     }).then(function () {
       return self.clients.claim();
     })
   );
 });
 
-// Fetch: stale-while-revalidate for static, network-first for API and HTML
+// Fetch routing
 self.addEventListener('fetch', function (ev) {
   var url = new URL(ev.request.url);
 
-  // API calls: network first, no cache (data must be fresh)
+  // API calls: network only — never cache
   if (url.pathname.startsWith('/api/')) {
-    ev.respondWith(
-      fetch(ev.request).catch(function () {
-        return new Response(JSON.stringify({ error: 'Offline — no connection' }), {
-          status: 503,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      })
-    );
+    ev.respondWith(fetch(ev.request));
     return;
   }
 
-  // HTML: network first (must see version bumps for cache-busted assets)
-  if (ev.request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname === '/') {
+  // JS and CSS: network-first, no stale cache
+  if (url.pathname.match(/\.(js|css)(\?|$)/)) {
     ev.respondWith(
       fetch(ev.request).catch(function () {
         return caches.match(ev.request);
@@ -105,24 +43,25 @@ self.addEventListener('fetch', function (ev) {
     return;
   }
 
-  // External requests (Open-Meteo, CDNs, etc.): pass through — don't cache
-  if (!url.hostname.includes(self.location.hostname)) {
+  // HTML: network-first
+  if (ev.request.destination === 'document' || url.pathname === '/') {
+    ev.respondWith(
+      fetch(ev.request).catch(function () {
+        return caches.match(ev.request);
+      })
+    );
     return;
   }
 
-  // Static assets: stale-while-revalidate
+  // Images, fonts, other static: cache-first (safe to cache forever)
   ev.respondWith(
-    caches.open(CACHE).then(function (cache) {
-      return cache.match(ev.request).then(function (cached) {
-        var fetchPromise = fetch(ev.request).then(function (networkResponse) {
-          if (networkResponse && networkResponse.ok) {
-            cache.put(ev.request, networkResponse.clone());
-          }
-          return networkResponse;
-        }).catch(function () {
-          // Network failed — return cached if available
-        });
-        return cached || fetchPromise;
+    caches.match(ev.request).then(function (cached) {
+      return cached || fetch(ev.request).then(function (res) {
+        if (res.ok) {
+          var clone = res.clone();
+          caches.open(CACHE).then(function (c) { c.put(ev.request, clone); });
+        }
+        return res;
       });
     })
   );
