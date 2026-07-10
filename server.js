@@ -99,6 +99,10 @@ function dbExec(sql) {
 
 const _db = new Database(DB_PATH);
 _db.pragma('journal_mode = WAL');
+_db.pragma('synchronous = NORMAL');
+_db.pragma('busy_timeout = 5000');
+_db.pragma('foreign_keys = ON');
+_db.pragma('cache_size = -64000');
 runMigrations(_db);
 
 /* ------------------------------------------------------------------ *
