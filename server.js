@@ -345,6 +345,7 @@ app.use(helmet({
       fontSrc: ["'self'", "https://fonts.gstatic.com", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "blob:", "https://*.open-meteo.com"],
       connectSrc: ["'self'", "https://api.open-meteo.com", "https://api.weather.gov", "https://nominatim.openstreetmap.org", "https://ipapi.co"],
+      mediaSrc: ["'self'", "blob:"],
       frameSrc: ["'self'"],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
