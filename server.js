@@ -497,6 +497,22 @@ app.get('/api/ping', (_req, res) => {
   res.json({ ok: true, time: nowISO() });
 });
 
+// ── Health check: for monitoring and load balancers ──
+app.get('/api/health', (_req, res) => {
+  var dbOk = false;
+  try {
+    dbGet('SELECT 1');
+    dbOk = true;
+  } catch (_) {}
+  res.json({
+    ok: dbOk,
+    db: dbOk ? 'connected' : 'error',
+    uptime: Math.floor(process.uptime()),
+    version: require('./config').APP_VERSION,
+    time: nowISO()
+  });
+});
+
 // ── Client error reporting ──
 app.post('/api/client-errors', (req, res) => {
   var e = req.body || {};

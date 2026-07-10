@@ -8,6 +8,11 @@
   var BASE = '';
   var CACHE_PREFIX = 'apm_cache_';
 
+  // When running inside Capacitor (bundled shell), API hits the server
+  if (typeof window.Capacitor !== 'undefined' && window.Capacitor.isNativePlatform) {
+    BASE = 'https://alignprojects.net';
+  }
+
   function authHeaders() {
     var token = window.Store && window.Store.get('token');
     var h = { 'Content-Type': 'application/json' };

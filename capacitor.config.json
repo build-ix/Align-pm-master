@@ -1,19 +1,13 @@
 {
   "appId": "net.alignprojects.app",
   "appName": "Align PM",
-  "webDir": "www",
-  "server": {
-    "url": "https://alignprojects.net",
-    "cleartext": false,
-    "allowNavigation": ["alignprojects.net", "*.alignprojects.net"]
-  },
+  "webDir": ".",
   "ios": {
     "contentInset": "automatic",
     "backgroundColor": "#0a0a12",
     "allowsLinkPreview": false,
     "scrollEnabled": true,
     "overScrollEnabled": false,
-    "limitsNavigationsToAppBoundDomains": ["alignprojects.net"],
     "infoPlist": {
       "NSPhotoLibraryUsageDescription": "Align PM uses your photo library to attach images to daily logs, punchlists, and project photos.",
       "NSCameraUsageDescription": "Align PM uses the camera to capture photos for daily logs, punchlists, and project documentation.",
