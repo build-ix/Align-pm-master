@@ -11,7 +11,7 @@
 
   /* ── Route Table ──────────────────────────────────────────────────────── */
   var _routes = {
-    'signin':        { module: 'AlignAuth',     public: true },
+    'signin':        { module: 'SignIn',        public: true },
     'projects':      { module: 'AlignProjects', public: false },
     'home':          { module: 'Home',           public: false },
     'daily-logs':    { module: 'AlignDailyLogs', public: false, needsProject: true },
