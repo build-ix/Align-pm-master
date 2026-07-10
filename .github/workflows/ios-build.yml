@@ -111,6 +111,7 @@ jobs:
           export SPACESHIP_CONNECT_API_KEY_FILEPATH=~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
           fastlane sigh \
             --app_identifier "net.alignprojects.app" \
+            --username "${{ secrets.APPLE_ID }}" \
             --filename "/tmp/align-distribution.mobileprovision" \
             --platform "ios" \
             --readonly true
