@@ -493,8 +493,11 @@ function _escHtml(s) {
 // ─── AUTH: INIT ON LOAD ──────────────────────────────────────────────────────
 (function _initAuth() {
   // If new router already booted, skip old auth overlay logic
+  // If new router already booted, skip old auth overlay logic
   if (window._routerBooted) {
-    // Router handles sign-in and project select — just show the app shell
+    // Suppress the old auth overlay (it's visible by default in HTML)
+    var _ao = document.getElementById('auth-overlay');
+    if (_ao) _ao.style.display = 'none';
     var _user = window.Store && window.Store.get('user');
     if (_user) { _renderUserBadge(_user); }
     return;
