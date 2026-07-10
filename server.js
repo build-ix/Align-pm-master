@@ -467,6 +467,13 @@ app.post('/api/client-errors', (req, res) => {
   res.status(204).end();
 });
 
+// Dev: list recent errors
+app.get('/api/client-errors', requireAuth, (req, res) => {
+  var limit = parseInt(req.query.limit, 10) || 20;
+  var rows = dbAll('SELECT * FROM client_errors ORDER BY id DESC LIMIT ?', limit);
+  res.json({ items: rows });
+});
+
 // ── Session: bootstrap payload for the SPA router ──
 app.get('/api/session', requireAuth, (req, res) => {
   const user = safeUser(req.user);
