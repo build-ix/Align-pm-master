@@ -104,31 +104,17 @@ jobs:
             -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
             -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
-      - name: Create distribution profile (fastlane sigh)
-        run: |
-          export SPACESHIP_CONNECT_API_KEY_ID="${{ secrets.APP_STORE_CONNECT_KEY_ID }}"
-          export SPACESHIP_CONNECT_API_ISSUER_ID="${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
-          export SPACESHIP_CONNECT_API_KEY_FILEPATH=~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
-          fastlane sigh \
-            --app_identifier "net.alignprojects.app" \
-            --username "${{ secrets.APPLE_ID }}" \
-            --filename "/tmp/align-distribution.mobileprovision" \
-            --platform "ios" \
-            --readonly true
-
-      - name: Install provisioning profile
-        run: |
-          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
-          cp /tmp/align-distribution.mobileprovision ~/Library/MobileDevice/Provisioning\ Profiles/
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
-
       - name: Export .ipa
         run: |
           cd ios/App
           xcodebuild -exportArchive \
             -archivePath ./build/App.xcarchive \
             -exportOptionsPlist exportOptions.plist \
-            -exportPath ./build
+            -exportPath ./build \
+            -allowProvisioningUpdates \
+            -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
       - name: Upload to App Store Connect
         run: |
