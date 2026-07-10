@@ -13,6 +13,11 @@
     "allowsLinkPreview": false,
     "scrollEnabled": true,
     "overScrollEnabled": false,
-    "limitsNavigationsToAppBoundDomains": ["alignprojects.net"]
+    "limitsNavigationsToAppBoundDomains": ["alignprojects.net"],
+    "infoPlist": {
+      "NSPhotoLibraryUsageDescription": "Align PM uses your photo library to attach images to daily logs, punchlists, and project photos.",
+      "NSCameraUsageDescription": "Align PM uses the camera to capture photos for daily logs, punchlists, and project documentation.",
+      "NSPhotoLibraryAddUsageDescription": "Align PM saves project photos to your library for reference."
+    }
   }
 }
