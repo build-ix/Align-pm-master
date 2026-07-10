@@ -38,6 +38,12 @@ jobs:
           npx cap add ios
           npx cap sync ios
 
+      - name: Add privacy strings to Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'Align PM uses your photo library to attach images to daily logs, punchlists, and project photos.'" ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSPhotoLibraryUsageDescription 'Align PM uses your photo library to attach images to daily logs, punchlists, and project photos.'" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Align PM uses the camera to capture photos for daily logs, punchlists, and project documentation.'" ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription 'Align PM uses the camera to capture photos for daily logs, punchlists, and project documentation.'" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryAddUsageDescription string 'Align PM saves project photos to your library.'" ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Set :NSPhotoLibraryAddUsageDescription 'Align PM saves project photos to your library.'" ios/App/App/Info.plist
+
       - name: Write export options
         run: |
           cat > ios/App/exportOptions.plist << 'PLIST'
