@@ -94,6 +94,7 @@ jobs:
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
+            -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -archivePath ./build/App.xcarchive \
             -configuration Release \
