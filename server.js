@@ -536,6 +536,32 @@ app.get('/api/flags', (_req, res) => {
   res.json({ devPanel: true, offlineBanner: true, newTileGrid: true });
 });
 
+// ── Thumbnail serving (generates on first request) ──
+app.get('/api/thumbs/:fileId', function(req, res) {
+  var fileId = req.params.fileId;
+  var size = parseInt(req.query.size, 10) || 320;
+  var file = dbGet('SELECT * FROM files WHERE id = ?', fileId);
+  if (!file) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'File not found' } });
+
+  var ext = (file.name || '').split('.').pop().toLowerCase();
+  var uploadPath = path.join(UPLOADS_DIR, file.id + '.' + ext);
+
+  try {
+    var thumb = require('./thumbs');
+    thumb.generate(uploadPath, fileId, size).then(function(tpath) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Content-Type', 'image/webp');
+      res.sendFile(tpath);
+    }).catch(function() {
+      // Thumbnail failed — serve original
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.sendFile(uploadPath);
+    });
+  } catch (_) {
+    res.sendFile(uploadPath);
+  }
+});
+
 // ── Session: bootstrap payload for the SPA router ──
 app.get('/api/session', requireAuth, (req, res) => {
   const user = safeUser(req.user);
