@@ -108,11 +108,9 @@ jobs:
         run: |
           fastlane sigh \
             --app_identifier "net.alignprojects.app" \
-            --username "${{ secrets.APPLE_ID }}" \
-            --team_id "${{ secrets.APPLE_TEAM_ID }}" \
             --api_key_path ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8 \
-            --api_key_issuer_id "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" \
-            --api_key_id "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
+            --api_key_issuer "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" \
+            --api_key "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
             --filename "/tmp/align-distribution.mobileprovision" \
             --platform "ios" \
             --readonly true \
