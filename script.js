@@ -496,7 +496,7 @@ function _escHtml(s) {
   // If new router already booted, skip old auth overlay logic
   if (window._routerBooted) {
     // Suppress the old auth overlay (it's visible by default in HTML)
-    var _ao = document.getElementById('auth-overlay');
+    var _ao = document.getElementById('align-auth-overlay');
     if (_ao) _ao.style.display = 'none';
     var _user = window.Store && window.Store.get('user');
     if (_user) { _renderUserBadge(_user); }
