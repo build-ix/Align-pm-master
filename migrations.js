@@ -439,6 +439,14 @@ const MIGRATIONS = [
         try { db.exec('ALTER TABLE ' + t + ' ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0'); } catch(e) {}
       });
     }
+  },
+  /* ── v22: soft-delete for files ──────────────────────────────────── */
+  {
+    version: 22,
+    name: 'soft_delete_files',
+    up(db) {
+      try { db.exec('ALTER TABLE files ADD COLUMN deleted_at INTEGER'); } catch(e) {}
+    }
   }
 ];
 

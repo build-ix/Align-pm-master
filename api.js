@@ -97,6 +97,29 @@
     });
   }
 
+  /* Single-flight lock: prevent concurrent token refresh storms */
+  var _refreshLock = null;
+  function refreshToken() {
+    if (_refreshLock) return _refreshLock;
+    _refreshLock = request('POST', '/api/auth/refresh').catch(function () { return null; });
+    _refreshLock.then(function () { _refreshLock = null; });
+    return _refreshLock;
+  }
+
+  /* App resume: re-validate token when app returns from background */
+  function _onResume() {
+    if (!window.Store || !window.Store.get('token')) return;
+    request('GET', '/api/session').then(function (data) {
+      if (data && window.Store) window.Store.hydrate(data);
+    }).catch(function () {});
+  }
+  // Capacitor resume event
+  try {
+    document.addEventListener('resume', _onResume);
+  } catch (_) {}
+  // Web: validate on first focus after hidden
+  window.addEventListener('focus', _onResume, { once: true });
+
   window.Api = {
     get: function (path) { return request('GET', path); },
     post: function (path, body) { return request('POST', path, body); },

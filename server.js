@@ -600,7 +600,24 @@ app.get('/api/session', requireAuth, (req, res) => {
 app.get('/api/config', (_req, res) => {
   res.json({
     devMode: DEV_MODE,
-    version: '2.0.0'
+    version: '2.0.0',
+    minClientVersion: '2.0.0',
+    features: {
+      upload: true,
+      camera: true,
+      offline: false,
+      video: false
+    },
+    limits: {
+      maxUploadBytes: 100 * 1024 * 1024,
+      pageSize: 50,
+      thumbnailSizes: [160, 320, 640, 1024]
+    },
+    routes: {
+      auth: '/api/v1/auth',
+      files: '/api/v1/files',
+      projects: '/api/v1/projects'
+    }
   });
 });
 

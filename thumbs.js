@@ -18,10 +18,12 @@ function generate(filePath, fileId, size) {
 
   return new Promise(function (resolve, reject) {
     execFile('convert', [
-      filePath + '[0]',  // first page/frame
+      filePath + '[0]',
+      '-auto-orient',
       '-resize', size + 'x' + size + '>',
       '-quality', '80',
       '-strip',
+      '-interlace', 'Plane',
       dest
     ], { timeout: 30000 }, function (err) {
       if (err) return reject(err);
