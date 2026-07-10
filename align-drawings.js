@@ -505,11 +505,19 @@
                     return newDoc.save();
                   });
                 }).then(function (pdfBytes) {
-                  var binary = '';
-                  for (var b = 0; b < pdfBytes.length; b++) {
-                    binary += String.fromCharCode(pdfBytes[b]);
+                  // Proper Uint8Array → base64 (btoa chokes on raw binary)
+                  var bytes = new Uint8Array(pdfBytes);
+                  var chunks = [];
+                  var chunkSize = 0x8000; // 32KB chunks
+                  for (var b = 0; b < bytes.length; b += chunkSize) {
+                    var chunk = bytes.subarray(b, Math.min(b + chunkSize, bytes.length));
+                    var bin = '';
+                    for (var c = 0; c < chunk.length; c++) {
+                      bin += String.fromCharCode(chunk[c]);
+                    }
+                    chunks.push(btoa(bin));
                   }
-                  var dataUrl = 'data:application/pdf;base64,' + btoa(binary);
+                  var dataUrl = 'data:application/pdf;base64,' + chunks.join('');
                   pages.push({
                     name: pageName,
                     dataUrl: dataUrl,
@@ -1538,7 +1546,17 @@
     }
 
     // content is a data URL — convert to arraybuffer
-    var byteString = atob(content.split(',')[1]);
+    var parts = content.split(',');
+    if (parts.length < 2) {
+      console.warn('[AlignDrawings] Invalid data URL for drawing');
+      return;
+    }
+    try {
+      var byteString = atob(parts[1]);
+    } catch(e) {
+      console.warn('[AlignDrawings] Invalid base64 in drawing data:', e.message);
+      return;
+    }
     var bytes = new Uint8Array(byteString.length);
     for (var i = 0; i < byteString.length; i++) {
       bytes[i] = byteString.charCodeAt(i);
