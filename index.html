@@ -36,6 +36,15 @@
 </head>
 <body>
 
+  <!-- Boot screen: shown while router decides destination -->
+  <div id="boot-screen" style="position:fixed;inset:0;background:#0a0a12;z-index:9999;display:flex;align-items:center;justify-content:center">
+    <div style="width:40px;height:40px;border:3px solid rgba(232,100,27,0.2);border-top-color:#E8641B;border-radius:50%;animation:boot-spin 0.8s linear infinite"></div>
+  </div>
+  <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>
+
+  <!-- App shell: hidden until boot decides destination -->
+  <div id="app" style="visibility:hidden">
+
   <!-- Skip-to-content link -->
   <a href="#dashboard" class="skip-link">Skip to main content</a>
 
@@ -146,5 +155,6 @@
       document.body.appendChild(s);
     })();
   </script>
+  </div><!-- /#app -->
 </body>
 </html>
