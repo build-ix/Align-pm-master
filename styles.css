@@ -1129,3 +1129,8 @@ html[data-theme="dark"] .logo-dark { display: block; }
 }
 .dev-btn:hover { background: var(--line); }
 .dev-btn-danger { color: #ef4444; border-color: #ef4444; }
+
+/* ── Route Transitions ──────────────────────────────────────────── */
+#app { transition: opacity 0.12s ease; }
+#app.route-exit { opacity: 0; }
+#app.route-enter { opacity: 1; }
