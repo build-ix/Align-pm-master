@@ -106,11 +106,11 @@ jobs:
 
       - name: Create distribution profile (fastlane sigh)
         run: |
+          export SPACESHIP_CONNECT_API_KEY_ID="${{ secrets.APP_STORE_CONNECT_KEY_ID }}"
+          export SPACESHIP_CONNECT_API_ISSUER_ID="${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
+          export SPACESHIP_CONNECT_API_KEY_FILEPATH=~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
           fastlane sigh \
             --app_identifier "net.alignprojects.app" \
-            --api_key_path ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8 \
-            --api_key_issuer "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}" \
-            --api_key "${{ secrets.APP_STORE_CONNECT_KEY_ID }}" \
             --filename "/tmp/align-distribution.mobileprovision" \
             --platform "ios" \
             --readonly true \
