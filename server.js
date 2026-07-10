@@ -448,7 +448,44 @@ app.use(function(req, res, next) {
   }
   next();
 });
-app.use(express.static(__dirname));
+
+// ── Request logger: JSON per request for journalctl ──
+app.use(function(req, res, next) {
+  var start = Date.now();
+  res.on('finish', function() {
+    var log = JSON.stringify({
+      t: new Date().toISOString().replace('T',' ').slice(0,19),
+      m: req.method,
+      p: req.path,
+      s: res.statusCode,
+      ms: Date.now() - start,
+      u: req.user ? req.user.id : null,
+      ip: req.ip
+    });
+    // Only log API requests, skip static files
+    if (req.path.indexOf('/api/') === 0) console.log(log);
+  });
+  next();
+});
+
+app.use(express.static(__dirname, {
+  etag: true,
+  lastModified: true,
+  setHeaders: function(res, filepath) {
+    // JS/CSS: immutable (versioned filenames)
+    if (filepath.match(/\.(js|css)(\?|$)/)) {
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+    // Images: long cache
+    else if (filepath.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)$/)) {
+      res.set('Cache-Control', 'public, max-age=86400');
+    }
+    // HTML: no cache
+    else if (filepath.match(/\.html$/)) {
+      res.set('Cache-Control', 'no-cache');
+    }
+  }
+}));
 
 const upload = multer({ dest: UPLOADS_DIR, limits: { fileSize: Infinity } });
 
@@ -1559,6 +1596,23 @@ app.patch('/api/projects/:pid/punchlist/batch', requireAuth, auth.requireProject
 // Catch-all: serve SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// ── Global error handler: never crash on route errors ──
+app.use(function(err, req, res, next) {
+  if (res.headersSent) return next(err);
+  console.error(JSON.stringify({ t: new Date().toISOString(), err: err.message, stack: err.stack, path: req.path }));
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Crash-and-restart: systemd restarts us in 5s
+process.on('uncaughtException', function(err) {
+  console.error('FATAL uncaughtException:', err.message, err.stack);
+  process.exit(1);
+});
+process.on('unhandledRejection', function(reason) {
+  console.error('FATAL unhandledRejection:', reason);
+  process.exit(1);
 });
 
 // Start server
