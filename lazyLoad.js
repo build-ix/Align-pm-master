@@ -29,7 +29,7 @@
   }
 
   // Watch new elements added to DOM
-  if (window.MutationObserver) {
+  if (window.MutationObserver && document.body) {
     var mo = new MutationObserver(function () { watch(); });
     mo.observe(document.body, { childList: true, subtree: true });
   }
