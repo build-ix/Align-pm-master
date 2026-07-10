@@ -29,7 +29,7 @@
         '<h1 class="signin-title">Sign In</h1>' +
         '<form id="signin-form" novalidate>' +
           '<div class="si-field">' +
-            '<input type="email" id="si-email" class="si-input" placeholder="Email" autocomplete="username" />' +
+            '<input type="text" id="si-email" class="si-input" placeholder="Username" autocomplete="username" />' +
             '<p class="si-error" id="si-email-error"></p>' +
           '</div>' +
           '<div class="si-field">' +

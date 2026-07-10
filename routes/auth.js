@@ -92,12 +92,12 @@ module.exports = function(app, deps) {
   // ── Token-based login (for SPA router + Capacitor) ──
   app.post('/api/auth/login', signinLimiter, function(req, res) {
     var body = req.body || {};
-    var email = (body.email || '').toLowerCase().trim();
+    var email = (body.email || body.username || '').toLowerCase().trim();
     var password = body.password || '';
 
-    if (!email || !password) return res.status(400).json({ error: 'Email and password required', field: !email ? 'email' : 'password' });
+    if (!email || !password) return res.status(400).json({ error: 'Username and password required', field: !email ? 'email' : 'password' });
 
-    var user = dbGet('SELECT * FROM users WHERE LOWER(email) = ?', email);
+    var user = dbGet('SELECT * FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?', email, email);
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
 
     // Lockout check

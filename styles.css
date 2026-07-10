@@ -1139,6 +1139,8 @@ html[data-theme="dark"] .logo-dark { display: block; }
 .offline-banner {
   position: fixed; top: 0; left: 0; right: 0; z-index: 9998;
   background: #ef4444; color: #fff; text-align: center;
-  padding: 6px 12px; font-size: 0.8rem; font-weight: 500;
-  display: none;
+
+/* ── Sign-In No-Scroll ──────────────────────────────────────────── */
+.signin-page {
+  position: fixed; inset: 0; overflow: hidden;
 }
