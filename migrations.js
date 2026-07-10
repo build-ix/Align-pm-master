@@ -447,6 +447,14 @@ const MIGRATIONS = [
     up(db) {
       try { db.exec('ALTER TABLE files ADD COLUMN deleted_at INTEGER'); } catch(e) {}
     }
+  },
+  /* ── v23: token kind (ios|web) ───────────────────────────────────── */
+  {
+    version: 23,
+    name: 'token_kind',
+    up(db) {
+      try { db.exec('ALTER TABLE auth_tokens ADD COLUMN kind TEXT DEFAULT \'web\''); } catch(e) {}
+    }
   }
 ];
 
