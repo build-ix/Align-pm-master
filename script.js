@@ -409,9 +409,10 @@ function _applyPermissionsFilter() {
 // ─── AUTH: USER BADGE IN HEADER ──────────────────────────────────────────────
 function _renderUserBadge() {
   var container = document.getElementById('user-badge-container');
-  if (!container || !window.AlignAuth) return;
+  if (!container) return;
 
-  var user = window.AlignAuth.getActiveUser();
+  var user = (window.AlignAuth && window.AlignAuth.getActiveUser && window.AlignAuth.getActiveUser())
+    || (window.Store && window.Store.get('user'));
   if (!user) {
     container.innerHTML = '';
     // Clear cached badge hint on sign-out
@@ -491,6 +492,14 @@ function _escHtml(s) {
 
 // ─── AUTH: INIT ON LOAD ──────────────────────────────────────────────────────
 (function _initAuth() {
+  // If new router already booted, skip old auth overlay logic
+  if (window._routerBooted) {
+    // Router handles sign-in and project select — just show the app shell
+    var _user = window.Store && window.Store.get('user');
+    if (_user) { _renderUserBadge(_user); }
+    return;
+  }
+
   // Wait for boot (API detection) before deciding which Auth to use
   var bootPromise = window.Align && window.Align.ready
     ? window.Align.ready
@@ -1724,3 +1733,32 @@ function _escHtml(s) {
       });
   }
   window._renderProjectSelect = _renderProjectSelect;
+
+  // Bridge for new router
+  window.Home = {
+    mount: function (container) {
+      // Trigger old home screen: show header + tile grid + dashboard + essentials
+      document.body.classList.remove('section-open');
+      document.body.classList.remove('ps-open');
+      if (appHeader) appHeader.style.display = '';
+      if (tileGrid) tileGrid.style.display = '';
+      if (dashboard) dashboard.style.display = '';
+      if (essentials) essentials.style.display = '';
+      if (sectionPage) sectionPage.style.display = 'none';
+    },
+    unmount: function () {}
+  };
+
+  window.AlignProjects = {
+    mount: function (container) {
+      container.innerHTML = '';
+      var el = document.createElement('div');
+      el.id = 'ps-root';
+      container.appendChild(el);
+      _renderProjectSelect(el);
+    },
+    unmount: function () {
+      var el = document.getElementById('ps-root');
+      if (el) el.remove();
+    }
+  };

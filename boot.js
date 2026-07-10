@@ -30,6 +30,7 @@
     var token = window.Store && window.Store.loadToken();
 
     if (!token) {
+      window._routerBooted = true;
       finish('signin');
       return;
     }
@@ -46,9 +47,10 @@
       timeout
     ]).then(function (data) {
       if (window.Store) window.Store.hydrate(data);
+      window._routerBooted = true;
       finish('projects');
     }).catch(function () {
-      // Timeout or network error — try cached user data
+      window._routerBooted = true;
       var cached = window.Store && window.Store.get('user');
       if (cached) {
         if (window.Store) window.Store.set('stale', true);
