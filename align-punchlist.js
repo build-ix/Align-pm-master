@@ -473,4 +473,5 @@
   }
 
   global.AlignPunchlist = Object.freeze({ render: render, CATEGORY: CATEGORY });
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'punchlist', title: 'Punchlist', icon: '/', route: 'punchlist', roles: ['user','admin'], order: 2 });
 })(window);

@@ -300,4 +300,5 @@
     render: render,
     CATEGORY: CATEGORY
   });
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'specs', title: 'Specifications', icon: '[]', route: 'specs', roles: ['user','admin'], order: 10 });
 })(window);

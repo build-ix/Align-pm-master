@@ -362,4 +362,5 @@
     CATEGORY: CATEGORY
   });
 
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'schedule', title: 'Schedule', icon: '[]', route: 'schedule', roles: ['user','admin'], order: 8 });
 })(window);

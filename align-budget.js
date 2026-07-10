@@ -307,4 +307,5 @@
     render: render,
     CATEGORY: CATEGORY
   });
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'budget', title: 'Budget', icon: '[]', route: 'budget', roles: ['user','admin'], order: 9 });
 })(window);

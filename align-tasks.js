@@ -478,4 +478,5 @@
 
   /* ── Public API ─────────────────────────────────────────────────────── */
   global.AlignTasks = Object.freeze({ render: render, CATEGORY: CAT });
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'tasks', title: 'Tasks', icon: '[]', route: 'tasks', roles: ['user','admin'], order: 6 });
 })(window);

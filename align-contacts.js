@@ -724,4 +724,5 @@ function _savePerm(uid, perms, btn, idx) {
 }
 
 g.AlignContacts=Object.freeze({render:render, refresh:function(){_resolvePid();_loadData();}});
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'contacts', title: 'Directory', icon: '[]', route: 'contacts', roles: ['user','admin'], order: 7 });
 })(window);

@@ -421,4 +421,5 @@
     render: render,
     CATEGORY: CATEGORY
   });
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'rfis', title: 'RFIs', icon: '[]', route: 'rfis', roles: ['user','admin'], order: 12 });
 })(window);

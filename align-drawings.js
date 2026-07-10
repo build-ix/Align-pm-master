@@ -3245,4 +3245,5 @@
     render: render
   };
 
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'drawings', title: 'Drawings', icon: '#', route: 'drawings', roles: ['user','admin'], order: 3 });
 })(window);

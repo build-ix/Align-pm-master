@@ -1603,4 +1603,5 @@
 
   /* ── Expose ────────────────────────────────────────────────────────── */
   global.AlignDailyLogs = { render: render, CATEGORY: CATEGORY };
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'daily-logs', title: 'Daily Logs', icon: '📋', route: 'daily-logs', roles: ['user','admin'], order: 1 });
 })(window);

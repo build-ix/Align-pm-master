@@ -316,4 +316,5 @@
     render: render,
     CATEGORY: CATEGORY
   });
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'procurement', title: 'Procurement', icon: '[]', route: 'procurement', roles: ['user','admin'], order: 11 });
 })(window);

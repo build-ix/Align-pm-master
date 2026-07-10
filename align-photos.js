@@ -292,4 +292,5 @@ function _bindView(){
 }
 
 g.AlignPhotos=Object.freeze({render:render,CATEGORY:CAT});
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'photos', title: 'Photos', icon: '[]', route: 'photos', roles: ['user','admin'], order: 5 });
 })(window);

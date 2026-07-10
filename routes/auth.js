@@ -159,6 +159,16 @@ module.exports = function(app, deps) {
     res.json({ token: rawToken, user: safeUser(freshUser), projects: projects, tiles: tiles });
   });
 
+  // ── Token-based logout ──
+  app.post('/api/auth/logout', requireAuth, function(req, res) {
+    // Revoke bearer token
+    dbRun('DELETE FROM auth_tokens WHERE token_hash = ?', crypto.createHash('sha256').update(req.token).digest('hex'));
+    // Also try old sessions table
+    try { sessions.revokeSession(dbRun, req.token); } catch (_) {}
+    res.clearCookie('align-token', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });
+    res.status(204).end();
+  });
+
   app.post('/api/auth/signout', requireAuth, function(req, res) {
     sessions.revokeSession(dbRun, req.token);
     res.clearCookie('align-token', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });

@@ -830,4 +830,5 @@
     deleteFile: function() { return false; },
     getQuota: function() { return { used:0, max:0 }; },
   };
+  if (window.TileRegistry) window.TileRegistry.register({ id: 'files', title: 'Files', icon: '[]', route: 'files', roles: ['user','admin'], order: 4 });
 })(window);
