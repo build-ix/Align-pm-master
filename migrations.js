@@ -408,6 +408,25 @@ const MIGRATIONS = [
       `);
       try { db.exec("CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id)"); } catch(e) {}
     }
+  },
+  /* ── v20: client_errors for tile error reporting ───────────────────── */
+  {
+    version: 20,
+    name: 'client_errors',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS client_errors (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          ts TEXT NOT NULL,
+          scope TEXT,
+          tile TEXT,
+          message TEXT,
+          stack TEXT,
+          src TEXT,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+    }
   }
 ];
 

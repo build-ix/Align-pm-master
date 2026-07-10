@@ -456,6 +456,17 @@ app.get('/api/ping', (_req, res) => {
   res.json({ ok: true, time: nowISO() });
 });
 
+// ── Client error reporting ──
+app.post('/api/client-errors', (req, res) => {
+  var e = req.body || {};
+  dbRun(
+    'INSERT INTO client_errors (ts, scope, tile, message, stack, src) VALUES (?, ?, ?, ?, ?, ?)',
+    nowISO(), e.scope || '', e.tile || '', String(e.message || '').slice(0, 500),
+    String(e.stack || '').slice(0, 4000), e.src || ''
+  );
+  res.status(204).end();
+});
+
 // ── Session: bootstrap payload for the SPA router ──
 app.get('/api/session', requireAuth, (req, res) => {
   const user = safeUser(req.user);
