@@ -38,6 +38,15 @@ jobs:
 
       - name: Generate native iOS project
         run: |
+          # Build www/ directory with app files (bundled shell)
+          mkdir -p www
+          cp index.html www/
+          cp *.js www/
+          cp *.css www/
+          cp -r assets www/
+          cp favicon.png www/
+          cp *.svg www/ 2>/dev/null || true
+          echo "www/ ready"
           npx cap add ios
           npx cap sync ios
 

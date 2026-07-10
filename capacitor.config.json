@@ -1,7 +1,7 @@
 {
   "appId": "net.alignprojects.app",
   "appName": "Align PM",
-  "webDir": ".",
+  "webDir": "www",
   "ios": {
     "contentInset": "automatic",
     "backgroundColor": "#0a0a12",
