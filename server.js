@@ -441,6 +441,48 @@ app.get('/api/ping', (_req, res) => {
   res.json({ ok: true, time: nowISO() });
 });
 
+// ── Session: bootstrap payload for the SPA router ──
+app.get('/api/session', requireAuth, (req, res) => {
+  const user = safeUser(req.user);
+  // Projects the user has access to
+  let projects = [];
+  if (req.user.role === 'admin') {
+    projects = dbAll('SELECT p.* FROM projects p ORDER BY p.created_at DESC');
+  } else {
+    projects = dbAll(
+      'SELECT p.*, up.role AS project_role FROM projects p JOIN user_projects up ON up.project_id = p.id WHERE up.user_id = ? ORDER BY p.created_at DESC',
+      req.user.id
+    );
+  }
+  projects = projects.map(function (p) {
+    var count = dbGet('SELECT COUNT(*) AS n FROM user_projects WHERE project_id = ?', p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      address: p.address || '',
+      role: p.project_role || (req.user.role === 'admin' ? 'super_admin' : 'user'),
+      memberCount: count ? count.n : 0
+    };
+  });
+
+  // Tile IDs this role can see
+  var allTiles = ['daily-logs','punchlist','drawings','files','photos','tasks','contacts','schedule','budget','specs','procurement','rfis'];
+  var adminTiles = ['settings','members'];
+  var superTiles = ['dev'];
+  var tiles = allTiles.slice();
+  if (req.user.role === 'admin') tiles = tiles.concat(adminTiles).concat(superTiles);
+
+  res.json({ user: user, projects: projects, tiles: tiles });
+});
+
+// ── Config: public config for the client ──
+app.get('/api/config', (_req, res) => {
+  res.json({
+    devMode: DEV_MODE,
+    version: '2.0.0'
+  });
+});
+
 // ── User listing — project-scoped (see below after invite endpoints)
 
 const signinLimiter = rateLimit({
