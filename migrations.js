@@ -427,6 +427,18 @@ const MIGRATIONS = [
         )
       `);
     }
+  },
+  /* ── v21: updated_at on remaining tables ─────────────────────────── */
+  {
+    version: 21,
+    name: 'add_updated_at',
+    up(db) {
+      var tables = ['user_projects', 'files', 'companies'];
+      tables.forEach(function(t) {
+        try { db.exec('ALTER TABLE ' + t + ' ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0'); } catch(e) {}
+        try { db.exec('ALTER TABLE ' + t + ' ADD COLUMN created_at INTEGER NOT NULL DEFAULT 0'); } catch(e) {}
+      });
+    }
   }
 ];
 

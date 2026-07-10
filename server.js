@@ -1617,8 +1617,11 @@ app.get('*', (req, res) => {
 // ── Global error handler: never crash on route errors ──
 app.use(function(err, req, res, next) {
   if (res.headersSent) return next(err);
-  console.error(JSON.stringify({ t: new Date().toISOString(), err: err.message, stack: err.stack, path: req.path }));
-  res.status(500).json({ error: 'Internal server error' });
+  var status = err.status || 500;
+  var code = err.code || 'INTERNAL';
+  var message = status >= 500 ? 'Internal server error' : (err.message || 'Server error');
+  console.error(JSON.stringify({ t: new Date().toISOString(), code: code, err: err.message, path: req.path }));
+  res.status(status).json({ error: { code: code, message: message, details: err.details || null } });
 });
 
 // Crash-and-restart: systemd restarts us in 5s
@@ -1629,6 +1632,12 @@ process.on('uncaughtException', function(err) {
 process.on('unhandledRejection', function(reason) {
   console.error('FATAL unhandledRejection:', reason);
   process.exit(1);
+});
+
+// ── API v1 alias: both /api/* and /api/v1/* hit the same routes ──
+app.use('/api/v1', function(req, res, next) {
+  req.url = req.url.replace('/api/v1', '/api');
+  next();
 });
 
 // Start server
