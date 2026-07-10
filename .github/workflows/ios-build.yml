@@ -113,8 +113,7 @@ jobs:
             --app_identifier "net.alignprojects.app" \
             --filename "/tmp/align-distribution.mobileprovision" \
             --platform "ios" \
-            --readonly true \
-            --force
+            --readonly true
 
       - name: Install provisioning profile
         run: |
