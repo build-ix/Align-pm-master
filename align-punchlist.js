@@ -342,8 +342,17 @@
       }
       if (act === 'delete') {
         if (confirm('Delete this item?')) {
-          S().deleteRecord(state.projectId, CATEGORY, id);
-          _paint();
+          var delId = id;
+          // Delete from server first
+          fetch('/api/projects/' + state.projectId + '/' + CATEGORY + '/' + delId, {
+            method: 'DELETE',
+            headers: (window.AlignAPI && window.AlignAPI.authHeaders) ? window.AlignAPI.authHeaders() : {}
+          }).then(function() {
+            S().deleteRecord(state.projectId, CATEGORY, delId);
+            _paint();
+          }).catch(function() {
+            alert('Delete failed — please try again.');
+          });
         }
       }
     });

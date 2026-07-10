@@ -1055,6 +1055,15 @@
     }).then(function(saved) {
       var rec = (saved && saved.record) ? saved.record.data : saved;
       state.currentLogData = rec;
+      // Update the dayRecords list so changelog refreshes immediately
+      var dayRecs = state.dayRecords || [];
+      var idx = -1;
+      for (var i = 0; i < dayRecs.length; i++) {
+        if (dayRecs[i].id === rec.id || dayRecs[i].date === rec.date) { idx = i; break; }
+      }
+      if (idx >= 0) dayRecs[idx] = rec;
+      else dayRecs.unshift(rec);
+      state.dayRecords = dayRecs;
       return rec;
     }).catch(function(err) {
       console.error('[DailyLog] Save failed:', err);

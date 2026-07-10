@@ -1648,7 +1648,7 @@ function _escHtml(s) {
         if (!projs.length) {
           // #4: Differentiate empty state — admin can create, member can't
           if (isAdmin) {
-            h += '<div class="ps-empty"><p>No projects yet.</p><p class="ps-empty-hint">Create one in Settings</p></div>';
+            h += '<div class="ps-empty"><p>No projects yet.</p><button class="pm-btn" id="ps-create-first-btn" style="margin-top:12px">+ Create First Project</button></div>';
           } else {
             h += '<div class="ps-empty"><p>No projects assigned.</p><p class="ps-empty-hint">Ask an admin to add you to a project.</p></div>';
           }
@@ -1703,6 +1703,20 @@ function _escHtml(s) {
 
         var so = el.querySelector('#ps-signout');
         if (so) so.addEventListener('click', function() { if (window.AlignAuth) window.AlignAuth.signOut(); });
+
+        var cf = el.querySelector('#ps-create-first-btn');
+        if (cf) cf.addEventListener('click', function() {
+          var name = prompt('Project name:');
+          if (!name) return;
+          fetch('/api/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+          }).then(function(r) {
+            if (r.ok) { location.hash = '#project-select'; location.reload(); }
+            else alert('Failed to create project.');
+          });
+        });
       })
       .catch(function(e) {
         if (e && e.message === 'unauthorized') return;
