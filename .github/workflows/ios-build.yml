@@ -110,7 +110,11 @@ jobs:
           xcodebuild -exportArchive \
             -archivePath ./build/App.xcarchive \
             -exportOptionsPlist exportOptions.plist \
-            -exportPath ./build
+            -exportPath ./build \
+            -allowProvisioningUpdates \
+            -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
+            -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+            -authenticationKeyPath ~/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_KEY_ID }}.p8
 
       - name: Upload to App Store Connect
         run: |
