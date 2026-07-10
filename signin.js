@@ -95,8 +95,7 @@
     var email = (document.getElementById('si-email') || {}).value || '';
     var pass = (document.getElementById('si-password') || {}).value || '';
     var valid = true;
-    if (!email.trim()) { _showFieldError('email', 'Email is required'); valid = false; }
-    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { _showFieldError('email', 'Enter a valid email'); valid = false; }
+    if (!email.trim()) { _showFieldError('email', 'Username is required'); valid = false; }
     if (!pass) { _showFieldError('pass', 'Password is required'); valid = false; }
     return valid;
   }
