@@ -89,6 +89,76 @@ module.exports = function(app, deps) {
     res.json({ user: safeUser(freshUser) });
   });
 
+  // ── Token-based login (for SPA router + Capacitor) ──
+  app.post('/api/auth/login', signinLimiter, function(req, res) {
+    var body = req.body || {};
+    var email = (body.email || '').toLowerCase().trim();
+    var password = body.password || '';
+
+    if (!email || !password) return res.status(400).json({ error: 'Email and password required', field: !email ? 'email' : 'password' });
+
+    var user = dbGet('SELECT * FROM users WHERE LOWER(email) = ?', email);
+    if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+
+    // Lockout check
+    if (user.locked_until && user.locked_until > nowISO()) {
+      var minsLeft = Math.ceil((new Date(user.locked_until) - new Date()) / 60000);
+      return res.status(423).json({ error: 'Account locked. Try again in ' + minsLeft + ' min.', locked_until: user.locked_until });
+    }
+
+    if (!bcrypt.compareSync(password, user.pin_hash)) {
+      var newCount = (user.failed_attempts || 0) + 1;
+      var MAX = 10;
+      if (newCount >= MAX) {
+        var lockUntil = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+        dbRun('UPDATE users SET failed_attempts = ?, locked_until = ? WHERE id = ?', newCount, lockUntil, user.id);
+        return res.status(423).json({ error: 'Account locked. Too many failed attempts.', locked_until: lockUntil });
+      }
+      dbRun('UPDATE users SET failed_attempts = ? WHERE id = ?', newCount, user.id);
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    // Success — reset lockout
+    if (user.failed_attempts > 0 || user.locked_until) {
+      dbRun('UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?', user.id);
+    }
+
+    // Generate bearer token
+    var rawToken = crypto.randomBytes(32).toString('base64url');
+    var expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    var hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    dbRun('INSERT INTO auth_tokens (user_id, token_hash, expires_at) VALUES (?, ?, ?)',
+      user.id, hash, expiresAt);
+
+    // Backward compat: set cookie too
+    res.cookie('align-token', rawToken, {
+      httpOnly: true, secure: true, sameSite: 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000, path: '/'
+    });
+
+    // Build bootstrap response
+    var freshUser = dbGet('SELECT * FROM users WHERE id = ?', user.id);
+    var projects = [];
+    if (freshUser.role === 'admin') {
+      projects = dbAll('SELECT p.* FROM projects p ORDER BY p.created_at DESC');
+    } else {
+      projects = dbAll(
+        'SELECT p.*, up.role AS project_role FROM projects p JOIN user_projects up ON up.project_id = p.id WHERE up.user_id = ?',
+        freshUser.id
+      );
+    }
+    projects = projects.map(function (p) {
+      var count = dbGet('SELECT COUNT(*) AS n FROM user_projects WHERE project_id = ?', p.id);
+      return { id: p.id, name: p.name, address: p.address || '', role: p.project_role || (freshUser.role === 'admin' ? 'super_admin' : 'user'), memberCount: count ? count.n : 0 };
+    });
+
+    var allTiles = ['daily-logs','punchlist','drawings','files','photos','tasks','contacts','schedule','budget','specs','procurement','rfis'];
+    var tiles = allTiles.slice();
+    if (freshUser.role === 'admin') tiles = tiles.concat(['settings','members','dev']);
+
+    res.json({ token: rawToken, user: safeUser(freshUser), projects: projects, tiles: tiles });
+  });
+
   app.post('/api/auth/signout', requireAuth, function(req, res) {
     sessions.revokeSession(dbRun, req.token);
     res.clearCookie('align-token', { httpOnly: true, secure: true, sameSite: 'lax', path: '/' });

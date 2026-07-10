@@ -274,13 +274,16 @@ function parseJSON(s) {
  * 3. AUTH MIDDLEWARE
  * ------------------------------------------------------------------ */
 
+// Token hashing — SHA-256 (fast indexed lookup, not bcrypt)
+function tokenHash(t) { return crypto.createHash('sha256').update(t).digest('hex'); }
+
 function requireAuth(req, res, next) {
-  // Read token from httpOnly cookie first, fall back to Authorization header
-  var token = req.cookies['align-token'] ||
+  // Read token from httpOnly cookie OR Authorization header
+  var rawToken = req.cookies['align-token'] ||
     (req.headers.authorization || '').replace('Bearer ', '');
 
   // DEV MODE: auto-authenticate as admin
-  if (DEV_MODE && (!token || token === 'dev')) {
+  if (DEV_MODE && (!rawToken || rawToken === 'dev')) {
     const admin = dbGet("SELECT * FROM users WHERE role = 'admin' ORDER BY created_at LIMIT 1");
     if (admin) {
       req.user = admin;
@@ -290,17 +293,29 @@ function requireAuth(req, res, next) {
     }
   }
 
-  if (!token) return res.status(401).json({ error: 'Not signed in' });
+  if (!rawToken) return res.status(401).json({ error: 'Not signed in' });
 
-  const result = sessions.validateSession(dbGet, dbRun, token, safeUser);
-  if (!result) return res.status(401).json({ error: 'Session expired' });
+  // New path: auth_tokens table (bearer tokens)
+  var row = dbGet(
+    'SELECT user_id FROM auth_tokens WHERE token_hash = ? AND expires_at > ?',
+    tokenHash(rawToken), Date.now()
+  );
 
-  req.user = result.user;
-  req.token = token;
+  // Legacy path: sessions table (cookie sessions — pre-migration)
+  if (!row) {
+    const result = sessions.validateSession(dbGet, dbRun, rawToken, safeUser);
+    if (result) {
+      req.user = result.user;
+      req.token = rawToken;
+      sessions.slideSession(dbRun, rawToken);
+      return next();
+    }
+  }
 
-  // Slide session expiry on activity (keep-alive)
-  sessions.slideSession(dbRun, token);
+  if (!row) return res.status(401).json({ error: 'Session expired' });
 
+  req.user = dbGet('SELECT * FROM users WHERE id = ?', row.user_id);
+  req.token = rawToken;
   next();
 }
 

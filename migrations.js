@@ -391,6 +391,23 @@ const MIGRATIONS = [
       try { db.exec("CREATE INDEX IF NOT EXISTS idx_rec_pl_apt ON records(project_id, pl_apartment) WHERE category = 'punchlist'"); } catch(e) {}
       try { db.exec("CREATE INDEX IF NOT EXISTS idx_rec_pl_co ON records(project_id, pl_company) WHERE category = 'punchlist'"); } catch(e) {}
     }
+  },
+  /* ── v19: auth_tokens for bearer token auth ────────────────────────── */
+  {
+    version: 19,
+    name: 'auth_tokens',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS auth_tokens (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id     INTEGER NOT NULL REFERENCES users(id),
+          token_hash  TEXT NOT NULL UNIQUE,
+          expires_at  INTEGER NOT NULL,
+          created_at  INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+        )
+      `);
+      try { db.exec("CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id)"); } catch(e) {}
+    }
   }
 ];
 
