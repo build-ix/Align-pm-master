@@ -1080,3 +1080,19 @@ html[data-theme="dark"] .logo-dark { display: block; }
   padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;
 }
 .tile-retry-btn:hover { opacity: 0.9; }
+
+/* ── New Tile Grid (router-powered) ─────────────────────────────── */
+.new-tile-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px; padding: 0 16px 24px 16px;
+}
+.new-tile {
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius-md); padding: 20px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  cursor: pointer; transition: transform 0.1s, box-shadow 0.15s;
+}
+.new-tile:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.new-tile:active { transform: translateY(0); }
+.new-tile-icon { font-size: 1.5rem; }
+.new-tile-title { font-size: 0.85rem; font-weight: 500; color: var(--ink); text-align: center; }

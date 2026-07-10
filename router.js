@@ -13,7 +13,7 @@
   var _routes = {
     'signin':        { module: 'SignIn',        public: true },
     'projects':      { module: 'AlignProjects', public: false },
-    'home':          { module: 'Home',           public: false },
+    'home':          { module: 'HomePage',      public: false },
     'daily-logs':    { module: 'AlignDailyLogs', public: false, needsProject: true },
     'punchlist':     { module: 'AlignPunchlist', public: false, needsProject: true },
     'drawings':      { module: 'AlignDrawings',  public: false, needsProject: true },
