@@ -64,6 +64,9 @@
   }
 
   // Wait for DOM + essential scripts
+  // Set flag immediately so old auth system knows to yield
+  window._routerBooted = true;
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);
   } else {
