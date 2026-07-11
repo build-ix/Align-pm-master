@@ -45,6 +45,30 @@ test('shell references cache-busted branded assets', () => {
   }
 });
 
+test('every icon/favicon referenced in index.html exists on disk', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+
+  // Collect all icon-related hrefs in <head>
+  const headMatch = html.match(/<head>[\s\S]*?<\/head>/);
+  const head = headMatch ? headMatch[0] : '';
+  const hrefs = [...head.matchAll(/<link[^>]*rel="(?:icon|apple-touch-icon)"[^>]*href="([^"]+)"/gi)];
+
+  const checked = new Set();
+  for (const m of hrefs) {
+    const raw = m[1];
+    // Resolve relative to root
+    const resolved = raw.startsWith('/') ? raw.slice(1) : raw;
+    if (checked.has(resolved)) continue;
+    checked.add(resolved);
+    const fullPath = path.join(root, resolved);
+    expect(fs.existsSync(fullPath), `${resolved} (from href="${raw}") is missing`).toBe(true);
+    expect(fs.statSync(fullPath).size, `${resolved} is empty`).toBeGreaterThan(100);
+  }
+
+  // Guard: we expect at least 2 icons (favicon.png + apple-touch-icon)
+  expect(checked.size, 'Expected at least 2 icon references').toBeGreaterThanOrEqual(2);
+});
+
 test('changed shell files use a fresh browser cache version', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   for (const file of ['styles.css', 'align-auth.css', 'align-native-bridge.js', 'align-api.js', 'script.js']) {
