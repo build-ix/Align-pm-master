@@ -17,18 +17,7 @@
   <script src="align-errors.js?v=60"></script>
   <script src="align-vitals.js?v=60"></script>
   <script src="align-native-bridge.js?v=60"></script>
-  <!-- Core: store → api → router (must load before modules) -->
-  <script src="store.js?v=1"></script>
-  <script src="api.js?v=1"></script>
-  <script src="tokenStore.js?v=1"></script>
-  <script src="router.js?v=1"></script>
-  <script src="signin.js?v=2"></script>
-  <script src="tileRegistry.js?v=1"></script>
-  <script src="safeRender.js?v=1"></script>
-  <script src="home.js?v=1"></script>
-  <script src="devPanel.js?v=1"></script>
-  <script src="offline.js?v=1"></script>
-  <script src="lazyLoad.js?v=1"></script>
+
   <link rel="stylesheet" href="styles.css?v=60" />
   <link rel="stylesheet" href="align-storage.css" />
   <link rel="stylesheet" href="align-files.css?v=60" />
@@ -48,14 +37,6 @@
 </head>
 <body>
 
-  <!-- Boot screen: shown while router decides destination -->
-  <div id="boot-screen" style="position:fixed;inset:0;background:#0a0a12;z-index:9999;display:flex;align-items:center;justify-content:center">
-    <div style="width:40px;height:40px;border:3px solid rgba(232,100,27,0.2);border-top-color:#E8641B;border-radius:50%;animation:boot-spin 0.8s linear infinite"></div>
-  </div>
-  <style>@keyframes boot-spin{to{transform:rotate(360deg)}}</style>
-
-  <!-- App shell: hidden until boot decides destination -->
-  <div id="app" style="visibility:hidden">
 
   <!-- Skip-to-content link -->
   <a href="#dashboard" class="skip-link">Skip to main content</a>
@@ -153,9 +134,6 @@
   <script src="align-contacts.js?v=60"></script>
   <script src="align-tasks.js?v=60"></script>
   <script src="align-photos.js?v=60"></script>
-  <!-- Boot: decides destination, fires router — must load BEFORE script.js -->
-  <script src="boot.js?v=1"></script>
-
   <script src="align-auth.js?v=60"></script>
   <script src="align-settings.js?v=60"></script>
   <script src="script.js?v=60"></script>
@@ -170,8 +148,5 @@
       document.body.appendChild(s);
     })();
   </script>
-  <!-- Boot: decides destination, fires router -->
-  <script src="boot.js?v=1"></script>
-  </div><!-- /#app -->
 </body>
 </html>
