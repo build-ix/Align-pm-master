@@ -88,30 +88,7 @@ function _closeSection() {
   }
 })();
 
-// ─── Apply At a Glance icon colors to tile icons ───
-var TILE_COLORS = {
-  drawings:    '#6366F1',
-  'daily-logs':'#A855F7',
-  specs:       '#8B5CF6',
-  rfis:        '#F59E0B',
-  punchlist:   '#10B981',
-  schedule:    '#06B6D4',
-  budget:      '#EC4899',
-  contacts:    '#14B8A6',
-  photos:      '#F97316',
-  tasks:       '#8B5CF6',
-  procurement: '#0EA5E9',
-  files:       '#D97706'
-};
-tiles.forEach(function(t) {
-  var section = t.getAttribute('data-section');
-  var color = TILE_COLORS[section] || '#6B7280';
-  var icon = t.querySelector('.tile-icon');
-  if (icon) {
-    icon.style.color = color;
-    icon.style.background = color + '15';
-  }
-});
+// ─── Tile icon colors are controlled by align-polish.css ───
 
 // ─── PERMISSIONS: Tile visibility based on room access ───
 window._myPermissions = {};
@@ -1655,7 +1632,7 @@ function _escHtml(s) {
       .then(function(d) {
         if (seq !== _psSeq) return; // stale
         var projs = d.projects || [];
-        var h = '<div class="ps-page"><div class="ps-header"><div class="ps-logo-wrap"><img class="ps-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align"><img class="ps-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align"></div><h1 class="ps-title">Select Project</h1></div>';
+        var h = '<div class="ps-page"><div class="ps-header"><div class="ps-logo-wrap"><img class="ps-logo auth-logo-light" src="assets/align-wordmark-v2.svg" alt="Align"><img class="ps-logo auth-logo-dark" src="assets/align-wordmark-dark-v2.svg" alt="Align"></div><h1 class="ps-title">Select Project</h1><button class="ps-signout-btn" id="ps-signout">Sign Out</button></div>';
 
         if (!projs.length) {
           // #4: Differentiate empty state — admin can create, member can't
@@ -1669,13 +1646,14 @@ function _escHtml(s) {
           for (var i = 0; i < projs.length; i++) {
             var p = projs[i];
             var pid = String(p.id);
+            var initial = String(p.name || 'P').trim().charAt(0).toUpperCase() || 'P';
             h += '<div class="ps-card" data-pid="' + _esc(pid) + '">';
-            // Image — edge-to-edge left, background-image style
+            h += '<div class="ps-card-img ps-card-img-empty">';
+            h += '<span class="ps-card-initial">' + _esc(initial) + '</span>';
             if (p.image_file_id) {
-              h += '<div class="ps-card-img" style="background-image:url(\'/api/files/' + _esc(String(p.image_file_id)) + '\')"></div>';
-            } else {
-              h += '<div class="ps-card-img"></div>';
+              h += '<img class="ps-card-photo" src="/api/files/' + _esc(String(p.image_file_id)) + '" alt="">';
             }
+            h += '</div>';
             h += '<div class="ps-card-body">';
             h += '<div class="ps-card-name">' + _esc(p.name) + '</div>';
             if (p.address) h += '<div class="ps-card-addr">' + _esc(p.address) + '</div>';
@@ -1685,8 +1663,15 @@ function _escHtml(s) {
           }
           h += '</div>';
         }
-        h += '<div class="ps-footer"><button class="ps-signout-btn" id="ps-signout">Sign Out</button></div></div>';
+        h += '</div>';
         el.innerHTML = h;
+
+        // Keep the project initial visible when a stored project image is missing.
+        el.querySelectorAll('.ps-card-photo').forEach(function(photo) {
+          function removeBrokenPhoto() { photo.remove(); }
+          photo.addEventListener('error', removeBrokenPhoto, { once: true });
+          if (photo.complete && photo.naturalWidth === 0) removeBrokenPhoto();
+        });
 
         // #6: Event delegation — single listener on grid, survives re-renders
         var grid = el.querySelector('#ps-grid');
@@ -1703,11 +1688,13 @@ function _escHtml(s) {
               promise.then(function() {
                 window._fetchMyPermissions(pid);
                 _updateProjectName();
+                if (window._refreshEssentials) window._refreshEssentials();
                 location.hash = '';
               });
             } else {
               window._fetchMyPermissions(pid);
               _updateProjectName();
+              if (window._refreshEssentials) window._refreshEssentials();
               location.hash = '';
             }
           });
