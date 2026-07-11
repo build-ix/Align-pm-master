@@ -7,6 +7,14 @@
 
   var _inFlight = false;
 
+  function _apiUrl(path) {
+    var capacitor = window.Capacitor;
+    var isNative = capacitor && (typeof capacitor.isNativePlatform === 'function'
+      ? capacitor.isNativePlatform()
+      : capacitor.isNativePlatform);
+    return isNative ? 'https://alignprojects.net' + path : path;
+  }
+
   function mount(container) {
     if (!container) return;
     container.innerHTML = _html();
@@ -111,7 +119,7 @@
     var email = document.getElementById('si-email').value.trim();
     var password = document.getElementById('si-password').value;
 
-    fetch('/api/auth/login', {
+    fetch(_apiUrl('/api/auth/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, password: password })
