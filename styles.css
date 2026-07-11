@@ -27,12 +27,12 @@ body.section-open { overflow: hidden; }
 /* Project-select is a standalone page — no section chrome, drafting background */
 body.ps-open .section-page-header { display: none; }
 body.ps-open #section-page {
-  background-image: url('assets/drafting-bg.png');
+  background-image: url('assets/drafting-bg-v2.png');
   background-size: cover;
   background-position: center;
 }
 html[data-theme="dark"] body.ps-open #section-page {
-  background-image: url('assets/drafting-bg-dark.png');
+  background-image: url('assets/drafting-bg-dark-v2.png');
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -82,7 +82,7 @@ html, body {
 body {
   font-family: var(--font);
   background: var(--bg);
-  background-image: url('assets/drafting-bg.png');
+  background-image: url('assets/drafting-bg-v2.png');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
@@ -96,7 +96,7 @@ body {
 
 /* Dark mode drafting background */
 html[data-theme="dark"] body {
-  background-image: url('assets/drafting-bg-dark.png');
+  background-image: url('assets/drafting-bg-dark-v2.png');
 }
 a { color: var(--brand); text-decoration: none; }
 img { max-width: 100%; display: block; }

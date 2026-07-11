@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 140">
+  <polygon points="35,130 80,130 58,22 12,22" fill="#E8641B"/>
+  <polygon points="128,130 173,130 115,22 68,22" fill="#E8641B"/>
+  <rect x="10" y="20" width="115" height="6" rx="2" fill="#D4500A"/>
+  <rect x="35" y="82" width="330" height="9" rx="3" fill="#D4500A"/>
+  <rect x="20" y="82" width="18" height="9" rx="2" fill="#E8641B"/>
+  <rect x="58" y="60" width="60" height="31" fill="#E8641B"/>
+  <text x="140" y="62" font-family="Arial Black,Helvetica Neue,sans-serif" font-weight="900" font-size="42" fill="#ffffff">LIGN</text>
+</svg>
