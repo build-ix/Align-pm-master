@@ -861,7 +861,7 @@ html[data-theme="dark"] body.ps-open #section-page {
 
 /* Sign out in project-selection header — right-aligned ghost button */
 .ps-signout-btn {
-  min-height: 38px;
+  min-height: 44px;
   margin-left: auto;
   padding: 0 16px;
   border: 1px solid var(--align-line);
@@ -924,7 +924,7 @@ html[data-theme="dark"] body.ps-open #section-page {
   }
 
   #user-badge-container {
-    min-width: 42px;
+    min-width: 44px;
   }
 
   .user-badge {

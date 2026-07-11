@@ -53,4 +53,6 @@ test('the professional UI layer contains no rejected visual effects', () => {
   expect(css).not.toMatch(/backdrop-filter:\s*blur/i);
   expect(css).not.toContain('#6366f1');
   expect(css).not.toContain('translatey(-');
+  expect(css).not.toMatch(/\.ps-signout-btn\s*\{[^}]*min-height:\s*38px/i);
+  expect(css).toMatch(/@media \(max-width: 600px\)[\s\S]*?#user-badge-container\s*\{[^}]*min-width:\s*44px/i);
 });
