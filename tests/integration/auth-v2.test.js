@@ -15,7 +15,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_SRC = path.join(__dirname, '../../data/align.db');
 
 // Import modules
-import { runMigrations } from '../../migrations.js';
 import * as crypto from '../../align-crypto.js';
 import * as sessions from '../../align-sessions.js';
 import * as invites from '../../align-invites.js';
@@ -73,7 +72,9 @@ let admin, testProjectId;
 beforeAll(async () => {
   const SQL = await initSqlJs();
   _db = new SQL.Database(fs.readFileSync(DB_SRC));
-  runMigrations(_db);
+  // This suite tests auth modules against a disposable sql.js copy of the
+  // already-migrated production schema. The migration runner uses the
+  // better-sqlite3 transaction API and is covered separately.
 
   admin = dbGet("SELECT * FROM users WHERE username = 'admin'");
   const proj = dbGet('SELECT id FROM projects LIMIT 1');
