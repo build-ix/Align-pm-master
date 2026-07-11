@@ -79,10 +79,13 @@ jobs:
 
       - name: Generate app icon assets
         run: |
+          test -f assets/icon-only.png
           npx capacitor-assets generate \
+            --ios \
             --iconBackgroundColor '#0a0a12' \
             --iconBackgroundColorDark '#0a0a12' \
             --assetPath assets/
+          test -s ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
 
       - name: Write App Store Connect API key
         run: |
@@ -110,6 +113,7 @@ jobs:
             -configuration Release \
             CODE_SIGN_STYLE=Auto \
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             -allowProvisioningUpdates \
             -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_KEY_ID }} \
             -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
