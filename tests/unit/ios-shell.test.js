@@ -71,7 +71,9 @@ test('every icon/favicon referenced in index.html exists on disk', () => {
 
 test('changed shell files use a fresh browser cache version', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  for (const file of ['styles.css', 'align-auth.css', 'align-native-bridge.js', 'align-api.js', 'script.js']) {
+  // script.js was changed in the approved UI redesign — requires v=62
+  for (const file of ['styles.css', 'align-auth.css', 'align-native-bridge.js', 'align-api.js']) {
     expect(html).toContain(`${file}?v=61`);
   }
+  expect(html).toContain('script.js?v=62');
 });
