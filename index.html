@@ -5,13 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Align</title>
   <style>html,body{background:#0a0a12;margin:0;color:#e0e0e0}html[data-theme="light"]{background:#f5f5f5;color:#111}</style>
-  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="icon" type="image/svg+xml" href="assets/c3-favicon.svg" />
+  <link rel="icon" type="image/png" href="/favicon-v2.png" />
   <script>
     // Apply saved theme before paint (prevents flash)
     var t = localStorage.getItem('align-theme') || 'dark';
     document.documentElement.setAttribute('data-theme', t);
   </script>
-  <link rel="apple-touch-icon" href="assets/icon-only.png" />
+  <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
   <!-- Error monitoring — must load FIRST, before any application code -->
   <script src="align-errors.js?v=60"></script>
   <script src="align-vitals.js?v=60"></script>
@@ -46,8 +47,8 @@
 
   <!-- HEADER -->
   <header class="app-header">
-    <img class="logo logo-light" src="assets/align-wordmark-v2.svg" alt="Align" width="90" height="28" />
-    <img class="logo logo-dark" src="assets/align-wordmark-dark-v2.svg" alt="Align" width="90" height="28" />
+    <img class="logo logo-light" src="assets/c3-wordmark-light.svg" alt="Align" width="90" height="36" />
+    <img class="logo logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align" width="90" height="36" />
     <div class="header-actions">
       <button class="project-picker" id="project-picker">
         <span id="project-name">Choose Project</span>

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALIGN — Logo Lab 3 · C1 Refinement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* Lab chrome only — the marks are the point. All marks are inline SVG geometry. */
+  :root { --orange:#E8641B; --navy:#1B2A3D; --ink:#151515; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:32px 40px 64px; background:#f4f4f2; color:#222;
+    font-family:Arial,'Helvetica Neue',sans-serif;
+  }
+  h1 {
+    font-size:22px; letter-spacing:2px; margin:0 0 4px; text-transform:uppercase;
+    font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif; font-weight:600;
+  }
+  .sub { font-size:13px; color:#777; margin:0 0 28px; }
+  section { margin:0 0 44px; }
+  h2 {
+    font-size:16px; letter-spacing:3px; text-transform:uppercase; color:#333;
+    border-bottom:2px solid var(--orange); display:inline-block; padding:0 24px 6px 0; margin:0 0 6px;
+    font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif; font-weight:600;
+  }
+  .note { font-size:12px; color:#888; margin:0 0 14px; max-width:760px; }
+  .row { display:flex; flex-wrap:wrap; gap:14px; margin-bottom:14px; align-items:stretch; }
+  .swatch {
+    padding:22px 26px; display:flex; align-items:center; justify-content:center; gap:22px;
+    border:1px solid #d8d8d4; border-radius:4px; position:relative; min-height:70px;
+  }
+  .swatch .tag {
+    position:absolute; top:5px; left:8px; font-size:10px; letter-spacing:1px;
+    text-transform:uppercase; opacity:.55;
+  }
+  .light { background:#fff; color:var(--navy); }
+  .dark  { background:#111; color:#fff; }
+  .dark .tag { color:#aaa; }
+  /* app header mock */
+  .appbar {
+    flex:1 1 340px; max-width:460px; height:52px; display:flex; align-items:center; gap:18px;
+    padding:0 18px; border-radius:4px; border:1px solid #d8d8d4;
+  }
+  .appbar.navy { background:var(--navy); color:#fff; }
+  .appbar.lightbar { background:#fff; color:var(--navy); }
+  .appbar .navi { margin-left:auto; display:flex; gap:16px; font-size:12px; letter-spacing:1px; text-transform:uppercase;
+    font-family:'Barlow Condensed','Arial Narrow',Arial,sans-serif; }
+  .appbar.navy .navi { color:#9fb0c2; }
+  .appbar.lightbar .navi { color:#8a8a8a; }
+  .appbar .navi b { color:var(--orange); font-weight:600; }
+  /* at 28px header size the monoline gets a slightly heavier optical cut */
+  .appbar svg { --c1sw:3; }
+  .favcell { display:flex; align-items:center; gap:18px; }
+  .favcell .fl { font-size:10px; opacity:.55; }
+  .cmp .swatch { gap:34px; }
+  svg { display:block; }
+</style>
+</head>
+<body>
+
+<h1>ALIGN &mdash; Logo Lab 3</h1>
+<p class="sub">C1 &ldquo;Continuous Lowercase&rdquo; refinement round &middot; rebuilt on one geometric skeleton &middot; two accent placements, V-A vs V-B &middot; Orange #E8641B &middot; Navy #1B2A3D.</p>
+
+<!-- ====================== SHARED SYMBOL DEFS ====================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+
+    <!-- ============ C1 REBUILT SKELETON ============
+         24u x-height grid: x-line ink y12, baseline ink y36, ascender ink y0,
+         descender ink to ~y48.6. Uniform 2.25u stroke, squared caps, round
+         joins, 10deg slant via skewX(-10) on the whole stroke group.
+
+         ONE bowl circle, R = 10.875u centerline (ink spans the full 24u
+         x-height band), reused three times:
+           - a bowl  : 267deg arc of that circle, endpoints ON the stem
+                       (crossings at 46deg, caps buried inside the stem band)
+           - g bowl  : the same circle, closed, its bottom point EXACTLY
+                       tangent to the baseline rail (24 + 10.875 = 34.875)
+           - n arch  : half of the same circle, springing colinearly off the
+                       left stem at mid x-height
+         All letter connections are tangent-continuous: single paths where the
+         pen doesn't lift; branches start colinear ON a stem (square cap
+         projects into the stem, invisible); the rail passes under the g and
+         kisses the bowl's bottom tangent point, where the open descender loop
+         peels off with opposite curvature (fast divergence, no sliver).
+         Dots are true circles OUTSIDE the skew group at pre-skew-compensated
+         centers x' = x - y*tan10, so the slant never ovals them. -->
+
+    <g id="c1-core" transform="skewX(-10)" fill="none" stroke="currentColor"
+       stroke-linecap="square" stroke-linejoin="round" style="stroke-width:var(--c1sw,2.25)">
+      <!-- a : bowl = 267deg arc of the master circle (c 12,24 R10.875),
+           endpoints (19.5, 24±7.875) sit on the stem centerline-0.5 -->
+      <path d="M19.5,16.125 A10.875,10.875 0 1 0 19.5,31.875"/>
+      <!-- a stem -> baseline exit -> l stem : ONE continuous path -->
+      <path d="M20,13.125 V29.875 A5,5 0 0 0 25,34.875 H29 A5,5 0 0 0 34,29.875 V1.125"/>
+      <!-- l exit -> i stem : branches colinearly off the l stem at y29.875 -->
+      <path d="M34,29.875 A5,5 0 0 0 39,34.875 H43 A5,5 0 0 0 48,29.875 V13.125"/>
+      <!-- i exit -> rail under g (tangent kiss at 69,34.875) -> n left stem -->
+      <path d="M48,29.875 A5,5 0 0 0 53,34.875 H85.5 A5,5 0 0 0 90.5,29.875 V13.125"/>
+      <!-- g : upper bowl = the SAME master circle, docked tangent on the rail -->
+      <circle cx="69" cy="24" r="10.875"/>
+      <!-- g : open lower loop, peels off the tangent point, terminal aims
+           back up toward the loop mouth; the dot caps the path end -->
+      <path d="M69,34.875 C71.9,34.875 74.4,37.3 74.4,40.8
+               C74.4,44.4 72.4,47.5 68.7,47.5
+               C65.3,47.5 63.3,45.4 63.3,42.9
+               C63.3,41.1 64.6,40.3 66.4,40"/>
+      <!-- n : arch = half of the master circle, springs colinearly at y24,
+           right leg + finishing flick -->
+      <path d="M90.5,24 A10.875,10.875 0 0 1 112.25,24 V29.875 A5,5 0 0 0 117.25,34.875 H119"/>
+    </g>
+
+    <!-- V-A : the i dot is the ONLY orange element; g terminal is navy -->
+    <symbol id="va-word" viewBox="-5.5 -1 121 51">
+      <use href="#c1-core"/>
+      <circle cx="46.85" cy="6.5" r="2.4" fill="#E8641B"/>
+      <circle cx="59.35" cy="40" r="2.4" fill="currentColor"/>
+    </symbol>
+
+    <!-- V-B : the g loop terminal is the ONLY orange element; i dot is navy -->
+    <symbol id="vb-word" viewBox="-5.5 -1 121 51">
+      <use href="#c1-core"/>
+      <circle cx="46.85" cy="6.5" r="2.4" fill="currentColor"/>
+      <circle cx="59.35" cy="40" r="2.4" fill="#E8641B"/>
+    </symbol>
+
+    <!-- V-A favicon : the 'a' glyph enclosed tight, plus the orange dot
+         placed as the i-dot would sit (superscript-right of the a) -->
+    <symbol id="va-fav" viewBox="-6.3 4.3 32.5 32.5">
+      <g transform="skewX(-10)" fill="none" stroke="currentColor"
+         stroke-linecap="square" stroke-linejoin="round" style="stroke-width:var(--c1fsw,3)">
+        <path d="M19.5,16.125 A10.875,10.875 0 1 0 19.5,31.875"/>
+        <path d="M20,13.125 V34.875"/>
+      </g>
+      <circle cx="21.5" cy="7.8" r="2.7" fill="#E8641B"/>
+    </symbol>
+
+    <!-- V-B favicon : the g strengthened for icon duty — heavier stroke,
+         loop opened wider, orange terminal dot enlarged -->
+    <symbol id="vb-fav" viewBox="45.75 10.9 40 40">
+      <g transform="skewX(-10)" fill="none" stroke="currentColor"
+         stroke-linecap="square" stroke-linejoin="round" style="stroke-width:var(--c1fsw,3)">
+        <circle cx="69" cy="24" r="10.875"/>
+        <path d="M69,34.875 C72.6,34.875 75.9,37.3 75.9,41.2
+                 C75.9,45.2 73.2,48.2 68.9,48.2
+                 C64.7,48.2 62.2,45.8 62.2,42.8
+                 C62.2,40.9 63.8,40 66.2,40.9"/>
+      </g>
+      <circle cx="58.99" cy="40.9" r="3.4" fill="#E8641B"/>
+    </symbol>
+
+  </defs>
+</svg>
+
+<!-- ====================== SIDE BY SIDE ====================== -->
+<section>
+  <h2>The Two Cuts &middot; Side by Side</h2>
+  <p class="note">Same rebuilt letterforms &mdash; one master bowl circle (R&nbsp;10.875u) shared by a, g and the n arch; tangent-welded connections; uniform 2.25u stroke; exactly ONE orange accent each. They differ only in where that accent lives.</p>
+  <div class="row">
+    <div class="swatch light" style="flex:1"><span class="tag">V-A &middot; orange i-dot</span>
+      <svg width="300" height="127"><use href="#va-word"/></svg>
+    </div>
+    <div class="swatch light" style="flex:1"><span class="tag">V-B &middot; orange g-tail</span>
+      <svg width="300" height="127"><use href="#vb-word"/></svg>
+    </div>
+  </div>
+  <div class="row">
+    <div class="swatch dark" style="flex:1"><span class="tag">V-A &middot; dark</span>
+      <svg width="300" height="127"><use href="#va-word"/></svg>
+    </div>
+    <div class="swatch dark" style="flex:1"><span class="tag">V-B &middot; dark</span>
+      <svg width="300" height="127"><use href="#vb-word"/></svg>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== V-A LADDER ====================== -->
+<section>
+  <h2>V-A &middot; Orange I-Dot</h2>
+  <p class="note">The i&rsquo;s dot carries the single accent &mdash; high, bright, where the eye lands mid-word. The g&rsquo;s open-loop terminal stays navy. Favicon = the lowercase a (first letter, strongest identifier) with the orange dot sitting superscript-right, exactly as the i-dot sits in the word.</p>
+  <div class="row">
+    <div class="swatch light"><span class="tag">hero &middot; light</span>
+      <svg width="300" height="127"><use href="#va-word"/></svg>
+    </div>
+    <div class="swatch dark"><span class="tag">hero &middot; dark</span>
+      <svg width="300" height="127"><use href="#va-word"/></svg>
+    </div>
+  </div>
+  <div class="row">
+    <div class="appbar navy">
+      <svg width="66" height="28"><use href="#va-word"/></svg>
+      <div class="navi"><b>Schedule</b><span>Trades</span><span>Lookahead</span><span>Reports</span></div>
+    </div>
+    <div class="appbar lightbar">
+      <svg width="66" height="28"><use href="#va-word"/></svg>
+      <div class="navi"><b>Schedule</b><span>Trades</span><span>Lookahead</span><span>Reports</span></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="swatch light"><span class="tag">favicon &middot; light</span>
+      <span class="favcell"><svg width="32" height="32"><use href="#va-fav"/></svg><span class="fl">32</span></span>
+      <span class="favcell"><svg width="16" height="16" style="--c1fsw:4"><use href="#va-fav"/></svg><span class="fl">16</span></span>
+    </div>
+    <div class="swatch dark"><span class="tag">favicon &middot; dark</span>
+      <span class="favcell"><svg width="32" height="32"><use href="#va-fav"/></svg><span class="fl">32</span></span>
+      <span class="favcell"><svg width="16" height="16" style="--c1fsw:4"><use href="#va-fav"/></svg><span class="fl">16</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== V-B LADDER ====================== -->
+<section>
+  <h2>V-B &middot; Orange G-Tail</h2>
+  <p class="note">The g&rsquo;s open lower-loop terminal carries the single accent &mdash; the signature flourish of the mark, low and unexpected. The i-dot stays navy. Favicon = the g strengthened for icon duty: heavier stroke at small sizes, loop opened wider, orange terminal enlarged so it still reads at 16px.</p>
+  <div class="row">
+    <div class="swatch light"><span class="tag">hero &middot; light</span>
+      <svg width="300" height="127"><use href="#vb-word"/></svg>
+    </div>
+    <div class="swatch dark"><span class="tag">hero &middot; dark</span>
+      <svg width="300" height="127"><use href="#vb-word"/></svg>
+    </div>
+  </div>
+  <div class="row">
+    <div class="appbar navy">
+      <svg width="66" height="28"><use href="#vb-word"/></svg>
+      <div class="navi"><b>Schedule</b><span>Trades</span><span>Lookahead</span><span>Reports</span></div>
+    </div>
+    <div class="appbar lightbar">
+      <svg width="66" height="28"><use href="#vb-word"/></svg>
+      <div class="navi"><b>Schedule</b><span>Trades</span><span>Lookahead</span><span>Reports</span></div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="swatch light"><span class="tag">favicon &middot; light</span>
+      <span class="favcell"><svg width="32" height="32"><use href="#vb-fav"/></svg><span class="fl">32</span></span>
+      <span class="favcell"><svg width="16" height="16" style="--c1fsw:4.2"><use href="#vb-fav"/></svg><span class="fl">16</span></span>
+    </div>
+    <div class="swatch dark"><span class="tag">favicon &middot; dark</span>
+      <span class="favcell"><svg width="32" height="32"><use href="#vb-fav"/></svg><span class="fl">32</span></span>
+      <span class="favcell"><svg width="16" height="16" style="--c1fsw:4.2"><use href="#vb-fav"/></svg><span class="fl">16</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ====================== 16px SHOOTOUT ====================== -->
+<section class="cmp">
+  <h2>16px Favicon Shootout</h2>
+  <p class="note">V-A&rsquo;s a-plus-dot vs V-B&rsquo;s strengthened g, at true 16px on white and #111.</p>
+  <div class="row">
+    <div class="swatch light"><span class="tag">light</span>
+      <span class="favcell"><svg width="16" height="16" style="--c1fsw:4"><use href="#va-fav"/></svg><span class="fl">V-A</span></span>
+      <span class="favcell"><svg width="16" height="16" style="--c1fsw:4.2"><use href="#vb-fav"/></svg><span class="fl">V-B</span></span>
+    </div>
+    <div class="swatch dark"><span class="tag">dark</span>
+      <span class="favcell"><svg width="16" height="16" style="--c1fsw:4"><use href="#va-fav"/></svg><span class="fl">V-A</span></span>
+      <span class="favcell"><svg width="16" height="16" style="--c1fsw:4.2"><use href="#vb-fav"/></svg><span class="fl">V-B</span></span>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

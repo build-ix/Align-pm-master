@@ -6,10 +6,9 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 const originalAssets = [
-  'assets/align-logo-light-v2.png',
-  'assets/align-logo-dark-v2.png',
-  'assets/align-wordmark-v2.svg',
-  'assets/align-wordmark-dark-v2.svg',
+  'assets/c3-wordmark-light.svg',
+  'assets/c3-wordmark-dark.svg',
+  'assets/c3-favicon.svg',
   'assets/drafting-bg-v2.png',
   'assets/drafting-bg-dark-v2.png'
 ];

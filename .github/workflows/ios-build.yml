@@ -82,8 +82,8 @@ jobs:
           test -f assets/icon-only.png
           npx capacitor-assets generate \
             --ios \
-            --iconBackgroundColor '#0a0a12' \
-            --iconBackgroundColorDark '#0a0a12' \
+            --iconBackgroundColor '#1B2A3D' \
+            --iconBackgroundColorDark '#1B2A3D' \
             --assetPath assets/
           test -s ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
 

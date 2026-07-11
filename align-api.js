@@ -674,7 +674,7 @@
         overlay.className = 'auth-overlay';
         overlay.innerHTML = '<div class="auth-container">' +
           '<div class="auth-brand">' +
-            '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+            '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/c3-wordmark-light.svg" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align" /></div>' +
             '<p class="auth-subtitle">Cannot connect to server. Make sure the backend is running.</p>' +
           '</div>' +
         '</div>';
@@ -836,7 +836,7 @@
     overlay.className = 'auth-overlay';
     overlay.innerHTML = '<div class="auth-container">' +
       '<div class="auth-brand">' +
-        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/c3-wordmark-light.svg" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align" /></div>' +
         '<h1 class="auth-title">Set Up Your Account</h1>' +
         '<p class="auth-subtitle">Choose a username and create a password</p>' +
       '</div>' +
@@ -890,7 +890,7 @@
   function _renderCreateAdminHTML() {
     return '<div class="auth-container">' +
       '<div class="auth-brand">' +
-        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/c3-wordmark-light.svg" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align" /></div>' +
         '<p class="auth-subtitle">Welcome! Create your admin account to get started.</p>' +
       '</div>' +
       '<div class="auth-create-form" id="auth-create-form">' +
@@ -941,7 +941,7 @@
 
     return '<div class="auth-container">' +
       '<div class="auth-brand">' +
-        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/c3-wordmark-light.svg" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align" /></div>' +
         '<p class="auth-subtitle">Welcome back</p>' +
       '</div>' +
       '<div class="auth-card-view" id="auth-card-view">' +
@@ -976,7 +976,7 @@
     // Clean login form (no cards) — first visit or after "Not you?" from card view
     return '<div class="auth-container">' +
       '<div class="auth-brand">' +
-        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/c3-wordmark-light.svg" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align" /></div>' +
         '<p class="auth-subtitle">Sign in to continue</p>' +
       '</div>' +
       '<div class="auth-login-form" id="auth-login-form">' +

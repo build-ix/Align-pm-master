@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 36" width="90" height="36">
+  <g fill="none" stroke-width="4" transform="translate(18,18)">
+    <path stroke="#1B2A3D" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4
+                               M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+    <path stroke="#E8641B" d="M0,-4 V4"/>
+  </g>
+  <text x="34" y="25" textLength="48" lengthAdjust="spacingAndGlyphs"
+    font-family="Barlow Condensed,Arial Narrow,Helvetica Neue,Arial,sans-serif"
+    font-weight="600" font-size="20" letter-spacing="0.8" fill="#1B2A3D">ALIGN</text>
+</svg>

@@ -36,8 +36,8 @@ test('the professional UI layer uses the approved construction identity', () => 
 test('the project selector uses the full wordmark and a deliberate empty-image state', () => {
   const script = read('script.js');
 
-  expect(script).toContain('assets/align-wordmark-v2.svg');
-  expect(script).toContain('assets/align-wordmark-dark-v2.svg');
+  expect(script).toContain('assets/c3-wordmark-light.svg');
+  expect(script).toContain('assets/c3-wordmark-dark.svg');
   expect(script).toContain('ps-card-img-empty');
   expect(script).toContain('ps-card-initial');
   expect(script).toContain('ps-card-photo');

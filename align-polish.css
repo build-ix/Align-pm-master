@@ -138,19 +138,17 @@ body.auth-overlay-open {
 
 .auth-logo-wrap {
   display: block;
-  width: 230px;
-  height: 115px;
+  width: 240px;
+  height: auto;
   margin: 0 0 10px;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .auth-logo {
-  width: 230px;
-  height: 115px;
+  width: 240px;
+  height: auto;
   max-width: none;
-  object-fit: cover;
-  object-position: center;
 }
 
 .auth-subtitle {
@@ -297,7 +295,7 @@ body.auth-overlay-open {
 
 .app-header .logo {
   width: auto;
-  height: 28px;
+  height: 36px;
 }
 
 .header-actions {
@@ -680,8 +678,8 @@ html[data-theme="dark"] body.ps-open #section-page {
 .ps-logo-wrap {
   display: flex;
   align-items: center;
-  width: 112px;
-  height: 38px;
+  width: 180px;
+  height: auto;
   margin: 0;
   padding-left: 10px;
   overflow: visible;
@@ -689,8 +687,8 @@ html[data-theme="dark"] body.ps-open #section-page {
 }
 
 .ps-logo {
-  width: 92px;
-  height: 30px;
+  width: 160px;
+  height: auto;
   object-fit: contain;
   object-position: left center;
 }

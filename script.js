@@ -1632,7 +1632,7 @@ function _escHtml(s) {
       .then(function(d) {
         if (seq !== _psSeq) return; // stale
         var projs = d.projects || [];
-        var h = '<div class="ps-page"><div class="ps-header"><div class="ps-logo-wrap"><img class="ps-logo auth-logo-light" src="assets/align-wordmark-v2.svg" alt="Align"><img class="ps-logo auth-logo-dark" src="assets/align-wordmark-dark-v2.svg" alt="Align"></div><h1 class="ps-title">Select Project</h1><button class="ps-signout-btn" id="ps-signout">Sign Out</button></div>';
+        var h = '<div class="ps-page"><div class="ps-header"><div class="ps-logo-wrap"><img class="ps-logo auth-logo-light" src="assets/c3-wordmark-light.svg" alt="Align"><img class="ps-logo auth-logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align"></div><h1 class="ps-title">Select Project</h1><button class="ps-signout-btn" id="ps-signout">Sign Out</button></div>';
 
         if (!projs.length) {
           // #4: Differentiate empty state — admin can create, member can't

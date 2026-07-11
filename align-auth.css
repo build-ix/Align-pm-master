@@ -73,8 +73,8 @@ body.auth-overlay-open {
 }
 .auth-logo {
   display: block;
-  height: 140px;
-  width: auto;
+  width: 240px;
+  height: auto;
   max-width: 100%;
   pointer-events: none;
 }

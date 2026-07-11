@@ -111,7 +111,7 @@ input, textarea, select, button { font: inherit; color: inherit; }
   margin-bottom: 4px;
   min-height: 52px;
 }
-.logo { height: 28px; }
+.logo { height: 36px; }
 
 /* Light mode: show light logo, hide dark */
 .logo-dark { display: none; }
@@ -973,8 +973,8 @@ html[data-theme="dark"] .logo-dark { display: block; }
 /* ── Project Selection Page ──────────────────────────────────────────── */
 .ps-page { display:flex; flex-direction:column; align-items:center; min-height:100vh; padding:40px 20px; box-sizing:border-box; }
 .ps-header { text-align:center; margin-bottom:32px; }
-.ps-logo-wrap { width:64px; height:64px; margin:0 auto 16px; }
-.ps-logo { width:100%; height:100%; }
+.ps-logo-wrap { width:180px; height:auto; margin:0 auto 16px; }
+.ps-logo { width:100%; height:auto; }
 .ps-title { font-size:1.5rem; font-weight:700; color:var(--ink); margin:0; }
 /* ── Project Select Cards (horizontal, editorial) ── */
 .ps-grid { display:flex; flex-direction:column; gap:12px; width:100%; max-width:560px; }
