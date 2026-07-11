@@ -111,7 +111,7 @@ input, textarea, select, button { font: inherit; color: inherit; }
   margin-bottom: 4px;
   min-height: 52px;
 }
-.logo { height: 36px; }
+.logo { height: 44px; }
 
 /* Light mode: show light logo, hide dark */
 .logo-dark { display: none; }
