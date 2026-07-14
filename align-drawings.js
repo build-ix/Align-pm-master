@@ -588,6 +588,71 @@
     }
   }
 
+  /* ── Title block field extraction (label-based) ───────────────────────── */
+
+  var _KNOWN_LABELS = [
+    'DRAWING NO', 'DRAWING NUMBER', 'SHEET NO', 'SHEET NUMBER',
+    'DWG NO', 'PAGE NO', 'CHECKED BY', 'DRAWN BY',
+    'PROJECT NO', 'PROJECT NUMBER', 'PROJECT', 'DATE',
+    'SCALE', 'REV', 'REVISION', 'DOB', 'D.O.B.',
+    'ARCHITECT', 'STRUCTURAL ENGINEER', 'MECHANICAL ENGINEER',
+    'DRAWING TITLE', 'TITLE', 'DRAWING NAME', 'SHEET TITLE'
+  ];
+
+  function _isKnownLabel(text) {
+    var t = text.toUpperCase().replace(/[:\.\s]/g, '');
+    for (var i = 0; i < _KNOWN_LABELS.length; i++) {
+      if (t.indexOf(_KNOWN_LABELS[i].replace(/[:\.\s]/g, '')) !== -1) return true;
+    }
+    return false;
+  }
+
+  function _findFieldValue(candidates, labelPatterns) {
+    // Find the label
+    var labelItem = null;
+    for (var i = 0; i < candidates.length; i++) {
+      var ct = candidates[i].text.toUpperCase().replace(/[:\.\s]/g, '');
+      for (var p = 0; p < labelPatterns.length; p++) {
+        var pat = labelPatterns[p].toUpperCase().replace(/[:\.\s]/g, '');
+        if (ct.indexOf(pat) !== -1) {
+          labelItem = candidates[i];
+          break;
+        }
+      }
+      if (labelItem) break;
+    }
+    if (!labelItem) return null;
+
+    // Find the best value near this label
+    var best = null;
+    var bestScore = -1;
+    for (var i = 0; i < candidates.length; i++) {
+      var c = candidates[i];
+      if (c === labelItem) continue;
+      if (_isKnownLabel(c.text)) continue;
+
+      var dx = Math.abs(c.x - labelItem.x);
+      var dy = Math.abs(c.y - labelItem.y);
+
+      // Must be reasonably close
+      if (dx > 400 || dy > 50) continue;
+
+      // Score: same row = big bonus, closer X = better, larger font = better
+      var score = 0;
+      if (dy < 15) score += 500;          // same row
+      score -= dx * 2;                     // horizontal proximity
+      score -= dy * 10;                    // vertical proximity
+      score += c.fontSize * 5;             // larger font = likely value
+
+      if (score > bestScore) {
+        bestScore = score;
+        best = c;
+      }
+    }
+
+    return best ? best.text : null;
+  }
+
   function _extractBottomRightText(textItems, viewport) {
 
     if (!textItems || textItems.length === 0) return null;
@@ -595,6 +660,36 @@
     var vw = viewport.width;
     var vh = viewport.height;
 
+    // ── NEW: Label-based title block scanner ──
+    // Scan the entire bottom 40% of the page for labeled fields
+    var candidates = [];
+    for (var i = 0; i < textItems.length; i++) {
+      var item = textItems[i];
+      if (!item.str || !item.transform) continue;
+      var ty = item.transform[5];
+      // PDF coords: y=0 is bottom. Scan bottom 40%.
+      if (ty > vh * 0.40) continue;
+      var str = item.str.trim();
+      if (!str || str.length < 2) continue;
+      candidates.push({
+        text: str,
+        x: item.transform[4],
+        y: ty,
+        fontSize: item.height || (item.transform ? Math.abs(item.transform[3]) : 8)
+      });
+    }
+
+    var drawingNo = _findFieldValue(candidates, ['DRAWING NO.', 'DRAWING NO', 'DRAWING NUMBER', 'SHEET NO.', 'SHEET NO', 'SHEET NUMBER', 'DWG NO.', 'DWG NO']);
+    var drawingTitle = _findFieldValue(candidates, ['DRAWING TITLE', 'TITLE', 'DRAWING NAME', 'SHEET TITLE']);
+
+    if (drawingNo || drawingTitle) {
+      if (drawingNo && drawingTitle) {
+        return drawingNo + ' — ' + drawingTitle;
+      }
+      return drawingNo || drawingTitle;
+    }
+
+    // ── FALLBACK: old bottom-right quadrant scanner ──
     // Bottom-right region: rightmost 35% of width, bottom 20% of height
     var leftBound = vw * 0.65;
     var topBound  = vh * 0.80;
