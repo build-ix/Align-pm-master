@@ -706,45 +706,25 @@
 
   /* ── Server upload (source of truth) ──────────────────────────────────── */
 
-  /**
-   * Convert a base64 data URL to a Blob without fetch() (avoids mobile browser
-   * data-URL length limits and memory issues).
-   */
-  function _dataUrlToBlob(dataUrl) {
-    var parts = dataUrl.split(',');
-    var mime = parts[0].match(/:(.*?);/)[1];
-    var binary = atob(parts[1]);
-    var len = binary.length;
-    var arr = new Uint8Array(len);
-    for (var i = 0; i < len; i++) {
-      arr[i] = binary.charCodeAt(i);
-    }
-    return new Blob([arr], { type: mime });
-  }
-
   function _uploadToServer(pid, drawingId, name, mime, dataUrl, folderId) {
-    // Convert data URL to Blob (handles large files without fetch() memory issues)
-    var blob;
-    try {
-      blob = _dataUrlToBlob(dataUrl);
-    } catch (e) {
-      return Promise.reject(new Error('Failed to convert data URL to blob'));
-    }
-    var fd = new FormData();
-    fd.append('file', blob, name);
-    fd.append('project_id', pid);
-    if (folderId) fd.append('folder_id', folderId);
+    // Convert data URL to Blob via fetch (handles large files reliably)
+    return fetch(dataUrl).then(function (r) { return r.blob(); }).then(function (blob) {
+      var fd = new FormData();
+      fd.append('file', blob, name);
+      fd.append('project_id', pid);
+      if (folderId) fd.append('folder_id', folderId);
 
-    var token = localStorage.getItem('align-token') || '';
-    return fetch('/api/files/upload', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token },
-      body: fd
-    }).then(function (r) {
-      if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Upload failed'); });
-      return r.json();
-    }).then(function (data) {
-      return data.file || { id: drawingId };
+      var token = localStorage.getItem('align-token') || '';
+      return fetch('/api/files/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: fd
+      }).then(function (r) {
+        if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Upload failed'); });
+        return r.json();
+      }).then(function (data) {
+        return data.file || { id: drawingId };
+      });
     });
   }
 
