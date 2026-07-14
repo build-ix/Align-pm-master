@@ -4,6 +4,7 @@ module.exports = function(app, deps) {
   var dbGet = deps.dbGet, dbRun = deps.dbRun, dbAll = deps.dbAll;
   var uid = deps.uid, nowISO = deps.nowISO, safeUser = deps.safeUser;
   var sendInviteEmail = deps.sendInviteEmail;
+  var sendProjectWelcomeEmail = deps.sendProjectWelcomeEmail;
   var crypto = deps.crypto;
   var requireAuth = deps.requireAuth, requireAdmin = deps.requireAdmin;
   var normalizePermissions = deps.normalizePermissions || function(p) { return p || {}; };
@@ -39,9 +40,84 @@ module.exports = function(app, deps) {
     email = email.toLowerCase().trim();
     name = name.trim();
 
-    var existing = dbGet('SELECT id FROM users WHERE lower(email) = lower(?)', email);
-    if (existing) return res.status(409).json({ error: 'A user with this email already exists', id: existing.id });
+    var existing = dbGet('SELECT * FROM users WHERE lower(email) = lower(?)', email);
 
+    // ── Existing deactivated user → reactivate, add to project(s), send welcome email
+    if (existing && existing.status === 'deactivated') {
+      if (Array.isArray(projects)) {
+        projects.forEach(function(p) {
+          if (p.id) {
+            dbRun('INSERT OR IGNORE INTO user_projects (user_id, project_id, permissions, role, company_id) VALUES (?, ?, ?, ?, ?)',
+              existing.id, p.id, JSON.stringify(p.permissions || {}), p.role || 'member', body.company_id || null);
+          }
+        });
+      }
+      // Reactivate
+      dbRun("UPDATE users SET status = 'active', invite_status = 'accepted', updated_at = ? WHERE id = ?",
+        nowISO(), existing.id);
+      // Gather project names for the welcome email
+      var projectNames = [];
+      if (Array.isArray(projects)) {
+        projects.forEach(function(p) {
+          if (p.id) {
+            var prj = dbGet('SELECT name FROM projects WHERE id = ?', p.id);
+            if (prj) projectNames.push(prj.name);
+          }
+        });
+      }
+      if (projectNames.length > 0 && sendProjectWelcomeEmail) {
+        try { sendProjectWelcomeEmail(email, existing.name || name, projectNames); } catch(e) {}
+      }
+      var updated = dbGet('SELECT * FROM users WHERE id = ?', existing.id);
+      return res.status(200).json({ person: safeUser(updated), reactivated: true });
+    }
+    if (existing && existing.status === 'active') {
+      if (Array.isArray(projects)) {
+        projects.forEach(function(p) {
+          if (p.id) {
+            dbRun('INSERT OR IGNORE INTO user_projects (user_id, project_id, permissions, role, company_id) VALUES (?, ?, ?, ?, ?)',
+              existing.id, p.id, JSON.stringify(p.permissions || {}), p.role || 'member', body.company_id || null);
+          }
+        });
+      }
+
+      // Gather project names for the welcome email
+      var projectNames = [];
+      if (Array.isArray(projects)) {
+        projects.forEach(function(p) {
+          if (p.id) {
+            var prj = dbGet('SELECT name FROM projects WHERE id = ?', p.id);
+            if (prj) projectNames.push(prj.name);
+          }
+        });
+      }
+      if (projectNames.length > 0 && sendProjectWelcomeEmail) {
+        try { sendProjectWelcomeEmail(email, existing.name || name, projectNames); } catch(e) {}
+      }
+
+      var updated = dbGet('SELECT * FROM users WHERE id = ?', existing.id);
+      return res.status(200).json({ person: safeUser(updated), added: true });
+    }
+
+    // ── Existing pending user → add to project(s), no new email (they already have an invite)
+    if (existing && existing.status === 'pending') {
+      if (Array.isArray(projects)) {
+        projects.forEach(function(p) {
+          if (p.id) {
+            dbRun('INSERT OR IGNORE INTO user_projects (user_id, project_id, permissions, role, company_id) VALUES (?, ?, ?, ?, ?)',
+              existing.id, p.id, JSON.stringify(p.permissions || {}), p.role || 'member', body.company_id || null);
+          }
+        });
+      }
+      // Update name if the pending user was created without one
+      if (!existing.name || existing.name === '') {
+        dbRun('UPDATE users SET name = ? WHERE id = ?', name, existing.id);
+      }
+      var updated = dbGet('SELECT * FROM users WHERE id = ?', existing.id);
+      return res.status(200).json({ person: safeUser(updated), pending: true });
+    }
+
+    // ── New user → create pending account + invite code (existing flow)
     var id = uid();
     var code = crypto.generateInviteCode();
     var ts = nowISO();
@@ -131,7 +207,10 @@ module.exports = function(app, deps) {
       dbRun('UPDATE invites SET status = ? WHERE email = ? AND status = ?', 'revoked', user.email, 'pending');
       res.json({ ok: true, revoked: true });
     } else {
+      // Remove from all projects first, then deactivate
+      dbRun('DELETE FROM user_projects WHERE user_id = ?', req.params.id);
       dbRun('UPDATE users SET status = ?, invite_status = ? WHERE id = ?', 'deactivated', 'revoked', req.params.id);
+      dbRun('DELETE FROM auth_tokens WHERE user_id = ?', req.params.id);
       dbRun('UPDATE invites SET status = ? WHERE email = ? AND status = ?', 'revoked', user.email, 'pending');
       res.json({ ok: true, deactivated: true });
     }

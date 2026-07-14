@@ -4,40 +4,104 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>Align</title>
-  <style>html,body{background:#0a0a12;margin:0;color:#e0e0e0}html[data-theme="light"]{background:#f5f5f5;color:#111}</style>
+  <meta name="theme-color" content="#0a0a12" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)" />
+  <style>
+    html,body{background:#0a0a12;margin:0;color:#e0e0e0}
+    html[data-theme="light"]{background:#f5f5f5;color:#111}
+    /* Drafting-paper grid pattern — renders instantly, hides black flash on reload */
+    body::before{
+      content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+      background:
+        linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+      background-size:40px 40px;
+    }
+    html[data-theme="light"] body::before{
+      background:
+        linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),
+        linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);
+      background-size:40px 40px;
+    }
+  </style>
   <link rel="icon" type="image/svg+xml" href="assets/c3-favicon.svg" />
   <link rel="icon" type="image/png" href="/favicon-v2.png" />
   <script>
     // Apply saved theme before paint (prevents flash)
     var t = localStorage.getItem('align-theme') || 'dark';
     document.documentElement.setAttribute('data-theme', t);
+
+    // iOS pull-to-refresh restores page from bfcache with stale body state.
+    // body.section-open hides the dashboard and locks scroll → black screen.
+    window.addEventListener('pageshow', function (e) {
+      if (e.persisted) {
+        document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.top = '';
+        document.body.style.width = '';
+        document.body.style.touchAction = '';
+        document.body.style.overscrollBehavior = '';
+        document.body.classList.remove('section-open', 'ps-open');
+      }
+    });
+
+    // ── Scroll position persistence ───────────────────────────────────────────────
+    (function(){
+      var KEY = 'align_scroll_y';
+      // Save on every scroll (throttled)
+      var lastY = 0, t;
+      window.addEventListener('scroll', function(){
+        lastY = window.scrollY || window.pageYOffset || 0;
+        clearTimeout(t);
+        t = setTimeout(function(){ try{ sessionStorage.setItem(KEY, String(lastY)); }catch(e){} }, 100);
+      }, {passive:true});
+      // Also save immediately when leaving
+      window.addEventListener('pagehide', function(){
+        try{ sessionStorage.setItem(KEY, String(window.scrollY || window.pageYOffset || 0)); }catch(e){}
+      });
+      // Restore after DOM settles
+      var saved = sessionStorage.getItem(KEY);
+      if(saved !== null){
+        var target = parseInt(saved, 10) || 0;
+        function tryRestore(){
+          var h = document.documentElement.scrollHeight || document.body.scrollHeight || 0;
+          if(h > window.innerHeight * 1.2){
+            window.scrollTo(0, target);
+            sessionStorage.removeItem(KEY);
+          } else {
+            setTimeout(tryRestore, 50);
+          }
+        }
+        if(document.readyState === 'complete'){ tryRestore(); }
+        else { window.addEventListener('load', tryRestore); }
+      }
+    })();
   </script>
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
   <!-- Error monitoring — must load FIRST, before any application code -->
-  <script src="align-errors.js?v=60"></script>
-  <script src="align-vitals.js?v=60"></script>
-  <script src="align-native-bridge.js?v=61"></script>
+  <script src="align-errors.js?v=68"></script>
+  <script src="align-vitals.js?v=68"></script>
+  <script src="align-native-bridge.js?v=68"></script>
 
-  <link rel="stylesheet" href="styles.css?v=64" />
+  <link rel="stylesheet" href="styles.css?v=68" />
   <link rel="stylesheet" href="align-storage.css" />
-  <link rel="stylesheet" href="align-files.css?v=60" />
-  <link rel="stylesheet" href="align-drawings.css" />
-  <link rel="stylesheet" href="align-auth.css?v=62" />
-  <link rel="stylesheet" href="align-daily-logs.css?v=60" />
-  <link rel="stylesheet" href="align-punchlist.css?v=60" />
-  <link rel="stylesheet" href="align-contacts.css?v=60" />
-  <link rel="stylesheet" href="align-tasks.css?v=60" />
+  <link rel="stylesheet" href="align-files.css?v=68" />
+  <link rel="stylesheet" href="align-drawings.css?v=68" />
+  <link rel="stylesheet" href="align-auth.css?v=68" />
+  <link rel="stylesheet" href="align-daily-logs.css?v=68" />
+  <link rel="stylesheet" href="align-punchlist.css?v=68" />
+  <link rel="stylesheet" href="align-contacts-v3.css" />
+  <link rel="stylesheet" href="align-tasks.css?v=68" />
   <link rel="stylesheet" href="align-photos.css" />
   <link rel="stylesheet" href="align-settings.css" />
   <link rel="stylesheet" href="align-schedule.css" />
   <link rel="stylesheet" href="align-specs.css" />
   <link rel="stylesheet" href="align-budget.css" />
-  <link rel="stylesheet" href="align-rfis.css?v=60" />
+  <link rel="stylesheet" href="align-rfis.css?v=68" />
   <link rel="stylesheet" href="align-procurement.css" />
-  <link rel="stylesheet" href="align-polish.css?v=4" />
+  <link rel="stylesheet" href="align-polish.css?v=68" />
 </head>
 <body>
-
 
   <!-- Skip-to-content link -->
   <a href="#dashboard" class="skip-link">Skip to main content</a>
@@ -116,28 +180,31 @@
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-  <script src="align-api.js?v=62"></script>
-  <script src="align-sync.js?v=60"></script>
-  <script src="align-storage.js?v=60"></script>
-  <script src="align-boot.js?v=60"></script>
-  <script src="align-a11y.js?v=60"></script>
-  <script src="align-files.js?v=60"></script>
-  <script src="align-projects.js?v=60"></script>
-  <script src="align-drawings.js?v=60"></script>
-  <script src="align-drawing-annotations.js?v=60"></script>
-  <script src="align-daily-logs.js?v=60"></script>
-  <script src="align-punchlist.js?v=60"></script>
-  <script src="align-schedule.js?v=60"></script>
-  <script src="align-rfis.js?v=60"></script>
-  <script src="align-budget.js?v=60"></script>
-  <script src="align-specs.js?v=60"></script>
-  <script src="align-procurement.js?v=60"></script>
-  <script src="align-contacts.js?v=60"></script>
-  <script src="align-tasks.js?v=60"></script>
-  <script src="align-photos.js?v=60"></script>
-  <script src="align-auth.js?v=60"></script>
-  <script src="align-settings.js?v=60"></script>
-  <script src="script.js?v=63"></script>
+  <script src="align-api.js?v=68"></script>
+  <script src="align-sync.js?v=68"></script>
+  <script src="align-storage.js?v=68"></script>
+  <script src="align-boot.js?v=68"></script>
+  <script src="store.js"></script>
+  <script src="api.js"></script>
+  <script src="safeRender.js"></script>
+  <script src="align-a11y.js?v=68"></script>
+  <script src="align-files.js?v=68"></script>
+  <script src="align-projects.js?v=68"></script>
+  <script src="align-drawings.js?v=68"></script>
+  <script src="align-drawing-annotations.js?v=68"></script>
+  <script src="align-daily-logs.js?v=68"></script>
+  <script src="align-punchlist.js?v=68"></script>
+  <script src="align-schedule.js?v=68"></script>
+  <script src="align-rfis.js?v=68"></script>
+  <script src="align-budget.js?v=68"></script>
+  <script src="align-specs.js?v=68"></script>
+  <script src="align-procurement.js?v=68"></script>
+  <script src="align-contacts.js?v=68"></script>
+  <script src="align-tasks.js?v=68"></script>
+  <script src="align-photos.js?v=69"></script>
+  <script src="align-auth.js?v=68"></script>
+  <script src="align-settings.js?v=68"></script>
+  <script src="script.js?v=68"></script>
 
   <!-- Eruda in-page devtools — loads only when ?debug=1 -->
   <script>

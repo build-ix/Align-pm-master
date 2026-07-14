@@ -448,12 +448,20 @@ const MIGRATIONS = [
       try { db.exec('ALTER TABLE files ADD COLUMN deleted_at INTEGER'); } catch(e) {}
     }
   },
-  /* ── v23: token kind (ios|web) ───────────────────────────────────── */
+  /* ── v23: token kind (ios|web) ───────────────────────────────────────────────────── */
   {
     version: 23,
     name: 'token_kind',
     up(db) {
       try { db.exec('ALTER TABLE auth_tokens ADD COLUMN kind TEXT DEFAULT \'web\''); } catch(e) {}
+    }
+  },
+  /* ── v24: photo metadata support ───────────────────────────────────────────────────── */
+  {
+    version: 24,
+    name: 'photo_metadata',
+    up(db) {
+      try { db.exec('ALTER TABLE files ADD COLUMN metadata TEXT'); } catch(e) {}
     }
   }
 ];

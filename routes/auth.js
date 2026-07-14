@@ -80,6 +80,17 @@ module.exports = function(app, deps) {
       dbRun('UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?', user.id);
     }
 
+    // ── Project access check (non-admins only) ──
+    if (user.role !== 'admin') {
+      var projectCount = dbGet(
+        'SELECT COUNT(*) AS n FROM user_projects up JOIN projects p ON p.id = up.project_id WHERE up.user_id = ?',
+        user.id
+      );
+      if (!projectCount || projectCount.n === 0) {
+        return res.status(403).json({ error: 'Account has no project access. Contact your administrator.' });
+      }
+    }
+
     var session = sessions.createSession(dbRun, user.id);
     var freshUser = dbGet('SELECT * FROM users WHERE id = ?', user.id);
     res.cookie('align-token', session.id, {
@@ -121,6 +132,17 @@ module.exports = function(app, deps) {
     // Success — reset lockout
     if (user.failed_attempts > 0 || user.locked_until) {
       dbRun('UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = ?', user.id);
+    }
+
+    // ── Project access check (non-admins only) ──
+    if (user.role !== 'admin') {
+      var projectCount = dbGet(
+        'SELECT COUNT(*) AS n FROM user_projects up JOIN projects p ON p.id = up.project_id WHERE up.user_id = ?',
+        user.id
+      );
+      if (!projectCount || projectCount.n === 0) {
+        return res.status(403).json({ error: 'Account has no project access. Contact your administrator.' });
+      }
     }
 
     // Generate bearer token

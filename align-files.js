@@ -821,7 +821,7 @@
 
   // ── Public API ───────────────────────────────────────────────────────────
 
-  global.AlignFiles = {
+  window.AlignFiles = {
     render: render,
     getTree: function() { return {}; },
     listFolder: function() { return { folders:[], files:[] }; },

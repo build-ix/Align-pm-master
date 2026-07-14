@@ -454,7 +454,8 @@
             '<span class="st-role-badge ', user.role === 'admin' ? 'admin' : 'user', '">', esc(user.role), '</span>',
           '</div>',
           '<div class="st-profile-actions">',
-            '<button class="pm-btn small" data-st-act="change-pin">🔐 Change PIN</button>',
+            '<button class="pm-btn small" data-st-act="change-pin">🔐 Change Password</button>',
+            '<button class="pm-btn small" data-st-act="refresh-cache">🔄 Refresh Cache</button>',
             '<button class="pm-btn small danger" data-st-act="sign-out">Sign Out</button>',
           '</div>',
         '</div>'
@@ -617,6 +618,28 @@
           // Refresh to show sign-in screen
           _paint();
           _wire();
+        }
+        break;
+
+      /* ── Refresh Cache ────────────────────────────────────────────────── */
+      case 'refresh-cache':
+        e.preventDefault();
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            for (var i = 0; i < names.length; i++) caches.delete(names[i]);
+          }).then(function() {
+            // Also unregister service workers
+            if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+              navigator.serviceWorker.getRegistrations().then(function(regs) {
+                for (var r = 0; r < regs.length; r++) regs[r].unregister();
+                window.location.reload(true);
+              });
+            } else {
+              window.location.reload(true);
+            }
+          });
+        } else {
+          window.location.reload(true);
         }
         break;
 
@@ -1250,7 +1273,7 @@
   } catch (e) { /* silent */ }
 
   /* ── Public API ───────────────────────────────────────────────── */
-  global.AlignSettings = {
+  window.AlignSettings = {
     render: render
   };
 

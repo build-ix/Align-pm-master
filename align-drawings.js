@@ -166,14 +166,15 @@
   function getDrawingsList() {
     if (!state.projectId) return Promise.resolve([]);
 
-    // 1) Fetch from server (source of truth)
-    var token = localStorage.getItem('align-token') || '';
-    return fetch('/api/projects/' + encodeURIComponent(state.projectId) + '/files', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    }).then(function (r) {
-      if (!r.ok) throw new Error('Server returned ' + r.status);
-      return r.json();
-    }).then(function (data) {
+    // 1) Fetch from server (source of truth) via centralized API
+    return (window.Api ? window.Api.get('/api/projects/' + encodeURIComponent(state.projectId) + '/files') :
+      fetch('/api/projects/' + encodeURIComponent(state.projectId) + '/files', {
+        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('align-token') || '') }
+      }).then(function (r) {
+        if (!r.ok) throw new Error('Server returned ' + r.status);
+        return r.json();
+      })
+    ).then(function (data) {
       var files = (data.files || []).filter(function (f) { return f.type === 'file' && f.trashed === 0; });
       // Mirror to localStorage cache for fast re-render
       var index = files.map(function (f) {
@@ -702,30 +703,24 @@
   /* ── Server upload (source of truth) ──────────────────────────────────── */
 
   function _uploadToServer(pid, drawingId, name, mime, dataUrl, folderId) {
-    return new Promise(function (resolve, reject) {
-      var parts = dataUrl.split(',');
-      var byteString = atob(parts[1]);
-      var ab = new ArrayBuffer(byteString.length);
-      var ia = new Uint8Array(ab);
-      for (var i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-      var blob = new Blob([ab], { type: mime });
-
+    // Convert data URL to Blob via fetch (handles large files without atob stack overflow)
+    return fetch(dataUrl).then(function (r) { return r.blob(); }).then(function (blob) {
       var fd = new FormData();
       fd.append('file', blob, name);
       fd.append('project_id', pid);
       if (folderId) fd.append('folder_id', folderId);
 
       var token = localStorage.getItem('align-token') || '';
-      fetch('/api/files/upload', {
+      return fetch('/api/files/upload', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },
         body: fd
       }).then(function (r) {
-        if (!r.ok) return r.json().then(function (d) { reject(new Error(d.error || 'Upload failed')); });
+        if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Upload failed'); });
         return r.json();
       }).then(function (data) {
-        resolve(data.file || { id: drawingId });
-      }).catch(reject);
+        return data.file || { id: drawingId };
+      });
     });
   }
 
@@ -844,38 +839,35 @@
       try { filesFolderId = ensureDrawingsFolder(); } catch (e) { /* best effort */ }
     }
 
-    var promises = [];
-    for (var i = 0; i < files.length; i++) {
-      (function (f) {
-        var name = f.customName || customName || f.name || 'drawing';
-        var mime = f.type || 'application/octet-stream';
-        var content = f.dataUrl || '';
-        var drawingId = _drawingUid();
-        var entry = {
-          id: drawingId,
+    // Upload sequentially to avoid memory spikes from concurrent atob/Blob conversion
+    function uploadSequential(idx) {
+      if (idx >= files.length) return Promise.resolve();
+      var f = files[idx];
+      var name = f.customName || customName || f.name || 'drawing';
+      var mime = f.type || 'application/octet-stream';
+      var content = f.dataUrl || '';
+      var drawingId = _drawingUid();
+
+      return _uploadToServer(pid, drawingId, name, mime, content, filesFolderId).then(function (serverFile) {
+        // Reload index each time to avoid race conditions
+        var currentIndex = _loadDrawingsIndex(pid);
+        currentIndex.push({
+          id: serverFile.id || drawingId,
           name: name,
           mimeType: mime,
           size: content.length,
           createdAt: now,
           updatedAt: now,
           drawingType: f.drawingType || ''
-        };
-
-        // 1) Upload to server (source of truth — shared across all users)
-        var p = _uploadToServer(pid, drawingId, name, mime, content, filesFolderId).then(function (serverFile) {
-          entry.id = serverFile.id || drawingId;
-          index.push(entry);
-          _saveDrawingsIndex(pid, index);
-          // Also cache in IndexedDB for offline access
-          _saveDrawingBlob(pid, entry.id, content).catch(function(){});
-          return entry;
         });
-
-        promises.push(p);
-      })(files[i]);
+        _saveDrawingsIndex(pid, currentIndex);
+        // Cache in IndexedDB for offline access (best-effort)
+        _saveDrawingBlob(pid, serverFile.id || drawingId, content).catch(function(){});
+        return uploadSequential(idx + 1);
+      });
     }
 
-    return Promise.all(promises);
+    return uploadSequential(0);
   }
 
   /* ════════════════════════════════════════════════════════════════════════════
@@ -1297,21 +1289,16 @@
 
     var h = [];
 
-    // ── Full-screen overlay ──
+    // ── Full-screen overlay (no top bar — floating controls only) ──
     h.push('<div class="dr-mv-overlay" id="dr-mv-overlay">');
 
-    // ── Top bar ──
-    h.push('<div class="dr-mv-topbar">');
-    h.push('<button class="pm-btn small dr-mv-back-btn" id="dr-mv-back">← Back to Drawings</button>');
-    h.push('<h3 class="dr-mv-title">' + esc(file.meta.name) + '</h3>');
-    h.push('<span class="dr-mv-meta">' + fmtSize(file.meta.size) + ' · ' + fmtDate(file.meta.updatedAt) + '</span>');
-    if (isImage) {
-      h.push('<button class="dr-mv-markup-toggle" id="dr-mv-markup-toggle">✏️ Markup Drawing</button>');
-    }
-    h.push('<button class="dr-mv-tool-btn" id="dr-mv-toggle" title="Toggle markups on/off">👁️ Markups</button>');
-    h.push('</div>');
+    // ── Floating back button (top-left) ──
+    h.push('<button class="dr-mv-float-btn dr-mv-back-float" id="dr-mv-back" title="Back">←</button>');
 
-    // ── Toolbar (hidden by default; slides in when "Markup Drawing" clicked) ──
+    // ── Floating tools button (bottom-right) ──
+    h.push('<button class="dr-mv-float-btn dr-mv-tools-float" id="dr-mv-tools-toggle" title="Tools">⚒</button>');
+
+    // ── Toolbar (slides up from bottom when toggled) ──
     h.push(_mvToolbarHtml());
 
     if (isImage) {
@@ -1812,25 +1799,22 @@
       _mvFitToViewport();
     });
 
-    // ── "Markup Drawing" toggle button (shows/hides toolbar with animation) ──
-    var markupToggle = document.getElementById('dr-mv-markup-toggle');
-    if (markupToggle) {
-      markupToggle.addEventListener('click', function () {
+    // ── Tools toggle button (floating top-right, shows/hides toolbar) ──
+    var toolsToggle = document.getElementById('dr-mv-tools-toggle');
+    if (toolsToggle) {
+      toolsToggle.addEventListener('click', function () {
         _mv.markupMode = !_mv.markupMode;
         var toolbar = document.getElementById('dr-mv-toolbar');
         var canvas = document.getElementById('dr-mv-canvas');
         if (toolbar) {
           if (_mv.markupMode) {
             toolbar.classList.add('open');
-            markupToggle.classList.add('active');
-            markupToggle.innerHTML = '✏️ Hide Tools';
+            toolsToggle.classList.add('active');
             if (canvas) canvas.style.cursor = 'crosshair';
           } else {
             toolbar.classList.remove('open');
-            markupToggle.classList.remove('active');
-            markupToggle.innerHTML = '✏️ Markup Drawing';
+            toolsToggle.classList.remove('active');
             if (canvas) canvas.style.cursor = 'grab';
-            // Cancel any in-progress drawing
             _mv.drawing = false;
             _mv.currentStroke = null;
           }
@@ -3195,7 +3179,7 @@
     });  // close _getSelectedIds().then()
   }
 
-  /** Delete selected drawings. Prompts confirmation first. */
+  /** Delete selected drawings. Calls server API for each, then cleans up local state. */
   function _deleteSelectedDrawings(selectAll) {
     _getSelectedIds(selectAll).then(function (ids) {
     if (ids.length === 0) return;
@@ -3204,44 +3188,55 @@
     if (!confirm('Delete ' + label + '? This cannot be undone.')) return;
 
     var pid = state.projectId;
-    var index = _loadDrawingsIndex(pid);
 
-    // Remove from IndexedDB
-    var delPromises = [];
+    // 1) Soft-delete each file on the server via centralized API
+    var serverDeletes = [];
     for (var i = 0; i < ids.length; i++) {
-      delPromises.push(_deleteDrawingBlob(pid, ids[i]));
+      (function (fileId) {
+        serverDeletes.push(
+          window.Api ? window.Api.del('/api/files/' + encodeURIComponent(fileId)) :
+          fetch('/api/files/' + encodeURIComponent(fileId), {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('align-token') || '') }
+          }).then(function (r) {
+            if (!r.ok) throw new Error('Server delete failed: ' + r.status);
+            return r.json();
+          })
+        );
+      })(ids[i]);
     }
 
-    Promise.all(delPromises).then(function () {
-      // Remove from index
-      var keep = [];
+    Promise.all(serverDeletes).then(function () {
+      // 2) Clean up local IndexedDB blobs
+      var delPromises = [];
+      for (var j = 0; j < ids.length; j++) {
+        delPromises.push(_deleteDrawingBlob(pid, ids[j]));
+      }
+      return Promise.all(delPromises);
+    }).then(function () {
+      // 3) Clean up local index
+      var index = _loadDrawingsIndex(pid);
       var deletedSet = {};
       for (var d = 0; d < ids.length; d++) deletedSet[ids[d]] = true;
-      for (var j = 0; j < index.length; j++) {
-        if (!deletedSet[index[j].id]) keep.push(index[j]);
+      var keep = [];
+      for (var k = 0; k < index.length; k++) {
+        if (!deletedSet[index[k].id]) keep.push(index[k]);
       }
       _saveDrawingsIndex(pid, keep);
 
-      // Also remove from AlignFiles if present
-      var filesAPI = window.AlignFiles || null;
-      if (filesAPI) {
-        for (var k = 0; k < ids.length; k++) {
-          try { filesAPI.deleteFile(pid, ids[k]); } catch(e) { /* best effort */ }
-        }
-      }
-
-      // Clear selection and re-render
+      // 4) Clear selection and re-render
       state.selectMode = false;
       state.selectedIds = {};
       _paint();
     }).catch(function (err) {
-      console.warn('[AlignDrawings] Delete failed:', err);
+      state.uploadError = 'Delete failed: ' + (err.message || 'Unknown error');
+      _paint();
     });
     });  // close _getSelectedIds().then()
   }
 
   /* ── Public API ─────────────────────────────────────────────────────────── */
-  global.AlignDrawings = {
+  window.AlignDrawings = {
     render: render
   };
 

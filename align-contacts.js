@@ -388,7 +388,8 @@ function _bindForm(){
             email:email,name:uname,role:role,company_id:cid||null,
             projects:state.projectId?[{id:state.projectId,role:'member',permissions:perms}]:[]
           }}).then(function(r){
-            alert('Invite sent to '+email);
+            var msg = r.added ? 'User added to project' : (r.reactivated ? 'User reactivated and added to project' : (r.pending ? 'Invite updated with additional projects' : 'Invite sent to '+email));
+            alert(msg);
             state.viewMode='list';state.editingContact=null;_loadData();
           }).catch(function(e){alert(e.message||'Failed to create user');});
         }

@@ -449,7 +449,7 @@
 
   // ── Export ──────────────────────────────────────────────────────────────
 
-  global.AlignDrawingAnnotations = {
+  window.AlignDrawingAnnotations = {
     init: init,
     injectToolbarButtons: injectToolbarButtons,
     renderAnnotations: renderAnnotations,

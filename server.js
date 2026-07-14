@@ -15,6 +15,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
+const sharp = require('sharp');
 const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const Database = require('better-sqlite3');
@@ -263,6 +264,17 @@ function sendInviteEmail(email, name, code, expires) {
   return sendEmail(email, 'Welcome to Align PM', html);
 }
 
+function sendProjectWelcomeEmail(email, name, projectNames) {
+  var projectsHtml = Array.isArray(projectNames) ? projectNames.join(', ') : projectNames;
+  var html = '<h2>You have been added to a new project</h2>' +
+    '<p>Hi ' + name + ',</p>' +
+    '<p>You have been invited to join the following project' + (Array.isArray(projectNames) && projectNames.length > 1 ? 's' : '') + ' on Align PM:</p>' +
+    '<p><strong>' + projectsHtml + '</strong></p>' +
+    '<p>Your account is active. The next time you log in, you will see the new project' + (Array.isArray(projectNames) && projectNames.length > 1 ? 's' : '') + ' in your project list.</p>' +
+    '<p><a href="https://alignprojects.net" style="padding:12px 24px;background:#6366F1;color:#fff;border-radius:6px;text-decoration:none;">Open Align PM</a></p>';
+  return sendEmail(email, 'New project invitation — Align PM', html);
+}
+
 function logSecurity(action, details) {
   const actor = details.actor || 'system';
   const entry = `[${nowISO()}] ${action.toUpperCase()}: ${actor} — ${details.msg || ''}\n`;
@@ -320,6 +332,12 @@ function requireAuth(req, res, next) {
 
   req.user = dbGet('SELECT * FROM users WHERE id = ?', row.user_id);
   req.token = rawToken;
+
+  // Reject deactivated accounts
+  if (req.user && req.user.status === 'deactivated') {
+    return res.status(403).json({ error: 'Account deactivated. Contact your administrator.' });
+  }
+
   next();
 }
 
@@ -849,11 +867,33 @@ app.delete('/api/projects/:id', requireAuth, requireAdmin, (req, res) => {
   if (!dbGet('SELECT id FROM projects WHERE id = ?', req.params.id))
     return res.status(404).json({ error: 'Project not found' });
 
+  // Capture project users before deleting memberships
+  var projectUsers = dbAll('SELECT user_id FROM user_projects WHERE project_id = ?', req.params.id);
+
   dbRun('DELETE FROM files WHERE project_id = ?', req.params.id);
   dbRun('DELETE FROM records WHERE project_id = ?', req.params.id);
   dbRun('DELETE FROM drawing_markups WHERE project_id = ?', req.params.id);
   dbRun('DELETE FROM user_projects WHERE project_id = ?', req.params.id);
   dbRun('DELETE FROM projects WHERE id = ?', req.params.id);
+
+  // Clean up invites orphaned by project deletion (FK sets project_id to NULL)
+  dbRun('DELETE FROM invites WHERE project_id IS NULL AND status = ?', 'pending');
+
+  // Delete users who no longer belong to any project (orphaned users)
+  // Must delete their invites first due to FK constraints
+  projectUsers.forEach(function(u) {
+    var remaining = dbGet('SELECT COUNT(*) as cnt FROM user_projects WHERE user_id = ?', u.user_id);
+    if (remaining && remaining.cnt === 0) {
+      var user = dbGet('SELECT id, email, role FROM users WHERE id = ?', u.user_id);
+      if (user && user.role !== 'admin') {
+        // Delete FK-referencing rows before deleting the user
+        dbRun('DELETE FROM auth_tokens WHERE user_id = ?', user.id);
+        dbRun('DELETE FROM invites WHERE created_by = ? OR used_by = ?', user.id, user.id);
+        dbRun('DELETE FROM invites WHERE email = ?', user.email);
+        dbRun('DELETE FROM users WHERE id = ?', user.id);
+      }
+    }
+  });
 
   res.json({ ok: true });
 });
@@ -987,6 +1027,26 @@ app.delete('/api/projects/:id/members/:userId', requireAuth, auth.requireProject
   }
   dbRun('DELETE FROM user_projects WHERE user_id = ? AND project_id = ?',
     req.params.userId, req.params.id);
+
+  // ── Clean up orphan users (no remaining projects) ──
+  var remaining = dbGet('SELECT COUNT(*) as cnt FROM user_projects WHERE user_id = ?', req.params.userId);
+  if (remaining && remaining.cnt === 0) {
+    var user = dbGet('SELECT id, email, role, status FROM users WHERE id = ?', req.params.userId);
+    if (user && user.role !== 'admin') {
+      // Pending users → fully delete so next invite is fresh
+      if (user.status === 'pending') {
+        dbRun('DELETE FROM auth_tokens WHERE user_id = ?', user.id);
+        dbRun('DELETE FROM invites WHERE created_by = ? OR used_by = ?', user.id, user.id);
+        dbRun('DELETE FROM invites WHERE email = ?', user.email);
+        dbRun('DELETE FROM users WHERE id = ?', user.id);
+      } else {
+        // Active/deactivated non-admins → deactivate (blocks login, preserves audit trail)
+        dbRun("UPDATE users SET status = 'deactivated', invite_status = 'revoked' WHERE id = ?", user.id);
+        dbRun('DELETE FROM auth_tokens WHERE user_id = ?', user.id);
+      }
+    }
+  }
+
   res.json({ ok: true });
 });
 
@@ -1098,12 +1158,11 @@ app.get('/api/projects/:pid/files', requireAuth, auth.requireProjectMember(dbGet
   let files;
   const trashFilter = showTrash ? 'AND trashed = 1' : 'AND trashed = 0';
   if (folderId && folderId !== 'root') {
-    files = dbAll('SELECT * FROM files WHERE project_id = ? AND folder_id = ? ' + trashFilter + ' ORDER BY type ASC, original_name ASC', req.params.pid, folderId);
+    files = dbAll('SELECT * FROM files WHERE project_id = ? AND folder_id = ? AND type != \'photo\' ' + trashFilter + ' ORDER BY type ASC, original_name ASC', req.params.pid, folderId);
   } else if (folderId === 'root' && showTrash) {
-    // Trash view: show all trashed files regardless of folder
-    files = dbAll('SELECT * FROM files WHERE project_id = ? AND trashed = 1 ORDER BY trashed_at DESC', req.params.pid);
+    files = dbAll('SELECT * FROM files WHERE project_id = ? AND type != \'photo\' AND trashed = 1 ORDER BY trashed_at DESC', req.params.pid);
   } else {
-    files = dbAll('SELECT * FROM files WHERE project_id = ? AND folder_id IS NULL ' + trashFilter + ' ORDER BY type ASC, original_name ASC', req.params.pid);
+    files = dbAll('SELECT * FROM files WHERE project_id = ? AND folder_id IS NULL AND type != \'photo\' ' + trashFilter + ' ORDER BY type ASC, original_name ASC', req.params.pid);
   }
   const result = files.map(f => ({
     id: f.id, project_id: f.project_id, folder_id: f.folder_id, type: f.type,
@@ -1140,7 +1199,28 @@ app.patch('/api/files/:id/restore', requireAuth, requireFileProjectMember, requi
   res.json({ ok: true, restored: true });
 });
 
-// ── Punchlist apartments — filtered by company visibility ──
+// ── Photos (server-backed, not localStorage) ──
+app.get('/api/projects/:pid/photos', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'photos', 'r'), (req, res) => {
+  var photos = dbAll('SELECT id, project_id, original_name, mime_type, size_bytes, created_at, uploaded_by, metadata FROM files WHERE project_id = ? AND type = \'photo\' AND trashed = 0 ORDER BY created_at DESC', req.params.pid);
+  res.json({ photos: photos.map(function(p) {
+    var meta = {};
+    try { if (p.metadata) meta = JSON.parse(p.metadata); } catch(e) {}
+    return { id: p.id, project_id: p.project_id, label: meta.label || p.original_name, company: meta.company || '', created_at: p.created_at, uploaded_by: p.uploaded_by || '' };
+  }) });
+});
+
+app.patch('/api/files/:id/photo-meta', requireAuth, requireFileProjectMember, auth.requireRoom(dbGet, 'photos', 'rw'), (req, res) => {
+  const file = dbGet('SELECT * FROM files WHERE id = ?', req.params.id);
+  if (!file) return res.status(404).json({ error: 'Photo not found' });
+  var meta = {};
+  try { if (file.metadata) meta = JSON.parse(file.metadata); } catch(e) {}
+  if (req.body.label !== undefined) meta.label = req.body.label;
+  if (req.body.company !== undefined) meta.company = req.body.company;
+  dbRun('UPDATE files SET metadata = ? WHERE id = ?', JSON.stringify(meta), req.params.id);
+  res.json({ ok: true, metadata: meta });
+});
+
+// ── Punchlist apartments ──
 app.get('/api/projects/:pid/punchlist/apartments', requireAuth, auth.requireProjectMember(dbGet), (req, res) => {
   var pid = req.params.pid;
   // Admins see all apartments that have punchlist items
@@ -1368,7 +1448,7 @@ app.delete('/api/projects/:pid/:cat/:rid', requireAuth, auth.requireProjectMembe
 
 // People API → routes/people.js
 require('./routes/people')(app, {
-  dbGet, dbRun, dbAll, uid, nowISO, safeUser, sendInviteEmail,
+  dbGet, dbRun, dbAll, uid, nowISO, safeUser, sendInviteEmail, sendProjectWelcomeEmail,
   crypto: require('./align-crypto'),
   requireAuth, requireAdmin,
   normalizePermissions
@@ -1386,20 +1466,19 @@ app.post('/api/files/upload', requireAuth, (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const projectId = (req.body && req.body.project_id) || null;
     if (!projectId) return res.status(400).json({ error: 'project_id required' });
+    const uploadType = (req.body && req.body.type) || 'file';
+    const roomKey = uploadType === 'photo' ? 'photos' : 'files';
     if (!req.user || req.user.role !== 'admin') {
       const memberRow = dbGet('SELECT role, permissions FROM user_projects WHERE user_id = ? AND project_id = ?', req.user.id, projectId);
       if (!memberRow) { try { fs.unlinkSync(req.file.path); } catch (e) {} return res.status(403).json({ error: 'Not a member of this project' }); }
       var perms = {};
       try { perms = JSON.parse(memberRow.permissions || '{}'); } catch(e) {}
-      var filePerm = perms['files'] || 'rw';
+      var filePerm = perms[roomKey] || 'rw';
       if (filePerm === 'none') { try { fs.unlinkSync(req.file.path); } catch (e) {} return res.status(404).json({ error: 'Not found' }); }
-      if (filePerm !== 'rw') { try { fs.unlinkSync(req.file.path); } catch (e) {} return res.status(403).json({ error: 'Read-only access for files' }); }
+      if (filePerm !== 'rw') { try { fs.unlinkSync(req.file.path); } catch (e) {} return res.status(403).json({ error: 'Read-only access for ' + roomKey }); }
     }
     const ext = (req.file.originalname || '').split('.').pop().toLowerCase();
     if (!ALLOWED_EXTENSIONS.includes(ext)) { try { fs.unlinkSync(req.file.path); } catch (e) {} return res.status(400).json({ error: 'File type not allowed' }); }
-    // multer 1.x decodes multipart filenames as latin1 — recover UTF-8 names
-    // (em-dashes etc. in auto-labeled drawing sheets arrived as mojibake "â€”").
-    // Re-decode is a no-op for pure-ASCII names; skip if it produces U+FFFD.
     let originalName = req.file.originalname || '';
     try {
       const recoded = Buffer.from(originalName, 'latin1').toString('utf8');
@@ -1409,10 +1488,19 @@ app.post('/api/files/upload', requireAuth, (req, res) => {
     if (!fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true });
     const finalPath = path.join(projectDir, req.file.filename);
     fs.renameSync(req.file.path, finalPath);
+    // Generate thumbnail for images (best-effort, non-blocking)
+    if (req.file.mimetype && req.file.mimetype.startsWith('image/')) {
+      sharp(finalPath)
+        .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toFile(finalPath + '.thumb.jpg')
+        .catch(function(){});
+    }
     const id = uid(); const ts = nowISO(); const folderId = (req.body && req.body.folder_id) || null;
-    dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, projectId, folderId, 'file', req.file.filename, originalName, req.file.mimetype, req.file.size, finalPath, ts, (req.user && req.user.username) || '');
-    res.status(201).json({ file: { id, project_id: projectId, folder_id: folderId, type: 'file', original_name: originalName, mime_type: req.file.mimetype, size_bytes: req.file.size, created_at: ts, uploaded_by: (req.user && req.user.username) || '' } });
+    const metadata = (req.body && req.body.metadata) || null;
+    dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, projectId, folderId, uploadType, req.file.filename, originalName, req.file.mimetype, req.file.size, finalPath, ts, (req.user && req.user.username) || '', metadata);
+    res.status(201).json({ file: { id, project_id: projectId, folder_id: folderId, type: uploadType, original_name: originalName, mime_type: req.file.mimetype, size_bytes: req.file.size, created_at: ts, uploaded_by: (req.user && req.user.username) || '', metadata: metadata } });
   });
 });
 
@@ -1420,6 +1508,12 @@ app.get('/api/files/:id', requireAuth, requireFileProjectMember, requireFileRoom
   const file = dbGet('SELECT * FROM files WHERE id = ?', req.params.id);
   if (!file) return res.status(404).json({ error: 'File not found' });
   if (!fs.existsSync(file.stored_path)) return res.status(404).json({ error: 'File missing from disk' });
+  const thumbPath = file.stored_path + '.thumb.jpg';
+  if (req.query.thumb === '1' && fs.existsSync(thumbPath)) {
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Content-Disposition', 'inline; filename="thumb.jpg"');
+    return fs.createReadStream(thumbPath).pipe(res);
+  }
   res.setHeader('Content-Type', file.mime_type);
   res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(file.original_name) + '"');
   fs.createReadStream(file.stored_path).pipe(res);

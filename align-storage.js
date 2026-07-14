@@ -320,7 +320,7 @@
     onProjectChange: function(fn) { /* localStorage — use AlignProjects.onProjectChange instead */ }
   });
 
-  global.AlignStorage = _storage;
-  global.__AlignLocalEngine = { storage: _storage };
+  window.AlignStorage = _storage;
+  window.__AlignLocalEngine = { storage: _storage };
 
 })(window);

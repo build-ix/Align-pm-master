@@ -1526,6 +1526,6 @@
 
   /* ── Initialize ───────────────────────────────────────────────────────── */
   /* Register engine for align-boot.js */
-  global.__AlignApiEngine = { storage: AlignStorage, auth: AlignAuth };
+  window.__AlignApiEngine = { storage: AlignStorage, auth: AlignAuth };
 
 })(window);

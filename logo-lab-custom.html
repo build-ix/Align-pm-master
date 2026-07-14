@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Logo Lab — Custom ALIGN Letterforms + C3 Knot</title>
+<style>
+  :root {
+    --navy: #1B2A3D;
+    --orange: #E8641B;
+    --white: #ffffff;
+    --bg-light: #f4f5f7;
+    --bg-dark: #1a1d23;
+    --surface-dark: #252830;
+    --text-light: #5a6270;
+    --text-dark: #a0a8b4;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-light);
+    color: #333;
+    padding: 32px;
+  }
+  h1 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--navy);
+  }
+  .subtitle {
+    font-size: 14px;
+    color: var(--text-light);
+    margin-bottom: 40px;
+  }
+  .section {
+    margin-bottom: 48px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-light);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #e0e2e8;
+  }
+  .swatch-pair {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    border-radius: 12px;
+    padding: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 200px;
+    flex: 1;
+    position: relative;
+  }
+  .swatch.light {
+    background: #ffffff;
+    border: 1px solid #e0e2e8;
+  }
+  .swatch.dark {
+    background: var(--bg-dark);
+    border: 1px solid #333640;
+  }
+  .swatch-label {
+    position: absolute;
+    top: 10px;
+    left: 14px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .light .swatch-label {
+    background: #e8eaef;
+    color: #5a6270;
+  }
+  .dark .swatch-label {
+    background: #333640;
+    color: #a0a8b4;
+  }
+  .size-badge {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #999;
+    letter-spacing: 0.03em;
+  }
+
+  /* Hero lockup */
+  .hero-lockup {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* Header mock */
+  .header-mock {
+    width: 100%;
+    max-width: 720px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid #e0e2e8;
+  }
+  .header-mock.dark-mock {
+    border-color: #333640;
+  }
+  .header-bar {
+    display: flex;
+    align-items: center;
+    height: 56px;
+    padding: 0 20px;
+    gap: 28px;
+  }
+  .header-bar.navy-bar {
+    background: var(--navy);
+  }
+  .header-bar.dark-bar {
+    background: var(--surface-dark);
+  }
+  .header-logo {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .header-logo svg {
+    display: block;
+  }
+  .nav-items {
+    display: flex;
+    gap: 20px;
+    flex: 1;
+  }
+  .nav-item {
+    font-size: 13px;
+    font-weight: 500;
+    padding: 4px 0;
+    border-radius: 4px;
+  }
+  .navy-bar .nav-item {
+    color: rgba(255,255,255,0.65);
+  }
+  .dark-bar .nav-item {
+    color: rgba(255,255,255,0.55);
+  }
+  .nav-item.active {
+    font-weight: 600;
+  }
+  .navy-bar .nav-item.active {
+    color: #fff;
+  }
+  .dark-bar .nav-item.active {
+    color: #fff;
+  }
+  .header-actions {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .header-avatar {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--orange);
+    flex-shrink: 0;
+  }
+  .header-badge {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+    flex-shrink: 0;
+  }
+  .body-mock {
+    padding: 20px;
+    min-height: 120px;
+  }
+  .body-mock.light-body {
+    background: #fafbfc;
+  }
+  .body-mock.dark-body {
+    background: var(--bg-dark);
+  }
+  .mock-line {
+    height: 8px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+  .light-body .mock-line {
+    background: #e8eaef;
+  }
+  .dark-body .mock-line {
+    background: #2a2d35;
+  }
+  .mock-line.short { width: 60%; }
+  .mock-line.medium { width: 80%; }
+
+  /* Favicon grid */
+  .favicon-grid {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+  .favicon-group {
+    text-align: center;
+  }
+  .favicon-group .label {
+    font-size: 10px;
+    font-weight: 600;
+    color: #999;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .favicon-tiles {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+  }
+  .favicon-tile {
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .favicon-tile.light-tile {
+    background: #fff;
+    border: 1px solid #e0e2e8;
+  }
+  .favicon-tile.dark-tile {
+    background: var(--bg-dark);
+    border: 1px solid #333640;
+  }
+  .favicon-tile svg {
+    display: block;
+  }
+
+  /* Specs panel */
+  .specs {
+    margin-top: 48px;
+    padding: 24px;
+    background: #fff;
+    border: 1px solid #e0e2e8;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: #555;
+  }
+  .specs h3 {
+    font-size: 14px;
+    color: var(--navy);
+    margin-bottom: 8px;
+  }
+  .specs code {
+    background: #f0f1f5;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Logo Lab — Custom ALIGN Letterforms</h1>
+<p class="subtitle">Industrial DIN-style custom-drawn SVG paths paired with the C3 Sync Knot icon.</p>
+
+<!-- ============================================================ -->
+<!-- HERO LOCKUP -->
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">Hero Lockup — ~280px wide</div>
+  <div class="swatch-pair">
+    <!-- LIGHT -->
+    <div class="swatch light">
+      <span class="swatch-label">Light</span>
+      <span class="size-badge">280px</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="-80 0 465 152" width="280" height="92" role="img" aria-label="ALIGN logo">
+        <defs>
+          <!-- C3 Sync Knot (navy) — raw paths, centered at origin via inner translate(15,15) -->
+          <g id="c3-knot-navy">
+            <g fill="none" stroke-width="4" transform="translate(15,15)">
+              <path stroke="#1B2A3D" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+              <path stroke="#E8641B" d="M0,-4 V4"/>
+            </g>
+          </g>
+          <!-- C3 Sync Knot (white) -->
+          <g id="c3-knot-white">
+            <g fill="none" stroke-width="4" transform="translate(15,15)">
+              <path stroke="#ffffff" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+              <path stroke="#E8641B" d="M0,-4 V4"/>
+            </g>
+          </g>
+        </defs>
+        <!-- C3 icon scaled 2.2× ≈ 66 units tall, positioned left of wordmark with generous gap -->
+        <use href="#c3-knot-navy" transform="translate(-48, 42) scale(2.2)"/>
+        <!-- Wordmark -->
+        <g fill="none" stroke="#1B2A3D" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter">
+          <!-- A -->
+          <path d="M 10,30 L 3,134"/>
+          <path d="M 70,30 L 77,134"/>
+          <path d="M 5,21 L 75,21"/>
+          <path d="M 18,80 L 62,80"/>
+          <!-- L -->
+          <path d="M 93,21 L 93,134"/>
+          <path d="M 90,127 L 157,127"/>
+          <!-- I -->
+          <path d="M 178,21 L 192,21"/>
+          <path d="M 185,34 L 185,118"/>
+          <path d="M 178,131 L 192,131"/>
+          <!-- G -->
+          <path d="M 228,21 L 228,134"/>
+          <path d="M 228,21 L 282,21"/>
+          <path d="M 282,80 L 282,121"/>
+          <path d="M 228,127 L 282,127"/>
+          <path d="M 228,80 L 282,80"/>
+          <!-- N -->
+          <path d="M 308,21 L 308,134"/>
+          <path d="M 308,21 L 362,134"/>
+          <path d="M 362,21 L 362,134"/>
+        </g>
+      </svg>
+    </div>
+    <!-- DARK -->
+    <div class="swatch dark">
+      <span class="swatch-label">Dark</span>
+      <span class="size-badge">280px</span>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="-80 0 465 152" width="280" height="92" role="img" aria-label="ALIGN logo">
+        <use href="#c3-knot-white" transform="translate(-48, 42) scale(2.2)"/>
+        <g fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter">
+          <path d="M 10,30 L 3,134"/>
+          <path d="M 70,30 L 77,134"/>
+          <path d="M 5,21 L 75,21"/>
+          <path d="M 18,80 L 62,80"/>
+          <path d="M 93,21 L 93,134"/>
+          <path d="M 90,127 L 157,127"/>
+          <path d="M 178,21 L 192,21"/>
+          <path d="M 185,34 L 185,118"/>
+          <path d="M 178,131 L 192,131"/>
+          <path d="M 228,21 L 228,134"/>
+          <path d="M 228,21 L 282,21"/>
+          <path d="M 282,80 L 282,121"/>
+          <path d="M 228,127 L 282,127"/>
+          <path d="M 228,80 L 282,80"/>
+          <path d="M 308,21 L 308,134"/>
+          <path d="M 308,21 L 362,134"/>
+          <path d="M 362,21 L 362,134"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- APP HEADER MOCK -->
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">App Header Mock — 28px wordmark height</div>
+  <div class="swatch-pair" style="flex-direction: column;">
+    <!-- Light header: navy bar -->
+    <div class="header-mock">
+      <div class="header-bar navy-bar">
+        <div class="header-logo">
+          <!-- C3 icon at header size (~17px) -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="17" height="17">
+            <g fill="none" stroke-width="4" transform="translate(15,15)">
+              <path stroke="#ffffff" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+              <path stroke="#E8641B" d="M0,-4 V4"/>
+            </g>
+          </svg>
+          <!-- Wordmark at 28px cap height → ~93px wide -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 152" width="88" height="35" role="img" aria-label="ALIGN">
+            <g fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter">
+              <path d="M 10,30 L 3,134"/>
+              <path d="M 70,30 L 77,134"/>
+              <path d="M 5,21 L 75,21"/>
+              <path d="M 18,80 L 62,80"/>
+              <path d="M 93,21 L 93,134"/>
+              <path d="M 90,127 L 157,127"/>
+              <path d="M 178,21 L 192,21"/>
+              <path d="M 185,34 L 185,118"/>
+              <path d="M 178,131 L 192,131"/>
+              <path d="M 228,21 L 228,134"/>
+              <path d="M 228,21 L 282,21"/>
+              <path d="M 282,80 L 282,121"/>
+              <path d="M 228,127 L 282,127"/>
+              <path d="M 228,80 L 282,80"/>
+              <path d="M 308,21 L 308,134"/>
+              <path d="M 308,21 L 362,134"/>
+              <path d="M 362,21 L 362,134"/>
+            </g>
+          </svg>
+        </div>
+        <div class="nav-items">
+          <span class="nav-item active">Dashboard</span>
+          <span class="nav-item">Projects</span>
+          <span class="nav-item">Schedule</span>
+          <span class="nav-item">Teams</span>
+          <span class="nav-item">Reports</span>
+        </div>
+        <div class="header-actions">
+          <span class="header-badge"></span>
+          <span class="header-avatar"></span>
+        </div>
+      </div>
+      <div class="body-mock light-body">
+        <div class="mock-line"></div>
+        <div class="mock-line medium"></div>
+        <div class="mock-line short"></div>
+      </div>
+    </div>
+
+    <!-- Dark header: dark bar -->
+    <div class="header-mock dark-mock">
+      <div class="header-bar dark-bar">
+        <div class="header-logo">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="17" height="17">
+            <g fill="none" stroke-width="4" transform="translate(15,15)">
+              <path stroke="#ffffff" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+              <path stroke="#E8641B" d="M0,-4 V4"/>
+            </g>
+          </svg>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 152" width="88" height="35" role="img" aria-label="ALIGN">
+            <g fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter">
+              <path d="M 10,30 L 3,134"/>
+              <path d="M 70,30 L 77,134"/>
+              <path d="M 5,21 L 75,21"/>
+              <path d="M 18,80 L 62,80"/>
+              <path d="M 93,21 L 93,134"/>
+              <path d="M 90,127 L 157,127"/>
+              <path d="M 178,21 L 192,21"/>
+              <path d="M 185,34 L 185,118"/>
+              <path d="M 178,131 L 192,131"/>
+              <path d="M 228,21 L 228,134"/>
+              <path d="M 228,21 L 282,21"/>
+              <path d="M 282,80 L 282,121"/>
+              <path d="M 228,127 L 282,127"/>
+              <path d="M 228,80 L 282,80"/>
+              <path d="M 308,21 L 308,134"/>
+              <path d="M 308,21 L 362,134"/>
+              <path d="M 362,21 L 362,134"/>
+            </g>
+          </svg>
+        </div>
+        <div class="nav-items">
+          <span class="nav-item active">Dashboard</span>
+          <span class="nav-item">Projects</span>
+          <span class="nav-item">Schedule</span>
+          <span class="nav-item">Teams</span>
+          <span class="nav-item">Reports</span>
+        </div>
+        <div class="header-actions">
+          <span class="header-badge"></span>
+          <span class="header-avatar"></span>
+        </div>
+      </div>
+      <div class="body-mock dark-body">
+        <div class="mock-line"></div>
+        <div class="mock-line medium"></div>
+        <div class="mock-line short"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- FAVICON TESTS -->
+<!-- ============================================================ -->
+<div class="section">
+  <div class="section-title">Favicon Tests</div>
+  <div class="favicon-grid">
+    <!-- 32px -->
+    <div class="favicon-group">
+      <div class="label">32×32</div>
+      <div class="favicon-tiles">
+        <div class="favicon-tile light-tile">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="32" height="32">
+            <g fill="none" stroke-width="4" transform="translate(15,15)">
+              <path stroke="#1B2A3D" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+              <path stroke="#E8641B" d="M0,-4 V4"/>
+            </g>
+          </svg>
+        </div>
+        <div class="favicon-tile dark-tile">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="32" height="32">
+            <g fill="none" stroke-width="4" transform="translate(15,15)">
+              <path stroke="#ffffff" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+              <path stroke="#E8641B" d="M0,-4 V4"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- 16px -->
+    <div class="favicon-group">
+      <div class="label">16×16</div>
+      <div class="favicon-tiles">
+        <div class="favicon-tile light-tile">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="16" height="16">
+            <g fill="none" stroke-width="4" transform="translate(15,15)">
+              <path stroke="#1B2A3D" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+              <path stroke="#E8641B" d="M0,-4 V4"/>
+            </g>
+          </svg>
+        </div>
+        <div class="favicon-tile dark-tile">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30" width="16" height="16">
+            <g fill="none" stroke-width="4" transform="translate(15,15)">
+              <path stroke="#ffffff" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+              <path stroke="#E8641B" d="M0,-4 V4"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- 32px icon + "A" favicon concept -->
+    <div class="favicon-group">
+      <div class="label">32×32 icon + A</div>
+      <div class="favicon-tiles">
+        <div class="favicon-tile light-tile">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+            <rect width="32" height="32" rx="6" fill="#1B2A3D"/>
+            <g transform="translate(16,16)">
+              <g fill="none" stroke-width="3" transform="scale(0.55) translate(-15,-15)">
+                <g transform="translate(15,15)">
+                  <path stroke="#E8641B" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+                  <path stroke="#ffffff" d="M0,-4 V4"/>
+                </g>
+              </g>
+            </g>
+          </svg>
+        </div>
+        <div class="favicon-tile dark-tile">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+            <rect width="32" height="32" rx="6" fill="#1B2A3D"/>
+            <g transform="translate(16,16)">
+              <g fill="none" stroke-width="3" transform="scale(0.55) translate(-15,-15)">
+                <g transform="translate(15,15)">
+                  <path stroke="#E8641B" d="M0,-3.8 V-8 A4,4 0 0 0 -4,-12 H-8 A4,4 0 0 0 -12,-8 V-4 A4,4 0 0 0 -8,0 H-4.4 M4.4,0 H8 A4,4 0 0 1 12,4 V8 A4,4 0 0 1 8,12 H4 A4,4 0 0 1 0,8 V3.8"/>
+                  <path stroke="#ffffff" d="M0,-4 V4"/>
+                </g>
+              </g>
+            </g>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SPECS -->
+<!-- ============================================================ -->
+<div class="specs">
+  <h3>Letterform Construction Specs</h3>
+  <p>
+    <strong>Technique:</strong> Stroked SVG paths — <code>stroke-width="14"</code>, <code>stroke-linecap="square"</code>, <code>stroke-linejoin="miter"</code>.<br>
+    <strong>Grid:</strong> Each letter cell 80w × 152h viewBox units (cap-height ~120). Stroke weight 14 = 11.7% of cell width. Proportional spacing: A=75, L=80, I=60, G=80, N=80; total wordmark width ~375 units.<br>
+    <strong>A:</strong> Flat-top apex via horizontal top bar + two slanted stems + mid-height crossbar. Apex is a T-junction.<br>
+    <strong>L:</strong> Vertical stem + horizontal baseline bar. Square corner at junction.<br>
+    <strong>I:</strong> Vertical stem with top and bottom serif bars. Centered in 60-unit cell at x=185.<br>
+    <strong>G:</strong> Squared-C form. Left full-height vertical + top horizontal + right partial vertical + bottom horizontal + horizontal crossbar at 60% height. Opening on right between top bar and crossbar.<br>
+    <strong>N:</strong> Two vertical stems connected by diagonal. All square terminals.<br>
+    <strong>Colors:</strong> Navy <code>#1B2A3D</code> (light mode), White <code>#ffffff</code> (dark mode). C3 knot orange centerline <code>#E8641B</code>.<br>
+    <strong>C3 Icon:</strong> Exact paths from <code>assets/c3-icon.svg</code> — unmodified.
+  </p>
+</div>
+
+</body>
+</html>
