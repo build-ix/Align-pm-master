@@ -1165,17 +1165,18 @@
       });
     });
 
-    // Lazy-load image thumbnails
+    // Lazy-load image thumbnails (use server-generated thumbs for speed)
     var thumbs = document.querySelectorAll('.dr-thumb[data-thumb-id]');
     thumbs.forEach(function (thumb) {
       var fileId = thumb.getAttribute('data-thumb-id');
       if (fileId) {
-        _loadDrawingForViewer(state.projectId, fileId).then(function (viewData) {
-          if (viewData && viewData.content) {
+        _loadDrawingThumb(fileId).then(function (thumbUrl) {
+          if (thumbUrl) {
             var img = document.createElement('img');
-            img.src = viewData.content;
-            img.alt = viewData.meta.name;
+            img.src = thumbUrl;
+            img.alt = '';
             img.className = 'dr-thumb-img';
+            img.loading = 'lazy';
             thumb.innerHTML = '';
             thumb.appendChild(img);
           }
@@ -1210,6 +1211,23 @@
     }).catch(function () {
       // Fallback: IndexedDB
       return _loadFromIndexedDB(projectId, drawingId);
+    });
+  }
+
+  /**
+   * Load a thumbnail URL for an image drawing. Uses server ?thumb=1 when available.
+   */
+  function _loadDrawingThumb(drawingId) {
+    var token = localStorage.getItem('align-token') || '';
+    return fetch('/api/files/' + encodeURIComponent(drawingId) + '?thumb=1', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).then(function (r) {
+      if (!r.ok) throw new Error('Thumb not available');
+      return r.blob();
+    }).then(function (blob) {
+      return URL.createObjectURL(blob);
+    }).catch(function () {
+      return null;
     });
   }
 
