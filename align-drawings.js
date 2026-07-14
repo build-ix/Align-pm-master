@@ -439,11 +439,17 @@
     var lib = _ensurePdfJs();
     if (!lib) return null;          // PDF.js not loaded → fall back to whole file
     if (!file.type || file.type.indexOf('pdf') === -1) return null; // not a PDF
+    // Cap page count to avoid memory exhaustion on mobile
+    var MAX_SPLIT_PAGES = 50;
 
     return readFileAsArrayBuffer(file).then(function (buffer) {
       return lib.getDocument({ data: buffer.slice(0) }).promise.then(function (pdfDoc) {
         var numPages = pdfDoc.numPages;
         if (numPages <= 1) return null; // single page — no split needed
+        if (numPages > MAX_SPLIT_PAGES) {
+          console.warn('[AlignDrawings] PDF has ' + numPages + ' pages, exceeds split limit of ' + MAX_SPLIT_PAGES + '. Uploading whole file.');
+          return null;
+        }
         return { pdfDoc: pdfDoc, numPages: numPages, buffer: buffer };
       });
     }).then(function (info) {
@@ -452,85 +458,83 @@
       var pdfDoc = info.pdfDoc;
       var numPages = info.numPages;
 
-      // 1) Extract text for naming each page using pdf.js.
-      //    CRITICAL: getTextContent() coordinates are in unscaled PDF user
-      //    space — the viewport used for region math MUST be scale 1.0.
-      //    (A 1.5x viewport made the bottom-right filter reject everything,
-      //    so every page fell back to "Page N".)
-      //    Also render a small PNG thumbnail per page for the preview list —
-      //    <img> tags cannot display application/pdf data URLs.
-      var textPromises = [];
-      for (var i = 1; i <= numPages; i++) {
-        (function (pn) {
-          textPromises.push(
-            pdfDoc.getPage(pn).then(function (page) {
-              return page.getTextContent().then(function (tc) {
-                var vp1 = page.getViewport({ scale: 1.0 });
-                var thumbScale = Math.min(180 / vp1.width, 180 / vp1.height, 1);
-                var tvp = page.getViewport({ scale: thumbScale });
-                var canvas = document.createElement('canvas');
-                canvas.width = Math.ceil(tvp.width);
-                canvas.height = Math.ceil(tvp.height);
-                return page.render({ canvasContext: canvas.getContext('2d'), viewport: tvp }).promise.then(function () {
-                  var thumbUrl = null;
-                  try { thumbUrl = canvas.toDataURL('image/png'); } catch (e) { /* tainted/oom — icon fallback */ }
-                  return { pageNum: pn, items: tc.items, viewport: vp1, thumbUrl: thumbUrl };
-                }).catch(function () {
-                  return { pageNum: pn, items: tc.items, viewport: vp1, thumbUrl: null };
-                });
-              });
-            })
-          );
-        })(i);
+      // 1) Extract text + render thumbnail for each page SEQUENTIALLY
+      //    to avoid loading all pages into memory at once.
+      function processPageSequential(pn) {
+        if (pn > numPages) return Promise.resolve([]);
+        return pdfDoc.getPage(pn).then(function (page) {
+          return page.getTextContent().then(function (tc) {
+            var vp1 = page.getViewport({ scale: 1.0 });
+            var thumbScale = Math.min(180 / vp1.width, 180 / vp1.height, 1);
+            var tvp = page.getViewport({ scale: thumbScale });
+            var canvas = document.createElement('canvas');
+            canvas.width = Math.ceil(tvp.width);
+            canvas.height = Math.ceil(tvp.height);
+            return page.render({ canvasContext: canvas.getContext('2d'), viewport: tvp }).promise.then(function () {
+              var thumbUrl = null;
+              try { thumbUrl = canvas.toDataURL('image/png'); } catch (e) { /* tainted/oom — icon fallback */ }
+              // Clean up canvas immediately to free memory
+              canvas.width = 0; canvas.height = 0;
+              return [{ pageNum: pn, items: tc.items, viewport: vp1, thumbUrl: thumbUrl }];
+            }).catch(function () {
+              canvas.width = 0; canvas.height = 0;
+              return [{ pageNum: pn, items: tc.items, viewport: vp1, thumbUrl: null }];
+            });
+          });
+        }).then(function (result) {
+          return processPageSequential(pn + 1).then(function (rest) {
+            return result.concat(rest);
+          });
+        });
       }
 
-      return Promise.all(textPromises).then(function (textResults) {
-        // 2) Use pdf-lib to extract each page as a standalone PDF
+      return processPageSequential(1).then(function (textResults) {
+        // 2) Use pdf-lib to extract each page as a standalone PDF SEQUENTIALLY
         if (typeof PDFLib === 'undefined') {
           console.warn('[AlignDrawings] pdf-lib not loaded, falling back to whole file');
           return null;
         }
         return PDFLib.PDFDocument.load(info.buffer).then(function (srcDoc) {
           var pages = [];
-          var splitPromises = [];
-          for (var j = 0; j < textResults.length; j++) {
-            (function (tr) {
-              var pageName = _extractBottomRightText(tr.items, tr.viewport);
-              if (!pageName) pageName = 'Page ' + tr.pageNum;
-              pageName = _sanitizePageName(pageName, tr.pageNum);
 
-              splitPromises.push(
-                PDFLib.PDFDocument.create().then(function (newDoc) {
-                  return newDoc.copyPages(srcDoc, [tr.pageNum - 1]).then(function (copied) {
-                    newDoc.addPage(copied[0]);
-                    return newDoc.save();
-                  });
-                }).then(function (pdfBytes) {
-                  // Proper Uint8Array → base64 (btoa chokes on raw binary)
-                  var bytes = new Uint8Array(pdfBytes);
-                  var chunks = [];
-                  var chunkSize = 0x8000; // 32KB chunks
-                  for (var b = 0; b < bytes.length; b += chunkSize) {
-                    var chunk = bytes.subarray(b, Math.min(b + chunkSize, bytes.length));
-                    var bin = '';
-                    for (var c = 0; c < chunk.length; c++) {
-                      bin += String.fromCharCode(chunk[c]);
-                    }
-                    chunks.push(btoa(bin));
-                  }
-                  var dataUrl = 'data:application/pdf;base64,' + chunks.join('');
-                  pages.push({
-                    name: pageName,
-                    dataUrl: dataUrl,
-                    thumbUrl: tr.thumbUrl || null,
-                    pageNum: tr.pageNum
-                  });
-                })
-              );
-            })(textResults[j]);
+          function splitPageSequential(idx) {
+            if (idx >= textResults.length) return Promise.resolve();
+            var tr = textResults[idx];
+            var pageName = _extractBottomRightText(tr.items, tr.viewport);
+            if (!pageName) pageName = 'Page ' + tr.pageNum;
+            pageName = _sanitizePageName(pageName, tr.pageNum);
+
+            return PDFLib.PDFDocument.create().then(function (newDoc) {
+              return newDoc.copyPages(srcDoc, [tr.pageNum - 1]).then(function (copied) {
+                newDoc.addPage(copied[0]);
+                return newDoc.save();
+              });
+            }).then(function (pdfBytes) {
+              // Proper Uint8Array → base64 (btoa chokes on raw binary)
+              var bytes = new Uint8Array(pdfBytes);
+              var chunks = [];
+              var chunkSize = 0x8000; // 32KB chunks
+              for (var b = 0; b < bytes.length; b += chunkSize) {
+                var chunk = bytes.subarray(b, Math.min(b + chunkSize, bytes.length));
+                var bin = '';
+                for (var c = 0; c < chunk.length; c++) {
+                  bin += String.fromCharCode(chunk[c]);
+                }
+                chunks.push(btoa(bin));
+              }
+              var dataUrl = 'data:application/pdf;base64,' + chunks.join('');
+              pages.push({
+                name: pageName,
+                dataUrl: dataUrl,
+                thumbUrl: tr.thumbUrl || null,
+                pageNum: tr.pageNum
+              });
+              // Proceed to next page
+              return splitPageSequential(idx + 1);
+            });
           }
 
-          return Promise.all(splitPromises).then(function () {
+          return splitPageSequential(0).then(function () {
             pages.sort(function (a, b) {
               return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
             });
@@ -702,25 +706,45 @@
 
   /* ── Server upload (source of truth) ──────────────────────────────────── */
 
-  function _uploadToServer(pid, drawingId, name, mime, dataUrl, folderId) {
-    // Convert data URL to Blob via fetch (handles large files without atob stack overflow)
-    return fetch(dataUrl).then(function (r) { return r.blob(); }).then(function (blob) {
-      var fd = new FormData();
-      fd.append('file', blob, name);
-      fd.append('project_id', pid);
-      if (folderId) fd.append('folder_id', folderId);
+  /**
+   * Convert a base64 data URL to a Blob without fetch() (avoids mobile browser
+   * data-URL length limits and memory issues).
+   */
+  function _dataUrlToBlob(dataUrl) {
+    var parts = dataUrl.split(',');
+    var mime = parts[0].match(/:(.*?);/)[1];
+    var binary = atob(parts[1]);
+    var len = binary.length;
+    var arr = new Uint8Array(len);
+    for (var i = 0; i < len; i++) {
+      arr[i] = binary.charCodeAt(i);
+    }
+    return new Blob([arr], { type: mime });
+  }
 
-      var token = localStorage.getItem('align-token') || '';
-      return fetch('/api/files/upload', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token },
-        body: fd
-      }).then(function (r) {
-        if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Upload failed'); });
-        return r.json();
-      }).then(function (data) {
-        return data.file || { id: drawingId };
-      });
+  function _uploadToServer(pid, drawingId, name, mime, dataUrl, folderId) {
+    // Convert data URL to Blob (handles large files without fetch() memory issues)
+    var blob;
+    try {
+      blob = _dataUrlToBlob(dataUrl);
+    } catch (e) {
+      return Promise.reject(new Error('Failed to convert data URL to blob'));
+    }
+    var fd = new FormData();
+    fd.append('file', blob, name);
+    fd.append('project_id', pid);
+    if (folderId) fd.append('folder_id', folderId);
+
+    var token = localStorage.getItem('align-token') || '';
+    return fetch('/api/files/upload', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + token },
+      body: fd
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Upload failed'); });
+      return r.json();
+    }).then(function (data) {
+      return data.file || { id: drawingId };
     });
   }
 
