@@ -501,7 +501,8 @@
             if (idx >= textResults.length) return Promise.resolve();
             var tr = textResults[idx];
             var pageName = _extractBottomRightText(tr.items, tr.viewport);
-            if (!pageName) pageName = 'Page ' + tr.pageNum;
+            // If scanner can't find a name, leave empty — user will enter manually
+            if (!pageName) pageName = '';
             pageName = _sanitizePageName(pageName, tr.pageNum);
 
             return PDFLib.PDFDocument.create().then(function (newDoc) {
@@ -526,6 +527,7 @@
               pages.push({
                 name: pageName,
                 dataUrl: dataUrl,
+                pdfBytes: bytes,   // ← raw bytes for upload (avoids fetch(dataUrl) limits)
                 thumbUrl: tr.thumbUrl || null,
                 pageNum: tr.pageNum
               });
@@ -657,24 +659,18 @@
 
     if (!textItems || textItems.length === 0) return null;
 
-    var vw = viewport.width;
-    var vh = viewport.height;
-
-    // ── NEW: Label-based title block scanner ──
-    // Scan the entire bottom 40% of the page for labeled fields
+    // ── Label-based scanner: scan ALL text items on the page ──
+    // No coordinate filtering — architectural title blocks can be anywhere.
     var candidates = [];
     for (var i = 0; i < textItems.length; i++) {
       var item = textItems[i];
       if (!item.str || !item.transform) continue;
-      var ty = item.transform[5];
-      // PDF coords: y=0 is bottom. Scan bottom 40%.
-      if (ty > vh * 0.40) continue;
       var str = item.str.trim();
       if (!str || str.length < 2) continue;
       candidates.push({
         text: str,
         x: item.transform[4],
-        y: ty,
+        y: item.transform[5],
         fontSize: item.height || (item.transform ? Math.abs(item.transform[3]) : 8)
       });
     }
@@ -689,88 +685,8 @@
       return drawingNo || drawingTitle;
     }
 
-    // ── FALLBACK: old bottom-right quadrant scanner ──
-    // Bottom-right region: rightmost 35% of width, bottom 20% of height
-    var leftBound = vw * 0.65;
-    var topBound  = vh * 0.80;
-
-    var candidates = [];
-
-    for (var i = 0; i < textItems.length; i++) {
-      var item = textItems[i];
-      if (!item.str || !item.transform) continue;
-      var tx = item.transform[4];
-      var ty = item.transform[5];
-      var str = item.str.trim();
-
-      if (!str) continue;
-
-      // Bottom-right region
-      if (tx >= leftBound && ty <= (vh * 0.20) && str.length >= 1) {
-        if (/^[\d.,\s\-]+$/.test(str) && str.length < 8) continue;
-        if (str.length < 2) continue;
-
-        candidates.push({
-          text: str,
-          x: tx,
-          y: ty,
-          fontSize: item.height || (item.transform ? Math.abs(item.transform[3]) : 8)
-        });
-      }
-    }
-
-    if (candidates.length === 0) return null;
-
-    // Sort by Y (bottom-to-top), then X (left-to-right)
-    candidates.sort(function (a, b) {
-      var yDiff = a.y - b.y;
-      if (Math.abs(yDiff) < 5) return a.x - b.x;
-      return yDiff;
-    });
-
-    // ── Smart extraction: look for sheet number pattern (A-101, S-201, etc.) ──
-    var sheetPattern = /^[A-Z]\d*[-.]?\d+[A-Za-z]?$/;  // e.g. A-101, S201, M-2.1, E001a
-    var sheetNum = null;
-    var otherParts = [];
-
-    for (var j = 0; j < candidates.length; j++) {
-      var t = candidates[j].text;
-      if (!sheetNum && sheetPattern.test(t)) {
-        sheetNum = t;
-      } else if (t.length >= 3) {
-        otherParts.push(t);
-      }
-    }
-
-    // Build name: SHEET NUMBER: Title
-    var name = '';
-    if (sheetNum) {
-      name = sheetNum;
-      if (otherParts.length > 0) {
-        // Take first meaningful title piece (skip scale, revision, dates)
-        var title = otherParts.filter(function (p) {
-          return !/^(SCALE|REV|DATE|DWG|CHK|APPR|\d{1,2}\/\d{1,2}\/\d{2,4}|NTS|NOT TO SCALE)$/i.test(p);
-        });
-        if (title.length > 0) {
-          name += ' — ' + title.slice(0, 3).join(' ');
-        }
-      }
-    } else {
-      // No sheet number found — use the best text we have
-      var seen = {};
-      var parts = [];
-      for (var k = 0; k < candidates.length; k++) {
-        var ct = candidates[k].text;
-        var key = ct.toLowerCase();
-        if (seen[key]) continue;
-        seen[key] = true;
-        if (ct.length < 3 && candidates.length > 3) continue;
-        parts.push(ct);
-      }
-      name = parts.join(' — ');
-    }
-
-    return name || null;
+    // Nothing found — let user enter manually (return null, caller handles it)
+    return null;
   }
 
   function _sanitizePageName(raw, fallbackNum) {
@@ -801,9 +717,17 @@
 
   /* ── Server upload (source of truth) ──────────────────────────────────── */
 
-  function _uploadToServer(pid, drawingId, name, mime, dataUrl, folderId) {
-    // Convert data URL to Blob via fetch (handles large files reliably)
-    return fetch(dataUrl).then(function (r) { return r.blob(); }).then(function (blob) {
+  function _uploadToServer(pid, drawingId, name, mime, dataUrl, folderId, pdfBytes) {
+    // If we have raw bytes (from pdf-lib split), use them directly — avoids
+    // Safari fetch(dataUrl) size limits and "Load failed" errors.
+    var blobPromise;
+    if (pdfBytes && pdfBytes.length) {
+      blobPromise = Promise.resolve(new Blob([pdfBytes], { type: mime }));
+    } else {
+      blobPromise = fetch(dataUrl).then(function (r) { return r.blob(); });
+    }
+
+    return blobPromise.then(function (blob) {
       var fd = new FormData();
       fd.append('file', blob, name);
       fd.append('project_id', pid);
@@ -945,9 +869,10 @@
       var name = f.customName || customName || f.name || 'drawing';
       var mime = f.type || 'application/octet-stream';
       var content = f.dataUrl || '';
+      var bytes = f.pdfBytes || null;
       var drawingId = _drawingUid();
 
-      return _uploadToServer(pid, drawingId, name, mime, content, filesFolderId).then(function (serverFile) {
+      return _uploadToServer(pid, drawingId, name, mime, content, filesFolderId, bytes).then(function (serverFile) {
         // Reload index each time to avoid race conditions
         var currentIndex = _loadDrawingsIndex(pid);
         currentIndex.push({
@@ -2906,6 +2831,7 @@
 
         for (var p = 0; p < pdfInfo.pages.length; p++) {
           var pg = pdfInfo.pages[p];
+          var hasName = pg.name && pg.name.trim().length > 0;
           h.push('<div class="dr-preview dr-preview-page">');
           h.push('<div class="dr-preview-thumb">');
           if (pg.thumbUrl) {
@@ -2916,7 +2842,12 @@
           }
           h.push('</div>');
           h.push('<div class="dr-preview-info">');
-          h.push('<strong>' + esc(pg.name) + '</strong>');
+          if (hasName) {
+            h.push('<strong>' + esc(pg.name) + '</strong>');
+          } else {
+            // Scanner couldn't find a name — let user type it
+            h.push('<input type="text" class="dr-page-name-input" id="dr-page-name-' + p + '" placeholder="Enter drawing name (e.g. G-004.00 — ADA NOTES)" value="">');
+          }
           h.push('<span>Page ' + pg.pageNum + ' of ' + pdfInfo.totalPages + '</span>');
           h.push('</div>');
           h.push('</div>');
@@ -3171,12 +3102,16 @@
       // PDF-split pages — each is a standalone PDF (from pdf-lib)
       for (var p = 0; p < state.pdfSplitInfo.pages.length; p++) {
         var pg = state.pdfSplitInfo.pages[p];
+        // Read user-edited name from input field if present
+        var nameInput = document.getElementById('dr-page-name-' + p);
+        var pageName = (nameInput ? nameInput.value.trim() : pg.name) || pg.name || ('Page ' + pg.pageNum);
         itemsToSave.push({
-          name: pg.name + '.pdf',
+          name: pageName + '.pdf',
           type: 'application/pdf',
           size: pg.dataUrl.length,
           dataUrl: pg.dataUrl,
-          customName: pg.name + '.pdf'
+          pdfBytes: pg.pdfBytes || null,
+          customName: pageName + '.pdf'
         });
       }
     } else {

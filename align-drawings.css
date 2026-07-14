@@ -424,6 +424,29 @@
   font-size: 0.8rem;
   color: var(--muted, #6b7480);
 }
+
+/* Editable page name input when scanner can't find a name */
+.dr-page-name-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1.5px solid var(--line, #e2e6ea);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: var(--font);
+  color: var(--ink, #1b1f24);
+  background: var(--card, #fff);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.dr-page-name-input:focus {
+  border-color: var(--brand, #1a6fd4);
+  box-shadow: 0 0 0 3px rgba(26, 111, 212, 0.12);
+}
+.dr-page-name-input::placeholder {
+  color: var(--muted, #6b7480);
+  font-size: 0.8rem;
+}
+
 .dr-preview-change {
   background: none;
   border: none;
