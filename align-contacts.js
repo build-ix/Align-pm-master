@@ -70,6 +70,7 @@ function _listHtml(){
   h.push('<div class="ct-header-actions">');
   h.push('<input type="search" class="ct-search" id="ct-search" placeholder="Search name, company, role..." value="'+esc(state.search)+'">');
   if(isAdmin()){
+    h.push('<button class="pm-btn" id="ct-manage-invites-btn">Manage Invites</button>');
     h.push('<button class="pm-btn" id="ct-new-company-btn">+ Add Company</button>');
     h.push('<button class="pm-btn primary" id="ct-new-user-btn">+ Add User</button>');
   }
@@ -186,6 +187,9 @@ function _bindList(){
   var pb=document.getElementById('ct-permissions-btn');
   if(pb)pb.addEventListener('click',function(){ _showPermissionsPanel(); });
 
+  var mb=document.getElementById('ct-manage-invites-btn');
+  if(mb)mb.addEventListener('click',function(){ _showInvitesPanel(); });
+
   var wrap=document.querySelector('.ct-wrap');
   if(wrap)wrap.addEventListener('click',function(e){
     // Company ribbon edit button
@@ -247,7 +251,7 @@ function _bindList(){
   });
 }
 
-/* ── Form ───────────────────────────────────────────────────────────── */
+/* ── Form ───────────────────────────────────────────────────────────────────────────────────── */
 function _formHtml(){
   var ct=state.editingContact||{};
   var isCompany=ct.mode==='company';
@@ -260,34 +264,178 @@ function _formHtml(){
   h.push('</div>');
 
   if(isCompany){
+    h.push('<div class="ct-form-card">');
     h.push('<div class="ct-form-section"><label class="ct-field-label">Company Name</label><input type="text" class="ct-input" id="ct-co-name" value="'+esc(ct.name||'')+'" placeholder="Company name" autocomplete="off"></div>');
     h.push('<div class="ct-form-section"><label class="ct-field-label">Trade (optional)</label><input type="text" class="ct-input" id="ct-co-trade" value="'+esc(ct.trade||'')+'" placeholder="e.g. Plumbing, Electrical" autocomplete="off"></div>');
+    h.push('</div>');
   }else{
+    h.push('<div class="ct-form-card">');
+
+    // Name
     h.push('<div class="ct-form-section"><label class="ct-field-label">Full Name</label><input type="text" class="ct-input" id="ct-name" value="'+esc(ct.name||'')+'" placeholder="Full name"></div>');
-    h.push('<div class="ct-form-row"><div class="ct-form-field"><label class="ct-field-label">Role</label><input type="text" class="ct-input" id="ct-role" value="'+esc(ct.project_role||ct.role||'')+'" placeholder="e.g. Project Manager"></div><div class="ct-form-field"><label class="ct-field-label">Email</label><input type="email" class="ct-input" id="ct-email" value="'+esc(ct.email||'')+'" placeholder="email@example.com"'+(ct.id?' disabled':'')+'></div></div>');
+
+    // Role + Email row
+    h.push('<div class="ct-form-row">');
+    h.push('<div class="ct-form-field"><label class="ct-field-label">Job Title</label><input type="text" class="ct-input" id="ct-role" value="'+esc(ct.project_role||ct.role||'')+'" placeholder="e.g. Project Manager"></div>');
+    h.push('<div class="ct-form-field"><label class="ct-field-label">Email</label><input type="email" class="ct-input" id="ct-email" value="'+esc(ct.email||'')+'" placeholder="email@example.com"'+(ct.id?' disabled':'')+'></div>');
+    h.push('</div>');
+
+    // Phone
     h.push('<div class="ct-form-section"><label class="ct-field-label">Phone (optional)</label><input type="tel" class="ct-input" id="ct-phone" value="'+esc(ct.phone||'')+'" placeholder="(555) 123-4567"></div>');
 
     // Company dropdown
     h.push('<div class="ct-form-section"><label class="ct-field-label">Company</label><select class="ct-input" id="ct-company-sel"></select></div>');
     h.push('<div id="ct-new-company-inline" style="display:none;"><label class="ct-field-label">New Company Name</label><input type="text" class="ct-input" id="ct-new-co-name" placeholder="Enter new company name"></div>');
 
-    // Permissions (new users only — pre-set room access)
-    h.push('<div class="ct-form-section" id="ct-perms-section">');
-    h.push('<label class="ct-field-label">Room Permissions</label>');
+    h.push('</div>'); // end ct-form-card
+
+    // Permissions card
+    h.push('<div class="ct-form-card ct-perms-card">');
+    h.push('<div class="ct-form-section">');
+    h.push('<label class="ct-field-label">Access Level</label>');
+    h.push('<div class="ct-access-toggle">');
+    h.push('<button type="button" class="ct-access-btn active" data-access="admin" id="ct-access-admin"><div class="ct-access-title">Admin</div><div class="ct-access-desc">Full access to all tiles</div></button>');
+    h.push('<button type="button" class="ct-access-btn" data-access="user" id="ct-access-user"><div class="ct-access-title">User</div><div class="ct-access-desc">Access specific tiles only</div></button>');
+    h.push('</div>');
+    h.push('</div>');
+
+    // Granular permissions (hidden when admin)
+    h.push('<div class="ct-form-section" id="ct-perms-section" style="display:none;">');
+
+    // Preset role buttons
+    h.push('<div class="ct-form-section">');
+    h.push('<label class="ct-field-label">Role Preset</label>');
+    h.push('<div class="ct-preset-grid">');
+    ['pm','sup','sub','custom'].forEach(function(key) {
+      var meta = {pm:'Project Manager',sup:'Superintendent',sub:'Sub Contractor',custom:'Custom'}[key];
+      h.push('<div class="ct-preset-box" data-preset="'+key+'">');
+      h.push('<span class="ct-preset-name">'+meta+'</span>');
+      h.push('<button type="button" class="ct-preset-edit" data-preset="'+key+'" title="Edit preset">Edit</button>');
+      h.push('</div>');
+    });
+    h.push('</div>');
+    h.push('</div>');
+
+    // Preset editor overlay (hidden by default)
+    h.push('<div id="ct-preset-editor" style="display:none;">');
+    h.push('<div class="ct-preset-editor-bar">');
+    h.push('<span class="ct-preset-editor-title">Edit Preset</span>');
+    h.push('<button type="button" class="ct-preset-editor-close" id="ct-preset-close">Done</button>');
+    h.push('</div>');
+    h.push('<div class="ct-preset-editor-grid" id="ct-preset-editor-grid"></div>');
+    h.push('</div>');
+
+    h.push('<label class="ct-field-label">Tile Permissions</label>');
     h.push('<div class="ct-perm-grid">');
     PERM_ROOMS.forEach(function(room) {
       h.push('<div class="ct-perm-row">');
       h.push('<span class="ct-perm-label">' + (PERM_LABELS[room] || room) + '</span>');
       h.push('<div class="perm-toggle-group" data-room="' + room + '">');
-      h.push('<button type="button" class="perm-tog active" data-val="none">None</button>');
-      h.push('<button type="button" class="perm-tog" data-val="r">View</button>');
+      h.push('<button type="button" class="perm-tog" data-val="none">None</button>');
+      h.push('<button type="button" class="perm-tog active" data-val="r">View</button>');
       h.push('<button type="button" class="perm-tog" data-val="rw">Edit</button>');
       h.push('</div></div>');
     });
     h.push('</div></div>');
+
+    h.push('</div>'); // end ct-perms-card
   }
   h.push('</div>');
   return h.join('');
+}
+
+function _getPresets() {
+  var defaults = {
+    pm:   {drawings:'rw','daily-logs':'rw',specs:'rw',rfis:'rw',punchlist:'rw',schedule:'rw',budget:'rw',contacts:'rw',photos:'rw',tasks:'rw',procurement:'rw',files:'rw',settings:'rw'},
+    sup:  {drawings:'rw','daily-logs':'rw',specs:'r',rfis:'r',punchlist:'rw',schedule:'rw',budget:'r',contacts:'r',photos:'r',tasks:'rw',procurement:'r',files:'r',settings:'none'},
+    sub:  {drawings:'r','daily-logs':'r',specs:'none',rfis:'none',punchlist:'rw',schedule:'r',budget:'none',contacts:'none',photos:'none',tasks:'rw',procurement:'none',files:'r',settings:'none'},
+    custom:{drawings:'none','daily-logs':'none',specs:'none',rfis:'none',punchlist:'none',schedule:'none',budget:'none',contacts:'none',photos:'none',tasks:'none',procurement:'none',files:'none',settings:'none'}
+  };
+  try {
+    var stored = localStorage.getItem('align.presets');
+    if (stored) return Object.assign({}, defaults, JSON.parse(stored));
+  } catch(e) {}
+  return defaults;
+}
+
+function _savePresets(presets) {
+  try { localStorage.setItem('align.presets', JSON.stringify(presets)); } catch(e) {}
+}
+
+function _applyPreset(key) {
+  var presets = _getPresets();
+  var p = presets[key];
+  if (!p) return;
+  var grid = document.getElementById('ct-perms-section');
+  if (!grid) return;
+  grid.querySelectorAll('.perm-toggle-group').forEach(function(group) {
+    var room = group.getAttribute('data-room');
+    var val = p[room] || 'none';
+    group.querySelectorAll('.perm-tog').forEach(function(tog) {
+      tog.classList.toggle('active', tog.getAttribute('data-val') === val);
+    });
+  });
+  // Mark preset box active
+  document.querySelectorAll('.ct-preset-box').forEach(function(box) {
+    box.classList.toggle('active', box.getAttribute('data-preset') === key);
+  });
+}
+
+function _openPresetEditor(key) {
+  var presets = _getPresets();
+  var p = presets[key] || {};
+  var editor = document.getElementById('ct-preset-editor');
+  var grid = document.getElementById('ct-preset-editor-grid');
+  if (!editor || !grid) return;
+
+  var names = {pm:'Project Manager',sup:'Superintendent',sub:'Sub Contractor',custom:'Custom'};
+  document.querySelector('.ct-preset-editor-title').textContent = 'Edit ' + (names[key] || key);
+
+  var h = '';
+  PERM_ROOMS.forEach(function(room) {
+    var val = p[room] || 'none';
+    h += '<div class="ct-perm-row">';
+    h += '<span class="ct-perm-label">' + (PERM_LABELS[room] || room) + '</span>';
+    h += '<div class="perm-toggle-group" data-ed-room="' + room + '">';
+    h += '<button type="button" class="perm-tog' + (val === 'none' ? ' active' : '') + '" data-val="none">None</button>';
+    h += '<button type="button" class="perm-tog' + (val === 'r' ? ' active' : '') + '" data-val="r">View</button>';
+    h += '<button type="button" class="perm-tog' + (val === 'rw' ? ' active' : '') + '" data-val="rw">Edit</button>';
+    h += '</div></div>';
+  });
+  grid.innerHTML = h;
+
+  // Wire editor toggles
+  grid.querySelectorAll('.perm-toggle-group').forEach(function(group) {
+    group.querySelectorAll('.perm-tog').forEach(function(tog) {
+      tog.addEventListener('click', function() {
+        group.querySelectorAll('.perm-tog').forEach(function(t) { t.classList.remove('active'); });
+        this.classList.add('active');
+      });
+    });
+  });
+
+  // Save on close
+  var closeBtn = document.getElementById('ct-preset-close');
+  if (closeBtn) {
+    closeBtn.onclick = function() {
+      var newPerms = {};
+      grid.querySelectorAll('.perm-toggle-group').forEach(function(group) {
+        var room = group.getAttribute('data-ed-room');
+        var active = group.querySelector('.perm-tog.active');
+        if (active) newPerms[room] = active.getAttribute('data-val');
+      });
+      presets[key] = newPerms;
+      _savePresets(presets);
+      editor.style.display = 'none';
+      // If this preset is currently selected, re-apply it live
+      var activeBox = document.querySelector('.ct-preset-box.active');
+      if (activeBox && activeBox.getAttribute('data-preset') === key) {
+        _applyPreset(key);
+      }
+    };
+  }
+
+  editor.style.display = '';
 }
 
 function _bindForm(){
@@ -313,6 +461,42 @@ function _bindForm(){
       }
     });
   }
+
+  // Wire access level toggle
+  var accessBtns = document.querySelectorAll('.ct-access-btn');
+  var permsSection = document.getElementById('ct-perms-section');
+  accessBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      accessBtns.forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      var access = this.getAttribute('data-access');
+      if (permsSection) {
+        permsSection.style.display = access === 'admin' ? 'none' : '';
+      }
+      // Auto-apply Project Manager preset when switching to User
+      if (access === 'user') {
+        _applyPreset('pm');
+      }
+    });
+  });
+
+  // Wire preset boxes
+  document.querySelectorAll('.ct-preset-box').forEach(function(box) {
+    box.addEventListener('click', function(e) {
+      if (e.target.closest('.ct-preset-edit')) return; // let edit button handle itself
+      var key = this.getAttribute('data-preset');
+      _applyPreset(key);
+    });
+  });
+
+  // Wire preset edit buttons
+  document.querySelectorAll('.ct-preset-edit').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var key = this.getAttribute('data-preset');
+      _openPresetEditor(key);
+    });
+  });
 
   // Wire permission toggles in the user form
   var permGrid = document.getElementById('ct-perms-section');
@@ -364,16 +548,27 @@ function _bindForm(){
         if(!newCoName)return alert('Enter a company name.');
       }
 
+      // Determine access level
+      var accessAdmin = document.getElementById('ct-access-admin') && document.getElementById('ct-access-admin').classList.contains('active');
+
       function saveUser(cid){
-        // Collect permissions from form
         var perms = {};
-        var permGrid2 = document.getElementById('ct-perms-section');
-        if (permGrid2) {
-          permGrid2.querySelectorAll('.perm-toggle-group').forEach(function(group) {
-            var room = group.getAttribute('data-room');
-            var active = group.querySelector('.perm-tog.active');
-            if (active) perms[room] = active.getAttribute('data-val');
-          });
+        var projectRole = 'member';
+
+        if (accessAdmin) {
+          // Admin gets full access to all rooms
+          projectRole = 'admin';
+          PERM_ROOMS.forEach(function(room) { perms[room] = 'rw'; });
+        } else {
+          // Collect granular permissions from form
+          var permGrid2 = document.getElementById('ct-perms-section');
+          if (permGrid2) {
+            permGrid2.querySelectorAll('.perm-toggle-group').forEach(function(group) {
+              var room = group.getAttribute('data-room');
+              var active = group.querySelector('.perm-tog.active');
+              if (active) perms[room] = active.getAttribute('data-val');
+            });
+          }
         }
 
         if(isUpdate){
@@ -386,7 +581,7 @@ function _bindForm(){
         }else{
           _api('/api/people',{method:'POST',body:{
             email:email,name:uname,role:role,company_id:cid||null,
-            projects:state.projectId?[{id:state.projectId,role:'member',permissions:perms}]:[]
+            projects:state.projectId?[{id:state.projectId,role:projectRole,permissions:perms}]:[]
           }}).then(function(r){
             var msg = r.added ? 'User added to project' : (r.reactivated ? 'User reactivated and added to project' : (r.pending ? 'Invite updated with additional projects' : 'Invite sent to '+email));
             alert(msg);
@@ -722,6 +917,125 @@ function _savePerm(uid, perms, btn, idx) {
   }).catch(function(e) {
     alert('Save failed: ' + (e.message || 'unknown error'));
   });
+}
+
+function _showInvitesPanel() {
+  _resolvePid();
+  if (!state.projectId) return;
+
+  Promise.all([
+    _api('/api/projects/' + state.projectId + '/invites').catch(function(){ return { invites: [] }; }),
+    _api('/api/people?status=active').catch(function(){ return { people: [] }; })
+  ]).then(function(results) {
+    var invites = results[0].invites || [];
+    var people = (results[1].people || []).filter(function(p){ return p.status === 'active'; });
+
+    var html = '<div class="perm-overlay" id="invites-overlay">';
+    html += '<div class="perm-panel perm-single">';
+    html += '<div class="perm-header"><h2>Manage Invites</h2><button class="perm-close" id="invites-close">&times;</button></div>';
+    html += '<div class="perm-body" style="flex-direction:column;padding:16px 20px;">';
+
+    // Pending Invites
+    html += '<div class="ct-form-section" style="margin-bottom:20px;">';
+    html += '<label class="ct-field-label">Pending Invites (' + invites.length + ')</label>';
+    if (!invites.length) {
+      html += '<div class="pm-empty" style="padding:20px 0;font-size:0.85rem;">No pending invites.</div>';
+    } else {
+      html += '<div class="st-project-list" style="gap:8px;">';
+      invites.forEach(function(inv) {
+        html += '<div class="st-proj-card">';
+        html += '<div class="st-proj-info">';
+        html += '<div class="st-proj-name">' + esc(inv.name || 'Unnamed') + '</div>';
+        html += '<div class="st-proj-meta">' + esc(inv.email) + ' · Code: ' + esc(inv.code) + ' · Expires ' + _fmtDate(inv.expires_at) + '</div>';
+        html += '</div>';
+        html += '<div class="st-proj-actions">';
+        html += '<button class="pm-btn small" data-inv-resend="' + esc(inv.id) + '">Resend</button>';
+        html += '<button class="pm-btn small danger" data-inv-cancel="' + esc(inv.id) + '">Cancel</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Member Log
+    html += '<div class="ct-form-section">';
+    html += '<label class="ct-field-label">Member Log (' + people.length + ')</label>';
+    if (!people.length) {
+      html += '<div class="pm-empty" style="padding:20px 0;font-size:0.85rem;">No members yet.</div>';
+    } else {
+      // Sort by created_at descending
+      people.sort(function(a, b) {
+        return (b.created_at || '').localeCompare(a.created_at || '');
+      });
+      html += '<div class="st-project-list" style="gap:8px;">';
+      people.forEach(function(p) {
+        html += '<div class="st-proj-card">';
+        html += '<div class="st-proj-info">';
+        html += '<div class="st-proj-name">' + esc(p.name || 'Unnamed') + '</div>';
+        html += '<div class="st-proj-meta">' + esc(p.email || '') + ' · Joined ' + _fmtDate(p.created_at) + '</div>';
+        html += '</div>';
+        html += '<div class="st-proj-actions">';
+        html += '<span class="st-role-badge ' + (p.role === 'admin' ? 'admin' : 'user') + '">' + esc(p.role) + '</span>';
+        html += '</div>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
+    html += '</div></div></div>';
+
+    var existing = document.getElementById('invites-overlay');
+    if (existing) existing.remove();
+    var div = document.createElement('div');
+    div.innerHTML = html;
+    document.body.appendChild(div.firstElementChild);
+
+    // Close handlers
+    document.getElementById('invites-close').addEventListener('click', function() {
+      var ov = document.getElementById('invites-overlay');
+      if (ov) ov.remove();
+    });
+    document.getElementById('invites-overlay').addEventListener('click', function(e) {
+      if (e.target === this) this.remove();
+    });
+
+    // Resend
+    document.querySelectorAll('[data-inv-resend]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = this.getAttribute('data-inv-resend');
+        _api('/api/invites/' + id + '/resend', { method: 'POST' })
+          .then(function(d) { alert(d.ok ? 'Invite resent!' : 'Failed'); })
+          .catch(function(e) { alert('Failed: ' + (e.message || 'unknown')); });
+      });
+    });
+
+    // Cancel
+    document.querySelectorAll('[data-inv-cancel]').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var id = this.getAttribute('data-inv-cancel');
+        if (!confirm('Cancel this invite?')) return;
+        _api('/api/invites/' + id + '/cancel', { method: 'POST' })
+          .then(function() {
+            var ov = document.getElementById('invites-overlay');
+            if (ov) ov.remove();
+            _showInvitesPanel();
+          })
+          .catch(function(e) { alert('Failed: ' + (e.message || 'unknown')); });
+      });
+    });
+  }).catch(function(e) {
+    alert('Could not load invites: ' + (e.message || 'unknown error'));
+  });
+}
+
+function _fmtDate(iso) {
+  if (!iso) return 'N/A';
+  try {
+    var d = new Date(iso);
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch(e) { return iso.slice(0, 10); }
 }
 
 g.AlignContacts=Object.freeze({render:render, refresh:function(){_resolvePid();_loadData();}});

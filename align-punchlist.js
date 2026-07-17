@@ -12,8 +12,9 @@
     projectId: null,
     apartments: [],
     activeApt: null,
-    viewMode: 'list',   // 'list' | 'apt' | 'form'
+    viewMode: 'list',   // 'list' | 'apt' | 'form' | 'detail' | 'profile-edit'
     editingItem: null,
+    detailItem: null,
     _aptCounts: {},
     _aptOpen: {}
   };
@@ -101,6 +102,21 @@
     return all.filter(function(i) { return (i.apartment||'').trim() === name; });
   }
 
+  /* ── Apartment profile data ────────────────────────────────────────────────────────── */
+  function _getAptProfile(aptName) {
+    if (!state.projectId || !aptName) return null;
+    var profiles = S().listRecords(state.projectId, 'apt_profiles');
+    return profiles.find(function(p) { return (p.apartment || '').trim() === aptName.trim(); }) || null;
+  }
+  function _saveAptProfile(profile) {
+    if (!state.projectId) return;
+    S().saveRecord(state.projectId, 'apt_profiles', profile);
+  }
+  function _drawingUrl(drawingId) {
+    if (!drawingId) return null;
+    return '/api/files/' + drawingId;
+  }
+
   function _aptIndex() {
     if (!state.activeApt) return -1;
     return state.apartments.indexOf(state.activeApt);
@@ -134,6 +150,16 @@
     if (state.viewMode==='form' && state.editingItem) {
       c.innerHTML=_formHtml(state.editingItem);
       _bindForm();
+      return;
+    }
+    if (state.viewMode==='detail' && state.detailItem) {
+      c.innerHTML=_detailHtml(state.detailItem);
+      _bindDetail();
+      return;
+    }
+    if (state.viewMode==='profile-edit') {
+      c.innerHTML=_profileEditHtml();
+      _bindProfileEdit();
       return;
     }
     _buildAptList();
@@ -238,6 +264,7 @@
     var idx = _aptIndex();
     var hasPrev = idx > 0;
     var hasNext = idx >= 0 && idx < state.apartments.length - 1;
+    var profile = _getAptProfile(state.activeApt);
 
     // Navigation header
     h.push('<div class="pl-apt-nav">');
@@ -251,6 +278,43 @@
     if (hasNext) h.push('<button class="pm-btn small" id="pl-apt-next">'+esc(state.apartments[idx+1])+' →</button>');
     h.push('</div>');
     h.push('</div>');
+
+    // Apartment profile card
+    h.push('<div class="pl-apt-profile">');
+    h.push('<div class="pl-apt-profile-header">');
+    h.push('<h4 class="pl-apt-profile-name">'+esc(state.activeApt)+'</h4>');
+    h.push('<button class="pm-btn small" id="pl-edit-profile">Edit Profile</button>');
+    h.push('</div>');
+
+    // Layout image placeholder
+    if (profile && profile.layoutImageId) {
+      h.push('<div class="pl-apt-profile-layout"><img src="/api/files/'+esc(profile.layoutImageId)+'" alt="Layout"></div>');
+    } else {
+      h.push('<div class="pl-apt-profile-layout">No layout image</div>');
+    }
+
+    // SF fields
+    h.push('<div class="pl-apt-profile-sf">');
+    h.push('<div>');
+    h.push('<div class="pl-apt-profile-label">Plan SF</div>');
+    h.push('<div class="pl-detail-value">'+(profile && profile.planSf ? esc(profile.planSf) : '—')+'</div>');
+    h.push('</div>');
+    h.push('<div>');
+    h.push('<div class="pl-apt-profile-label">Actual SF</div>');
+    var actualSf = profile && profile.actualSf ? esc(profile.actualSf) : '—';
+    var sfChanged = profile && profile.planSf && profile.actualSf && profile.actualSf !== profile.planSf;
+    h.push('<div class="pl-detail-value" style="font-weight:700;color:'+(sfChanged?'var(--success)':'var(--ink)')+'">'+actualSf+'</div>');
+    h.push('</div>');
+    h.push('</div>');
+
+    // References
+    h.push('<div class="pl-apt-profile-label">References</div>');
+    if (profile && profile.references) {
+      h.push('<div class="pl-apt-profile-ref">'+esc(profile.references)+'</div>');
+    } else {
+      h.push('<div class="pl-apt-profile-ref pl-apt-profile-ref-empty">No references added yet</div>');
+    }
+    h.push('</div>'); // .pl-apt-profile
 
     // Add Item bar
     h.push('<div class="pl-add-bar">');
@@ -304,6 +368,13 @@
       if (idx >= 0 && idx < state.apartments.length-1) { state.activeApt = state.apartments[idx+1]; _paint(); }
     });
 
+    // Edit Profile
+    var editProfileBtn = document.getElementById('pl-edit-profile');
+    if (editProfileBtn) editProfileBtn.addEventListener('click', function() {
+      state.viewMode = 'profile-edit';
+      _paint();
+    });
+
     // Add Item
     var addBtn = document.getElementById('pl-add-item');
     if (addBtn) addBtn.addEventListener('click', function() {
@@ -329,31 +400,39 @@
       _paint();
     });
 
-    // Item actions
+    // Item row click → detail view; button clicks → edit/delete
     var wrap = state.container;
     if (wrap) wrap.addEventListener('click', function(e) {
       var btn = e.target.closest('[data-pl-act]');
-      if (!btn) return;
-      var act = btn.getAttribute('data-pl-act');
-      var id = btn.getAttribute('data-pl-id');
-      if (act === 'edit') {
-        var item = getItemsFull().find(function(i) { return i.id === id; });
-        if (item) { state.editingItem = JSON.parse(JSON.stringify(item)); state.viewMode = 'form'; _paint(); }
-      }
-      if (act === 'delete') {
-        if (confirm('Delete this item?')) {
-          var delId = id;
-          // Delete from server first
-          fetch('/api/projects/' + state.projectId + '/' + CATEGORY + '/' + delId, {
-            method: 'DELETE',
-            headers: (window.AlignAPI && window.AlignAPI.authHeaders) ? window.AlignAPI.authHeaders() : {}
-          }).then(function() {
-            S().deleteRecord(state.projectId, CATEGORY, delId);
-            _paint();
-          }).catch(function() {
-            alert('Delete failed — please try again.');
-          });
+      if (btn) {
+        var act = btn.getAttribute('data-pl-act');
+        var id = btn.getAttribute('data-pl-id');
+        if (act === 'edit') {
+          var item = getItemsFull().find(function(i) { return i.id === id; });
+          if (item) { state.editingItem = JSON.parse(JSON.stringify(item)); state.viewMode = 'form'; _paint(); }
         }
+        if (act === 'delete') {
+          if (confirm('Delete this item?')) {
+            var delId = id;
+            fetch('/api/projects/' + state.projectId + '/' + CATEGORY + '/' + delId, {
+              method: 'DELETE',
+              headers: (window.AlignAPI && window.AlignAPI.authHeaders) ? window.AlignAPI.authHeaders() : {}
+            }).then(function() {
+              S().deleteRecord(state.projectId, CATEGORY, delId);
+              _paint();
+            }).catch(function() {
+              alert('Delete failed — please try again.');
+            });
+          }
+        }
+        return;
+      }
+      // Row click → detail
+      var row = e.target.closest('.pl-item-row');
+      if (row) {
+        var id = row.getAttribute('data-pl-id');
+        var item = getItemsFull().find(function(i) { return i.id === id; });
+        if (item) { state.detailItem = item; state.viewMode = 'detail'; _paint(); }
       }
     });
   }
@@ -468,6 +547,125 @@
       state.activeApt = item.apartment;
       state.viewMode = 'apt';
       state.editingItem = null;
+      _paint();
+    });
+  }
+
+  /* ── Detail View ───────────────────────────────────────────────────────────────── */
+  function _detailHtml(item) {
+    var h=[];
+    var sc = statusColor(item.status);
+    var drawingUrl = _drawingUrl(item.drawingId);
+
+    h.push('<div class="pl-detail-wrap">');
+    h.push('<div class="pl-detail-header">');
+    h.push('<button class="pm-btn" id="pl-detail-back">← Back</button>');
+    h.push('<h3 class="pl-detail-title">'+esc(item.title||'Untitled')+'</h3>');
+    h.push('<button class="pm-btn primary" id="pl-detail-edit">Edit</button>');
+    h.push('</div>');
+
+    h.push('<div class="pl-detail-section">');
+    h.push('<span class="pl-detail-status-badge" style="background:'+sc+'">'+statusLabel(item.status)+'</span>');
+    if (item.priority) {
+      var pc = item.priority==='critical'?'#dc2626':item.priority==='high'?'#ea580c':item.priority==='low'?'#16a34a':'#64748b';
+      h.push(' <span class="pl-priority-badge" style="background:'+pc+'">'+item.priority+'</span>');
+    }
+    h.push('</div>');
+
+    if (item.description) {
+      h.push('<div class="pl-detail-section">');
+      h.push('<span class="pl-detail-label">Description</span>');
+      h.push('<div class="pl-detail-value pl-detail-desc">'+esc(item.description)+'</div>');
+      h.push('</div>');
+    }
+
+    h.push('<div class="pl-detail-section">');
+    h.push('<span class="pl-detail-label">Apartment</span>');
+    h.push('<div class="pl-detail-value">'+esc(item.apartment||'—')+'</div>');
+    h.push('</div>');
+
+    if (item.location) {
+      h.push('<div class="pl-detail-section">');
+      h.push('<span class="pl-detail-label">Location</span>');
+      h.push('<div class="pl-detail-value">'+esc(item.location)+'</div>');
+      h.push('</div>');
+    }
+
+    if (item.assignedCompanyName || item.assignedTo) {
+      h.push('<div class="pl-detail-section">');
+      h.push('<span class="pl-detail-label">Assigned To</span>');
+      h.push('<div class="pl-detail-value">'+esc(item.assignedCompanyName || item.assignedTo || '—')+'</div>');
+      h.push('</div>');
+    }
+
+    if (drawingUrl) {
+      h.push('<div class="pl-detail-section">');
+      h.push('<span class="pl-detail-label">Linked Drawing</span>');
+      h.push('<a class="pl-detail-drawing-link" href="'+drawingUrl+'" target="_blank" rel="noopener">📐 Open Drawing</a>');
+      h.push('</div>');
+    }
+
+    h.push('<div class="pl-detail-section">');
+    h.push('<span class="pl-detail-label">Created</span>');
+    h.push('<div class="pl-detail-value">'+esc(item.createdBy||'Unknown')+' • '+fmtDate(item.createdAt)+'</div>');
+    h.push('</div>');
+
+    h.push('</div>'); // .pl-detail-wrap
+    return h.join('');
+  }
+
+  function _bindDetail() {
+    var backBtn = document.getElementById('pl-detail-back');
+    if (backBtn) backBtn.addEventListener('click', function() {
+      state.viewMode = 'apt'; state.detailItem = null; _paint();
+    });
+    var editBtn = document.getElementById('pl-detail-edit');
+    if (editBtn) editBtn.addEventListener('click', function() {
+      if (state.detailItem) {
+        state.editingItem = JSON.parse(JSON.stringify(state.detailItem));
+        state.viewMode = 'form';
+        _paint();
+      }
+    });
+  }
+
+  /* ── Profile Edit ────────────────────────────────────────────────────────── */
+  function _profileEditHtml() {
+    var profile = _getAptProfile(state.activeApt) || { apartment: state.activeApt, planSf: '', actualSf: '', references: '', layoutImageId: '' };
+    var h=[];
+    h.push('<div class="pl-form-wrap pl-profile-edit">');
+    h.push('<div class="pl-form-header">');
+    h.push('<button class="pm-btn" id="pl-profile-back">← Cancel</button>');
+    h.push('<h3 class="pl-form-title">Edit '+esc(state.activeApt)+'</h3>');
+    h.push('<button class="pm-btn primary" id="pl-profile-save">Save</button>');
+    h.push('</div>');
+
+    h.push('<div class="pl-form-section"><label class="pl-field-label">Plan SF</label><input type="text" class="pl-input" id="pl-profile-plan" value="'+esc(profile.planSf||'')+'" placeholder="e.g. 850"></div>');
+    h.push('<div class="pl-form-section"><label class="pl-field-label">Actual SF</label><input type="text" class="pl-input" id="pl-profile-actual" value="'+esc(profile.actualSf||'')+'" placeholder="e.g. 847"></div>');
+    h.push('<div class="pl-form-section"><label class="pl-field-label">References (specs, drawings, notes)</label><textarea class="pl-input" id="pl-profile-refs" rows="4" placeholder="Drawing A-301&#10;Kitchen: white quartz...">'+esc(profile.references||'')+'</textarea></div>');
+    h.push('<div class="pl-form-section"><label class="pl-field-label">Layout Image File ID (optional)</label><input type="text" class="pl-input" id="pl-profile-layout" value="'+esc(profile.layoutImageId||'')+'" placeholder="File ID from Files tile"></div>');
+
+    h.push('</div>');
+    return h.join('');
+  }
+
+  function _bindProfileEdit() {
+    var backBtn = document.getElementById('pl-profile-back');
+    if (backBtn) backBtn.addEventListener('click', function() {
+      state.viewMode = 'apt'; _paint();
+    });
+    var saveBtn = document.getElementById('pl-profile-save');
+    if (saveBtn) saveBtn.addEventListener('click', function() {
+      var existing = _getAptProfile(state.activeApt);
+      var profile = existing || { id: uid(), apartment: state.activeApt };
+      profile.planSf = (document.getElementById('pl-profile-plan')||{}).value || '';
+      profile.actualSf = (document.getElementById('pl-profile-actual')||{}).value || '';
+      profile.references = (document.getElementById('pl-profile-refs')||{}).value || '';
+      profile.layoutImageId = (document.getElementById('pl-profile-layout')||{}).value || '';
+      profile.updatedAt = nowISO();
+      if (!existing) profile.createdAt = nowISO();
+      _saveAptProfile(profile);
+      state.viewMode = 'apt';
       _paint();
     });
   }

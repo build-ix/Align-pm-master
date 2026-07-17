@@ -100,7 +100,7 @@
   font-size: 0.8rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--card);
   color: var(--ink-body);
   font-family: var(--font);
 }
@@ -124,7 +124,7 @@
   font-family: var(--font);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   transition: border-color 0.15s;
   -webkit-appearance: none;
@@ -154,7 +154,7 @@
   font-size: 0.8rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--card);
   color: var(--ink-body);
   font-family: var(--font);
   flex-shrink: 0;
@@ -191,7 +191,7 @@
   font-family: var(--font);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   cursor: pointer;
   transition: all 0.15s;
@@ -396,7 +396,7 @@
   font-family: var(--font);
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--card);
   color: var(--ink);
   transition: border-color 0.15s;
   -webkit-appearance: none;
@@ -691,3 +691,146 @@ select.pl-input {
 @media (max-width: 480px) {
   .pl-form-row-2 { grid-template-columns: 1fr; }
 }
+
+/* ── Item row clickable ────────────────────────────────────────────────── */
+.pl-item-row { cursor: pointer; }
+
+/* ── Item detail view ──────────────────────────────────────────────────── */
+.pl-detail-wrap { max-width: 640px; }
+.pl-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+  padding: 12px 0;
+  z-index: 5;
+  border-bottom: 1px solid var(--line);
+}
+.pl-detail-title { font-size:1.1rem; font-weight:700; color:var(--ink); margin:0; }
+.pl-detail-section { margin-bottom: 18px; }
+.pl-detail-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pl-detail-value {
+  font-size: 0.9rem;
+  color: var(--ink);
+  line-height: 1.5;
+}
+.pl-detail-value.pl-detail-desc {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  white-space: pre-wrap;
+}
+.pl-detail-status-badge {
+  display: inline-block;
+  padding: 5px 14px;
+  border-radius: 100px;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.pl-detail-drawing-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--brand);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pl-detail-drawing-link:hover { border-color: var(--brand-light); background: var(--brand-bg); }
+
+/* ── Apartment profile header ──────────────────────────────────────────── */
+.pl-apt-profile {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+.pl-apt-profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.pl-apt-profile-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+.pl-apt-profile-layout {
+  width: 100%;
+  height: 180px;
+  background: var(--bg-alt);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.pl-apt-profile-layout img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pl-apt-profile-sf {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.pl-apt-profile-ref {
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 0.82rem;
+  color: var(--ink);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  min-height: 60px;
+}
+.pl-apt-profile-ref-empty { color: var(--muted); font-style: italic; }
+.pl-apt-profile-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+.pl-apt-profile-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ── Profile edit inline ───────────────────────────────────────────────── */
+.pl-profile-edit .pl-input { margin-bottom: 10px; }
+.pl-profile-edit textarea.pl-input { min-height: 80px; resize: vertical; }

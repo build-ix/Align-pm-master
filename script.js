@@ -1632,7 +1632,7 @@ function _escHtml(s) {
       .then(function(d) {
         if (seq !== _psSeq) return; // stale
         var projs = d.projects || [];
-        var h = '<div class="ps-page"><div class="ps-header"><div class="ps-logo-wrap"><img class="ps-logo auth-logo-light" src="assets/c3-wordmark-light.svg" alt="Align"><img class="ps-logo auth-logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align"></div><h1 class="ps-title">Select Project</h1><button class="ps-signout-btn" id="ps-signout">Sign Out</button></div>';
+        var h = '<div class="ps-page"><div class="ps-header"><div class="ps-logo-wrap"><img class="ps-logo auth-logo-light" src="assets/c3-wordmark-light.svg" alt="Align"><img class="ps-logo auth-logo-dark" src="assets/c3-wordmark-dark.svg" alt="Align"></div><h1 class="ps-title">Select Project</h1><div class="ps-header-actions">' + (isAdmin ? '<button class="pm-btn primary ps-new-btn" id="ps-new-project">+ New Project</button>' : '') + '<button class="ps-signout-btn" id="ps-signout">Sign Out</button></div></div>';
 
         if (!projs.length) {
           // #4: Differentiate empty state — admin can create, member can't
@@ -1689,12 +1689,14 @@ function _escHtml(s) {
                 window._fetchMyPermissions(pid);
                 _updateProjectName();
                 if (window._refreshEssentials) window._refreshEssentials();
+                _tileCache = {}; // <-- clear stale tile cache on project switch
                 location.hash = '';
               });
             } else {
               window._fetchMyPermissions(pid);
               _updateProjectName();
               if (window._refreshEssentials) window._refreshEssentials();
+              _tileCache = {}; // <-- clear stale tile cache on project switch
               location.hash = '';
             }
           });
@@ -1705,6 +1707,20 @@ function _escHtml(s) {
 
         var cf = el.querySelector('#ps-create-first-btn');
         if (cf) cf.addEventListener('click', function() {
+          var name = prompt('Project name:');
+          if (!name) return;
+          fetch('/api/projects', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: name })
+          }).then(function(r) {
+            if (r.ok) { location.hash = '#project-select'; location.reload(); }
+            else alert('Failed to create project.');
+          });
+        });
+
+        var np = el.querySelector('#ps-new-project');
+        if (np) np.addEventListener('click', function() {
           var name = prompt('Project name:');
           if (!name) return;
           fetch('/api/projects', {
