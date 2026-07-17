@@ -84,22 +84,36 @@
     var items = getItemsFull();
     var apts = {};
     var openCounts = {};
+    var urgentCounts = {};
     items.forEach(function(i) {
       var a = (i.apartment || '').trim();
       if (!a) a = 'Unfiled';
       apts[a] = (apts[a] || 0) + 1;
       if (i.status === 'open') openCounts[a] = (openCounts[a] || 0) + 1;
+      if ((i.priority === 'critical' || i.priority === 'high') && (i.status === 'open' || i.status === 'in_progress')) {
+        urgentCounts[a] = (urgentCounts[a] || 0) + 1;
+      }
     });
     state.apartments = Object.keys(apts).sort();
     state._aptCounts = apts;
     state._aptOpen = openCounts;
+    state._aptUrgent = urgentCounts;
   }
 
   function _itemsForApt(name) {
     var all = getItemsFull();
     if (!name) return [];
-    if (name === 'Unfiled') return all.filter(function(i) { return !(i.apartment||'').trim(); });
-    return all.filter(function(i) { return (i.apartment||'').trim() === name; });
+    var items;
+    if (name === 'Unfiled') items = all.filter(function(i) { return !(i.apartment||'').trim(); });
+    else items = all.filter(function(i) { return (i.apartment||'').trim() === name; });
+    // Sort: priority desc, then number asc
+    var pw = {critical:4, high:3, medium:2, low:1};
+    items.sort(function(a,b){
+      var pa = pw[a.priority]||0, pb = pw[b.priority]||0;
+      if (pa !== pb) return pb - pa;
+      return (a.number||0) - (b.number||0);
+    });
+    return items;
   }
 
   /* ── Apartment profile data ────────────────────────────────────────────────────────── */
@@ -208,6 +222,7 @@
     state.apartments.forEach(function(a) {
       var total = state._aptCounts[a] || 0;
       var openCount = state._aptOpen[a] || 0;
+      var urgentCount = state._aptUrgent[a] || 0;
       h.push('<div class="pl-apt-tile" data-pl-apt="'+esc(a)+'">');
       h.push('<div class="pl-apt-name">'+esc(a)+'</div>');
       h.push('<div class="pl-apt-info">');
@@ -216,6 +231,9 @@
         h.push('<span class="pl-apt-open-badge">'+openCount+'</span>');
       }
       h.push('</div>');
+      if (urgentCount > 0) {
+        h.push('<span class="pl-apt-urgent-badge">'+urgentCount+' urgent</span>');
+      }
       h.push('</div>');
     });
 
