@@ -535,7 +535,7 @@ select.pl-input {
   cursor: pointer;
   transition: all 0.15s;
   touch-action: manipulation;
-  min-height: 56px;
+  min-height: 88px;
   position: relative;
   overflow: hidden;
 }
@@ -557,6 +557,7 @@ select.pl-input {
   align-items: center;
   gap: 8px;
   margin-top: 4px;
+  padding-right: 52px;
 }
 .pl-apt-total {
   font-size: 0.7rem;
