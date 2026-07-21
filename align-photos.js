@@ -69,9 +69,7 @@ function _renderList(){
     h.push('<h3 class="ph-title">Select Photos</h3>');
     h.push('<div class="ph-tools">');
     h.push('<button class="pm-btn small" id="ph-select-btn">Cancel</button>');
-    if(selCount>0){
-      h.push('<button class="pm-btn small danger" id="ph-delete-sel-btn">Delete ('+selCount+')</button>');
-    }
+    h.push('<button class="pm-btn small danger" id="ph-delete-sel-btn"'+(selCount>0?'':' style="display:none"')+'>Delete ('+selCount+')</button>');
     h.push('</div>');
   }else{
     h.push('<h3 class="ph-title">Site Photos</h3>');
@@ -104,7 +102,7 @@ function _renderList(){
         h.push('<div class="ph-thumb'+(isSel?' ph-sel':'')+'" data-ph-id="'+esc(p.id)+'">');
         h.push('<img src="/api/files/'+esc(p.id)+'?thumb=1" alt="'+esc(p.label||'')+'" loading="lazy">');
         h.push('<div class="ph-thumb-overlay"><span class="ph-thumb-label">'+esc(p.label||fmtDateTime(p.createdAt))+'</span></div>');
-        if(st.selectMode) h.push('<span class="ph-check">✓</span>');
+        h.push('<span class="ph-check">✓</span>');
         h.push('</div>');
       });
       h.push('</div>');
@@ -115,6 +113,14 @@ function _renderList(){
   h.push('</div>');
   c.innerHTML=h.join('');
   _bindList();
+}
+
+function _updateSelCount(){
+  var delBtn=document.getElementById('ph-delete-sel-btn');
+  if(!delBtn)return;
+  var selCount=Object.keys(st.selected).length;
+  delBtn.textContent='Delete ('+selCount+')';
+  delBtn.style.display=selCount>0?'':'none';
 }
 
 function _bindList(){
@@ -166,9 +172,11 @@ function _bindList(){
     var tb=e.target.closest('.ph-thumb');if(!tb)return;
     var pid=tb.getAttribute('data-ph-id');
     if(st.selectMode){
-      st.selected[pid]=!st.selected[pid];
-      if(!st.selected[pid]) delete st.selected[pid];
-      _renderList();
+      var isNowSel=!st.selected[pid];
+      st.selected[pid]=isNowSel;
+      if(!isNowSel) delete st.selected[pid];
+      tb.classList.toggle('ph-sel',isNowSel);
+      _updateSelCount();
       return;
     }
     var full=st.photoList.find(function(ph){return ph.id===pid;});
