@@ -19,14 +19,16 @@ function _apiDelete(path){return fetch(path,{method:'DELETE',headers:_auth()}).t
 function loadPhotos(){
   _pid();
   if(!st.projectId)return Promise.resolve([]);
-  return _apiGet('/api/projects/'+st.projectId+'/photos').then(function(r){
+  var fetchPromise=_apiGet('/api/projects/'+st.projectId+'/photos').then(function(r){
     return (r.photos||[]).map(function(p){
       return {id:p.id,label:p.label||'',createdAt:p.created_at||nowISO()};
     });
-  }).catch(function(e){console.error('[photos] load failed',e);return[];});
+  });
+  var timeoutPromise=new Promise(function(_,reject){setTimeout(function(){reject(new Error('timeout'));},15000);});
+  return Promise.race([fetchPromise,timeoutPromise]).catch(function(e){console.error('[photos] load failed',e);return[];});
 }
 
-function render(c){if(!c)return;st.container=c;st.viewingPhoto=null;st.selectMode=false;st.selected={};st.sortBy='date-desc';_paint(true);}
+function render(c){if(!c)return;st.container=c;st.viewingPhoto=null;st.selectMode=false;st.selected={};st.sortBy='date-desc';st.photoList=[];_paint(true);}
 
 function _paint(load){
   var c=st.container;if(!c)return;_pid();
@@ -37,9 +39,12 @@ function _paint(load){
     loadPhotos().then(function(list){
       st.photoList=list;
       _renderList();
+    }).catch(function(e){
+      console.error('[photos] paint error',e);
+      c.innerHTML='<div class="ph-empty"><strong>Error</strong><p>Could not load photos.</p></div>';
     });
   }else{
-    _renderList();
+    try{_renderList();}catch(e){console.error('[photos] render error',e);c.innerHTML='<div class="ph-empty"><strong>Error</strong><p>Could not render photos.</p></div>';}
   }
 }
 
