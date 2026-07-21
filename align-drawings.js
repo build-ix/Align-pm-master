@@ -27,7 +27,7 @@
   var MAX_CANVAS_DIM    = 4096;  // iOS single-dimension cap
   // Zoom limits
   var MV_ZOOM_MIN = 0.25;
-  var MV_ZOOM_MAX = 5;
+  var MV_ZOOM_MAX = 10;
   var _mvWheelTimer = 0;  // debounce wheel re-renders
 
   // Sheet number → category mapping for auto-classification

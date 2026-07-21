@@ -914,6 +914,7 @@
   flex-shrink: 0;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
+  touch-action: pan-x;
 }
 .dr-mv-page-strip::-webkit-scrollbar { display: none; }
 .dr-mv-page-btn {

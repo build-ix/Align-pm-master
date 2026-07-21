@@ -550,14 +550,14 @@ select.pl-input {
   color: var(--ink);
   word-break: break-word;
   overflow-wrap: break-word;
-  padding-right: 52px;
+  padding-right: 60px;
 }
 .pl-apt-info {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: 4px;
-  padding-right: 52px;
+  padding-right: 60px;
 }
 .pl-apt-total {
   font-size: 0.7rem;
@@ -566,34 +566,38 @@ select.pl-input {
 .pl-apt-open-badge {
   position: absolute;
   right: 14px;
-  top: 50%;
+  top: calc(50% - 20px);
   transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   background: #ef4444;
   color: #fff;
-  border-radius: 5px;
-  font-size: 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
   font-weight: 700;
   line-height: 1;
+  box-shadow: 0 2px 6px rgba(239,68,68,0.22);
 }
 
 .pl-apt-urgent-badge {
   position: absolute;
   right: 14px;
-  bottom: 10px;
-  display: inline-block;
-  padding: 2px 8px;
-  background: #dc2626;
+  top: calc(50% + 20px);
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  background: #b91c1c;
   color: #fff;
   border-radius: 100px;
-  font-size: 0.62rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  box-shadow: 0 2px 6px rgba(185,28,28,0.22);
 }
 
 /* Start New List */

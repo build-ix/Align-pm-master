@@ -1,0 +1,61 @@
+ALIGN AUDIT — Sun Jul 19 2026 06:00:34 GMT-0400 (Eastern Daylight Time)
+Target: http://localhost:3002
+================================================================
+  PASS  Sign-in (admin) -> #project-select
+  PASS  Project selection (2 project(s): New Test Project, 439 E 77TH STREET)
+
+PROJECT: New Test Project
+  PASS  [New Test Project] Dashboard opens
+  PASS  [New Test Project] All 12 tiles present — 12 tiles found
+  PASS  [New Test Project] Tile "drawings" — title "Drawings", 86 chars rendered
+  PASS  [New Test Project] Tile "daily-logs" — title "Daily Logs", 277 chars rendered
+  PASS  [New Test Project] Tile "specs" — title "Specs", 128 chars rendered
+  PASS  [New Test Project] Tile "rfis" — title "RFIs", 115 chars rendered
+  PASS  [New Test Project] Tile "punchlist" — title "Punchlist", 67 chars rendered
+  PASS  [New Test Project] Tile "schedule" — title "Schedule", 192 chars rendered
+  PASS  [New Test Project] Tile "budget" — title "Budget", 181 chars rendered
+  PASS  [New Test Project] Tile "contacts" — title "Directory", 115 chars rendered
+  PASS  [New Test Project] Tile "photos" — title "Photos", 66 chars rendered
+  PASS  [New Test Project] Tile "tasks" — title "Tasks", 138 chars rendered
+  PASS  [New Test Project] Tile "procurement" — title "Procurement", 136 chars rendered
+  PASS  [New Test Project] Tile "files" — title "Files", 68 chars rendered
+
+PROJECT: 439 E 77TH STREET
+  PASS  [439 E 77TH STREET] Dashboard opens
+  PASS  [439 E 77TH STREET] All 12 tiles present — 12 tiles found
+  PASS  [439 E 77TH STREET] Tile "drawings" — title "Drawings", 1297 chars rendered
+  FAIL  [439 E 77TH STREET] Tile "daily-logs" — 8 JS error(s): console.error: Failed to load resource: the server responded with a status of 400 (Bad Request) | console.error: [DailyLog] Migration failed for dlog_mrp22vh4fpx93o 400 | console.error: Failed to load resource: the server responded with a status of 400 (Bad Request) | console.error: [DailyLog] Migration failed for dlog_mro0l40y9uv3kq 400 | console.error: Failed to load resource: the server responded with a status of 400 (Bad Request) | console.error: [DailyLog] Migration failed for dlog_mrm9xx3gb8no70 400 | console.error: Failed to load resource: the server responded with a status of 400 (Bad Request) | console.error: [DailyLog] Migration failed for dlog_mrjo9utas5sinf 400; 4 network failure(s): HTTP 400: http://localhost:3002/api/projects/a_mrftir6d08ac4c03/daily-logs | HTTP 400: http://localhost:3002/api/projects/a_mrftir6d08ac4c03/daily-logs | HTTP 400: http://localhost:3002/api/projects/a_mrftir6d08ac4c03/daily-logs | HTTP 400: http://localhost:3002/api/projects/a_mrftir6d08ac4c03/daily-logs
+        screenshot: /home/alfr/align-pm-master/tools/reports/audit-20260719-0600-FAIL-439_E_77TH_STREET-daily-logs.png
+  PASS  [439 E 77TH STREET] Tile "specs" — title "Specs", 128 chars rendered
+  PASS  [439 E 77TH STREET] Tile "rfis" — title "RFIs", 115 chars rendered
+  PASS  [439 E 77TH STREET] Tile "punchlist" — title "Punchlist", 94 chars rendered
+  PASS  [439 E 77TH STREET] Tile "schedule" — title "Schedule", 192 chars rendered
+  PASS  [439 E 77TH STREET] Tile "budget" — title "Budget", 181 chars rendered
+  PASS  [439 E 77TH STREET] Tile "contacts" — title "Directory", 455 chars rendered
+  PASS  [439 E 77TH STREET] Tile "photos" — title "Photos", 71 chars rendered
+  PASS  [439 E 77TH STREET] Tile "tasks" — title "Tasks", 138 chars rendered
+  PASS  [439 E 77TH STREET] Tile "procurement" — title "Procurement", 136 chars rendered
+  PASS  [439 E 77TH STREET] Tile "files" — title "Files", 1659 chars rendered
+
+================================================================
+SUMMARY: 29/30 checks passed, 1 failed
+Console/page JS errors captured: 8
+Failed network requests captured: 4
+
+JS ERRORS:
+  [439 E 77TH STREET:daily-logs] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  [439 E 77TH STREET:daily-logs] console.error: [DailyLog] Migration failed for dlog_mrp22vh4fpx93o 400
+  [439 E 77TH STREET:daily-logs] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  [439 E 77TH STREET:daily-logs] console.error: [DailyLog] Migration failed for dlog_mro0l40y9uv3kq 400
+  [439 E 77TH STREET:daily-logs] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  [439 E 77TH STREET:daily-logs] console.error: [DailyLog] Migration failed for dlog_mrm9xx3gb8no70 400
+  [439 E 77TH STREET:daily-logs] console.error: Failed to load resource: the server responded with a status of 400 (Bad Request)
+  [439 E 77TH STREET:daily-logs] console.error: [DailyLog] Migration failed for dlog_mrjo9utas5sinf 400
+
+NETWORK ERRORS:
+  [439 E 77TH STREET:daily-logs] HTTP 400: http://localhost:3002/api/projects/a_mrftir6d08ac4c03/daily-logs
+  [439 E 77TH STREET:daily-logs] HTTP 400: http://localhost:3002/api/projects/a_mrftir6d08ac4c03/daily-logs
+  [439 E 77TH STREET:daily-logs] HTTP 400: http://localhost:3002/api/projects/a_mrftir6d08ac4c03/daily-logs
+  [439 E 77TH STREET:daily-logs] HTTP 400: http://localhost:3002/api/projects/a_mrftir6d08ac4c03/daily-logs
+
+RESULT: 1 FAILURE(S)
