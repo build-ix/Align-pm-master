@@ -5,7 +5,7 @@
  * Network-only for API (data freshness)
  */
 
-var CACHE = 'align-v63';
+var CACHE = 'align-v64';
 
 // Install: pre-cache nothing — load on demand
 self.addEventListener('install', function () {
