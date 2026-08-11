@@ -1,7 +1,16 @@
 // public/js/assignments.js — Punchlist assignment UI and API
 
-const CURRENT_USER_ID = window.APP_USER_ID || 1;
-const CURRENT_COMPANY_ID = window.APP_COMPANY_ID || 1;
+function getCurrentUserInfo() {
+  try {
+    if (window.AlignAuth && window.AlignAuth.getActiveUser) {
+      var u = window.AlignAuth.getActiveUser();
+      if (u) return { id: u.id || 1, companyId: u.company_id || 1 };
+    }
+  } catch(e) {}
+  return { id: 1, companyId: 1 };
+}
+
+var CURRENT_USER = getCurrentUserInfo();
 
 async function fetchCompanyUsers(companyId) {
   const res = await fetch(`/api/users?companyId=${companyId}`);
@@ -19,7 +28,7 @@ async function assignUsers(punchItemId, userIds) {
   const res = await fetch(`/api/punchlist/${punchItemId}/assignments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userIds, assignedBy: CURRENT_USER_ID }),
+    body: JSON.stringify({ userIds, assignedBy: CURRENT_USER.id }),
   });
   if (!res.ok) throw new Error((await res.json()).error || 'Assign failed');
   return res.json();
@@ -37,23 +46,31 @@ function openUserPicker(punchItemId, anchorEl) {
   picker.innerHTML = '<em>Loading…</em>';
   anchorEl.insertAdjacentElement('afterend', picker);
 
-  fetchCompanyUsers(CURRENT_COMPANY_ID).then(users => {
+  fetchCompanyUsers(CURRENT_USER.companyId).then(users => {
     picker.innerHTML = '';
+    if (users.length === 0) {
+      picker.innerHTML = '<em style="color: var(--muted); display: block; padding: 8px;">No other users in company</em>';
+      return;
+    }
     users.forEach(u => {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'assign-picker-option';
       btn.textContent = `${u.name} (${u.email})`;
       btn.addEventListener('click', async () => {
-        await assignUsers(punchItemId, [u.id]);
-        closeUserPicker();
-        const container = document.querySelector(`.assigned-users[data-punch-id="${punchItemId}"]`);
-        if (container) await initAssignmentUI(punchItemId, container);
+        try {
+          await assignUsers(punchItemId, [u.id]);
+          closeUserPicker();
+          const container = document.querySelector(`.assigned-users[data-punch-id="${punchItemId}"]`);
+          if (container) await renderAssignedUsers(punchItemId, container);
+        } catch (err) {
+          alert('Assignment failed: ' + err.message);
+        }
       });
       picker.appendChild(btn);
     });
   }).catch(err => {
-    picker.innerHTML = `<em style="color: red;">Error: ${err.message}</em>`;
+    picker.innerHTML = `<em style="color: #ef4444; display: block; padding: 8px;">Error: ${err.message}</em>`;
   });
 }
 
@@ -79,14 +96,22 @@ async function renderAssignedUsers(punchItemId, containerEl) {
       x.title = 'Remove assignment';
       x.addEventListener('click', async (e) => {
         e.stopPropagation();
-        await unassignUser(punchItemId, a.user_id);
-        renderAssignedUsers(punchItemId, containerEl);
+        try {
+          await unassignUser(punchItemId, a.user_id);
+          renderAssignedUsers(punchItemId, containerEl);
+        } catch (err) {
+          alert('Remove failed: ' + err.message);
+        }
       });
       chip.appendChild(x);
       containerEl.appendChild(chip);
     });
+    // Init UI after render completes
+    if (assignments.length > 0) {
+      containerEl.style.display = 'flex';
+    }
   } catch (err) {
-    containerEl.innerHTML = `<em style="color: red;">Error: ${err.message}</em>`;
+    containerEl.innerHTML = `<em style="color: #ef4444; font-size: 0.8rem;">Error loading assignments</em>`;
   }
 }
 
@@ -95,3 +120,8 @@ async function initAssignmentUI(punchItemId, containerEl) {
   containerEl.dataset.punchId = punchItemId;
   await renderAssignedUsers(punchItemId, containerEl);
 }
+
+// Export to global scope
+window.openUserPicker = openUserPicker;
+window.renderAssignedUsers = renderAssignedUsers;
+window.initAssignmentUI = initAssignmentUI;

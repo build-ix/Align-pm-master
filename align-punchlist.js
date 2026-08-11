@@ -180,6 +180,7 @@
     if (state.viewMode==='apt' && state.activeApt) {
       c.innerHTML=_aptViewHtml();
       _bindAptView();
+      _initAssignments();
     } else {
       c.innerHTML=_listHtml();
       _bindList();
@@ -357,15 +358,28 @@
         h.push('</div>');
         h.push('<div class="pl-item-right">');
         h.push('<span class="pl-item-status" style="background:'+sc+'">'+statusLabel(item.status)+'</span>');
+        h.push('<button class="assign-btn" data-pl-act="assign" data-pl-id="'+esc(item.id)+'">Assign</button>');
         h.push('<button class="pm-btn small" data-pl-act="edit" data-pl-id="'+esc(item.id)+'">Edit</button>');
         h.push('<button class="pm-btn small danger" data-pl-act="delete" data-pl-id="'+esc(item.id)+'">✕</button>');
         h.push('</div>');
+        h.push('<div class="assigned-users" data-punch-id="'+esc(item.id)+'"></div>');
         h.push('</div>');
       });
       h.push('</div>');
     }
 
     return h.join('');
+  }
+
+  /* ── Assignment UI initialization ────────────────────────────────────── */
+  function _initAssignments() {
+    var containers = document.querySelectorAll('.assigned-users[data-punch-id]');
+    if (window.initAssignmentUI) {
+      containers.forEach(function(container) {
+        var punchId = container.getAttribute('data-punch-id');
+        window.initAssignmentUI(punchId, container);
+      });
+    }
   }
 
   function _bindAptView() {
@@ -444,6 +458,14 @@
             }).catch(function() {
               alert('Delete failed — please try again.');
             });
+          }
+        }
+        if (act === 'assign') {
+          e.stopPropagation();
+          if (window.openUserPicker) {
+            window.openUserPicker(id, btn);
+          } else {
+            alert('Assignment library not loaded');
           }
         }
         return;
