@@ -1795,7 +1795,8 @@ const stmtInsertAssign   = _db.prepare(`
   ON CONFLICT (punch_item_id, user_id) DO NOTHING
 `);
 const stmtInsertNotif    = _db.prepare(`
-  INSERT INTO notifications (user_id, type, payload) VALUES (?, 'punchlist_assigned', ?)
+  INSERT INTO notifications (punch_item_id, recipient_email, subject, body)
+  VALUES (?, ?, ?, ?)
 `);
 const stmtDeleteAssign   = _db.prepare(
   'DELETE FROM punchlist_assignments WHERE punch_item_id = ? AND user_id = ?'
@@ -1809,7 +1810,19 @@ const stmtListAssign     = _db.prepare(`
 `);
 
 function queueAssignmentNotification(userId, punchItemId, assignedBy) {
-  stmtInsertNotif.run(userId, JSON.stringify({ punchItemId, assignedBy }));
+  try {
+    const user = stmtGetUser.get(userId);
+    if (!user || !user.email) return;
+    
+    const punchItem = stmtGetRecord.get(punchItemId);
+    const itemLabel = punchItem ? `#${punchItemId}` : 'item';
+    const subject = `Punch Item Assigned: ${itemLabel}`;
+    const body = `You've been assigned punch item ${itemLabel}. Please review and update status as needed.`;
+    
+    stmtInsertNotif.run(punchItemId, user.email, subject, body);
+  } catch (err) {
+    console.error('[NOTIFY] Queue failed:', err.message);
+  }
 }
 
 // GET /api/users?companyId=X
@@ -1919,6 +1932,31 @@ app.use('/api/v1', function(req, res, next) {
 });
 
 // Start server
+const { processNotifications } = require('./notificationWorker');
+
+// Initialize notification worker scheduler (every 5 minutes)
+const NOTIFY_SWEEP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+setInterval(async () => {
+  try {
+    const result = await processNotifications(_db);
+    if (result.processed > 0) {
+      console.log(`[NOTIFY] Sweep: ${result.processed} processed, ${result.sent} sent, ${result.failed} failed`);
+    }
+  } catch (err) {
+    console.error('[NOTIFY] Sweep error:', err.message);
+  }
+}, NOTIFY_SWEEP_INTERVAL);
+
+// Also run once on startup (after a brief delay to ensure DB is ready)
+setTimeout(async () => {
+  try {
+    const result = await processNotifications(_db);
+    console.log('[NOTIFY] Initial sweep complete: ' + JSON.stringify(result));
+  } catch (err) {
+    console.error('[NOTIFY] Initial sweep error:', err.message);
+  }
+}, 1000);
+
 app.listen(PORT, () => {
   console.log('[ALIGN] Server running on port ' + PORT);
 });
