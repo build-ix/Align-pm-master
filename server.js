@@ -1848,8 +1848,8 @@ app.post('/api/punchlist/:id/assignments', (req, res) => {
   if (!Array.isArray(userIds) || userIds.length === 0) {
     return res.status(400).json({ error: 'userIds must be a non-empty array' });
   }
-  if (!Number.isInteger(assignedBy)) {
-    return res.status(400).json({ error: 'assignedBy (integer user id) is required' });
+  if (!assignedBy || typeof assignedBy !== 'string') {
+    return res.status(400).json({ error: 'assignedBy (string user id) is required' });
   }
   if (!stmtGetRecord.get(punchItemId)) {
     return res.status(404).json({ error: 'Punch item not found' });
