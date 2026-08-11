@@ -133,7 +133,7 @@
       fetch(_apiUrl(state.projectId), {
         method: 'POST',
         headers: _authHeaders(),
-        body: JSON.stringify(rec)
+        body: JSON.stringify({ data: rec })
       }).then(function(r) {
         done++;
         if (!r.ok) console.error('[DailyLog] Migration failed for ' + rec.id, r.status);

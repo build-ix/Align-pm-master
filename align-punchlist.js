@@ -347,10 +347,13 @@
       h.push('<div class="pl-items">');
       items.forEach(function(item, i) {
         var sc = statusColor(item.status);
-        h.push('<div class="pl-item-row" data-pl-id="'+esc(item.id)+'">');
+        var metaParts = [esc(item.title||'Untitled')];
+        if (item.location) metaParts.push(esc(item.location));
+        if (item.assignedCompanyName) metaParts.push(esc(item.assignedCompanyName));
+        h.push('<div class="pl-item-row" data-pl-id="'+esc(item.id)+'" data-pl-status="'+esc(item.status)+'" data-pl-priority="'+esc(item.priority||'medium')+'">');
         h.push('<div class="pl-item-info">');
         h.push('<div class="pl-item-title">'+esc(state.activeApt)+': Item #'+(i+1).toString().padStart(3,'0')+'</div>');
-        h.push('<div class="pl-item-meta">'+esc(item.title||'Untitled')+' • '+fmtDate(item.createdAt) + (item.drawingId ? ' • 📐 Linked to drawing' : '') + '</div>');
+        h.push('<div class="pl-item-meta">'+metaParts.join(' • ')+' • '+fmtDate(item.createdAt) + (item.drawingId ? ' • 📐 Linked to drawing' : '') + '</div>');
         h.push('</div>');
         h.push('<div class="pl-item-right">');
         h.push('<span class="pl-item-status" style="background:'+sc+'">'+statusLabel(item.status)+'</span>');

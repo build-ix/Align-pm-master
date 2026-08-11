@@ -20,6 +20,7 @@ const rateLimit = require('express-rate-limit');
 const cookieParser = require('cookie-parser');
 const Database = require('better-sqlite3');
 const nodemailer = require('nodemailer');
+const { execFile } = require('child_process');
 const { runMigrations } = require('./migrations');
 const sessions = require('./align-sessions');
 const auth = require('./align-auth-middleware');
@@ -432,7 +433,7 @@ app.use(function(req, res, next) {
 
   // HTML: validate with server before using cached copy
   if (p.endsWith('.html') || p === '/') {
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-store');
     return next();
   }
 
@@ -516,7 +517,7 @@ app.use(express.static(__dirname, {
     }
     // HTML: no cache
     else if (filepath.match(/\.html$/)) {
-      res.set('Cache-Control', 'no-cache');
+      res.set('Cache-Control', 'no-store');
     }
   }
 }));
@@ -1488,13 +1489,32 @@ app.post('/api/files/upload', requireAuth, (req, res) => {
     if (!fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true });
     const finalPath = path.join(projectDir, req.file.filename);
     fs.renameSync(req.file.path, finalPath);
-    // Generate thumbnail for images (best-effort, non-blocking)
+    // Generate thumbnail for images and PDFs (best-effort, non-blocking)
     if (req.file.mimetype && req.file.mimetype.startsWith('image/')) {
       sharp(finalPath)
         .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 80 })
         .toFile(finalPath + '.thumb.jpg')
         .catch(function(){});
+    } else if (req.file.mimetype === 'application/pdf') {
+      (function generatePdfThumb() {
+        var tmpBase = finalPath + '.tmpthumb';
+        execFile('pdftoppm', ['-f', '1', '-l', '1', '-r', '150', '-png', finalPath, tmpBase], function(err) {
+          if (err) return;
+          var tmpPng = tmpBase + '-1.png';
+          if (!fs.existsSync(tmpPng)) return;
+          sharp(tmpPng)
+            .resize(400, 400, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80 })
+            .toFile(finalPath + '.thumb.jpg')
+            .then(function() {
+              try { fs.unlinkSync(tmpPng); } catch(e) {}
+            })
+            .catch(function() {
+              try { fs.unlinkSync(tmpPng); } catch(e) {}
+            });
+        });
+      })();
     }
     const id = uid(); const ts = nowISO(); const folderId = (req.body && req.body.folder_id) || null;
     const metadata = (req.body && req.body.metadata) || null;

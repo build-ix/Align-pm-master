@@ -854,3 +854,64 @@ select.pl-input {
 /* ── Profile edit inline ───────────────────────────────────────────────── */
 .pl-profile-edit .pl-input { margin-bottom: 10px; }
 .pl-profile-edit textarea.pl-input { min-height: 80px; resize: vertical; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Phase 6 — Mobile Status-Stamp Cards (≤768px)
+   ────────────────────────────────────────────────────────────────────────
+   Compact rectangular top-right status stamp + 3px priority left edge.
+   Desktop (>768px) retains original pill-style status badges unchanged.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .pl-item-row {
+    position: relative;
+    overflow: hidden;
+    border-left-width: 3px;
+    border-left-style: solid;
+    border-left-color: var(--line); /* fallback for items without priority */
+  }
+
+  /* Priority left edge colors (3px wide) */
+  .pl-item-row[data-pl-priority="critical"] { border-left-color: #dc2626; }
+  .pl-item-row[data-pl-priority="high"]     { border-left-color: #ea580c; }
+  .pl-item-row[data-pl-priority="medium"]   { border-left-color: #64748b; }
+  .pl-item-row[data-pl-priority="low"]      { border-left-color: #16a34a; }
+
+  /* Status stamp — reposition existing pill as absolute top-right rectangular stamp */
+  .pl-item-status {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 3px 10px 3px 12px;
+    border-radius: 0 0 0 4px; /* only bottom-left rounded corner */
+    font-family: var(--font-mono, ui-monospace, "SFMono-Regular", Consolas, monospace);
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #fff !important;
+    line-height: 1.4;
+    white-space: nowrap;
+    /* Override pill border-radius */
+  }
+
+  /* Status stamp colors (override CSS-variable inline styles with exact spec colors) */
+  .pl-item-row[data-pl-status="open"] .pl-item-status        { background: #ef4444 !important; }
+  .pl-item-row[data-pl-status="in_progress"] .pl-item-status { background: #f59e0b !important; }
+  .pl-item-row[data-pl-status="resolved"] .pl-item-status    { background: #3b82f6 !important; }
+  .pl-item-row[data-pl-status="verified"] .pl-item-status    { background: #16a34a !important; }
+
+  /* Card body clears the stamp so title text never runs underneath */
+  .pl-item-info {
+    padding-right: 90px;
+  }
+
+  /* Compact action buttons on mobile */
+  .pl-item-right {
+    gap: 4px;
+    margin-left: 8px;
+  }
+  .pl-item-right .pm-btn.small {
+    padding: 3px 6px;
+    font-size: 0.65rem;
+  }
+}

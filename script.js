@@ -14,7 +14,23 @@ const sections = {
   "procurement": { title: "Procurement", content: `<p>Manage purchase orders, material orders, and lead times here.</p>`, render: function(el) { if (window.AlignProcurement) window.AlignProcurement.render(el); } },
   "files":       { title: "Files",       content: ``, render: function(el) { if (window.AlignFiles) { var active = window.AlignStorage ? window.AlignStorage.getActiveProject() : null; if (active) window.AlignFiles.render(el, active.id); else el.innerHTML = '<div class=\"pm-empty\"><strong>No active project</strong> Select a project first.</div>'; } } },
   "settings":    { title: "Settings",    content: `<p>Configure project settings and preferences here.</p>`, render: function(el) { if (window.AlignSettings) window.AlignSettings.render(el); } },
-  "project-select": { title: "Select Project", render: function(el) { if (window._renderProjectSelect) window._renderProjectSelect(el); } }
+  "project-select": { title: "Select Project", render: function(el) { if (window._renderProjectSelect) window._renderProjectSelect(el); } },
+  "all-tools": { title: "All Tools", render: function(el) {
+    // Clone the tile grid into the section page
+    var grid = document.querySelector('.tile-grid');
+    if (grid) {
+      el.innerHTML = '<div class="tile-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:16px;">' + grid.innerHTML + '</div>';
+      // Re-attach click handlers to the cloned tiles
+      el.querySelectorAll('.tile').forEach(function(tile) {
+        tile.addEventListener('click', function() {
+          var key = this.getAttribute('data-section');
+          if (key && sections[key]) location.hash = '#/' + key;
+        });
+      });
+    } else {
+      el.innerHTML = '<div class="pm-empty">No tools available</div>';
+    }
+  } }
 };
 
 // ─── ELEMENT REFERENCES ───
@@ -138,7 +154,7 @@ let _sectionController = null; // AbortController for cleanup
 let _navStack = []; // Settings sub-view stack
 
 function _handleRoute() {
-  var hash = location.hash.replace(/^#/, '') || '';
+  var hash = location.hash.replace(/^#\/?/, '') || '';
   var parts = hash.split('/');
   var sectionKey = parts[0] || null;
 
@@ -1768,3 +1784,229 @@ function _escHtml(s) {
       if (el) el.remove();
     }
   };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // BOTTOM NAV — Phase 1 (tabs + quick-add sheet + all-tools sheet)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  (function() {
+    var bottomNav = document.getElementById('bottom-nav');
+    if (!bottomNav) return;
+
+    var tabs = bottomNav.querySelectorAll('.bn-tab');
+    var fab = document.getElementById('bn-add');
+    var sheet = document.getElementById('bn-sheet');
+    var overlay = document.getElementById('bn-sheet-overlay');
+    var sheetClose = document.getElementById('bn-sheet-close');
+    var sheetItems = document.querySelectorAll('.bn-sheet-item');
+
+    // ── All Tools sheet elements ──
+    var toolsOverlay = document.getElementById('bn-tools-overlay');
+    var toolsSheet = document.getElementById('bn-tools-sheet');
+    var toolsGrid = document.getElementById('bn-tools-grid');
+    var toolsClose = document.getElementById('bn-tools-close');
+    var _lastFocusedToolsEl = null;
+
+    // ── Tab active state ──
+    function _updateBottomNavActive() {
+      var hash = location.hash.replace('#/', '') || 'home';
+      tabs.forEach(function(tab) {
+        var bn = tab.getAttribute('data-bn');
+        var isActive = false;
+        if (hash === 'home' || hash === '') {
+          isActive = (bn === 'overview');
+        } else if (hash === 'all-tools') {
+          isActive = (bn === 'all-tools');
+        } else if (hash === 'daily-logs') {
+          isActive = (bn === 'logs');
+        } else if (hash === 'drawings') {
+          isActive = (bn === 'drawings');
+        }
+        tab.classList.toggle('active', isActive);
+      });
+    }
+
+    window.addEventListener('hashchange', _updateBottomNavActive);
+    if (window._alignReadyFired) {
+      _updateBottomNavActive();
+    } else {
+      window.addEventListener('align-ready', _updateBottomNavActive);
+    }
+
+    // ── Overview tab → home (dashboard + tiles) ──
+    var overviewTab = bottomNav.querySelector('[data-bn="overview"]');
+    if (overviewTab) {
+      overviewTab.addEventListener('click', function(e) {
+        // Let the href handle it, just ensure we're at home
+        if (location.hash === '#/home' || location.hash === '') return;
+      });
+    }
+
+    // ── All Tools tab → open bottom sheet (mobile only) ──
+    var allToolsTab = bottomNav.querySelector('[data-bn="all-tools"]');
+    if (allToolsTab) {
+      allToolsTab.addEventListener('click', function(e) {
+        e.preventDefault();
+        // Mobile only: open the tools sheet instead of navigating via hash
+        if (window.innerWidth <= 768) {
+          _openToolsSheet();
+        } else {
+          location.hash = '#/all-tools';
+        }
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ALL TOOLS SHEET — open / close / interaction
+    // ══════════════════════════════════════════════════════════════════════
+
+    function _openToolsSheet() {
+      if (!toolsSheet || !toolsOverlay || !toolsGrid) return;
+      // Close Quick Add sheet if open (prevent stacking)
+      if (sheet && sheet.classList.contains('open')) _closeSheet();
+
+      // Save focus target for restore
+      _lastFocusedToolsEl = document.activeElement;
+
+      // Clone tile innerHTML from the source tile-grid into the tools grid
+      var sourceGrid = document.querySelector('.tile-grid');
+      if (sourceGrid) {
+        // Convert .tile buttons → .bn-tools-tile buttons preserving data-section
+        var tiles = sourceGrid.querySelectorAll('.tile');
+        var html = '';
+        tiles.forEach(function(tile) {
+          var section = tile.getAttribute('data-section');
+          var labelEl = tile.querySelector('.tile-label');
+          var iconEl = tile.querySelector('.tile-icon');
+          var label = labelEl ? labelEl.textContent : '';
+          var iconHTML = iconEl ? iconEl.innerHTML : '';
+          html += '<button class="bn-tools-tile" data-section="' + section + '" type="button">' +
+            '<span class="bn-tools-tile-icon">' + iconHTML + '</span>' +
+            '<span class="bn-tools-tile-label">' + label + '</span>' +
+            '</button>';
+        });
+        toolsGrid.innerHTML = html;
+      }
+
+      // Lock body scroll (overflow only — never position:fixed)
+      document.body.style.overflow = 'hidden';
+
+      // Show overlay + sheet with animation
+      toolsOverlay.style.display = 'block';
+      // Force reflow for transition
+      void toolsOverlay.offsetWidth;
+      toolsOverlay.classList.add('open');
+      toolsSheet.classList.add('open');
+
+      // Focus management — focus first tile or close button
+      requestAnimationFrame(function() {
+        var firstTile = toolsGrid.querySelector('.bn-tools-tile');
+        if (firstTile) firstTile.focus();
+      });
+    }
+
+    function _closeToolsSheet() {
+      if (!toolsSheet || !toolsOverlay) return;
+      toolsOverlay.classList.remove('open');
+      toolsSheet.classList.remove('open');
+      document.body.style.overflow = '';
+
+      // Restore focus
+      if (_lastFocusedToolsEl && typeof _lastFocusedToolsEl.focus === 'function') {
+        try { _lastFocusedToolsEl.focus(); } catch(e) {}
+        _lastFocusedToolsEl = null;
+      }
+
+      // Hide overlay after transition completes
+      setTimeout(function() {
+        if (!toolsOverlay.classList.contains('open')) {
+          toolsOverlay.style.display = 'none';
+        }
+      }, 250);
+    }
+
+    // ── Overlay click closes sheet ──
+    if (toolsOverlay) {
+      toolsOverlay.addEventListener('click', function(e) {
+        if (e.target === toolsOverlay) _closeToolsSheet();
+      });
+    }
+
+    // ── Close button ──
+    if (toolsClose) {
+      toolsClose.addEventListener('click', _closeToolsSheet);
+    }
+
+    // ── Escape key closes sheet ──
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape' && toolsSheet && toolsSheet.classList.contains('open')) {
+        _closeToolsSheet();
+      }
+    });
+
+    // ── Tile click delegation on tools grid ──
+    if (toolsGrid) {
+      toolsGrid.addEventListener('click', function(e) {
+        var tile = e.target.closest('.bn-tools-tile');
+        if (!tile) return;
+        var section = tile.getAttribute('data-section');
+        if (!section) return;
+        _closeToolsSheet();
+        // Use existing hash router to navigate
+        if (location.hash === '#' + section) {
+          // Force re-navigation if already on same hash
+          location.hash = '';
+          setTimeout(function() { location.hash = '#' + section; }, 50);
+        } else {
+          location.hash = '#' + section;
+        }
+      });
+    }
+
+    // ── Add button → bottom sheet ──
+    function _openSheet() {
+      if (!sheet || !overlay) return;
+      overlay.style.display = 'block';
+      // force reflow
+      void overlay.offsetWidth;
+      overlay.classList.add('open');
+      sheet.classList.add('open');
+    }
+    function _closeSheet() {
+      if (!sheet || !overlay) return;
+      overlay.classList.remove('open');
+      sheet.classList.remove('open');
+      setTimeout(function() {
+        overlay.style.display = 'none';
+      }, 250);
+    }
+
+    if (fab) {
+      fab.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        _openSheet();
+      });
+    }
+    if (sheetClose) sheetClose.addEventListener('click', _closeSheet);
+    if (overlay) overlay.addEventListener('click', _closeSheet);
+
+    // Sheet item clicks
+    var actionRoutes = {
+      'daily-log': '#/daily-logs',
+      'punch': '#/punchlist',
+      'rfi': '#/rfis',
+      'task': '#/tasks',
+      'photo': '#/photos',
+      'file': '#/files'
+    };
+    sheetItems.forEach(function(item) {
+      item.addEventListener('click', function() {
+        var action = this.getAttribute('data-bn-action');
+        _closeSheet();
+        if (actionRoutes[action]) {
+          location.hash = actionRoutes[action];
+        }
+      });
+    });
+  })();
