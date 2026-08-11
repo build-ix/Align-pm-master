@@ -1490,3 +1490,81 @@ html[data-theme="light"] #bottom-nav {
     display: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Punchlist Assignment UI
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.assign-btn {
+  background: var(--card);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.assign-btn:hover {
+  background: var(--bg);
+}
+
+.assign-picker {
+  position: absolute;
+  z-index: 50;
+  min-width: 180px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.assign-picker-option {
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.85rem;
+  transition: background 0.15s;
+}
+.assign-picker-option:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.assigned-users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.assignee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--ink);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+}
+.assignee-chip button {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0;
+  transition: color 0.15s;
+}
+.assignee-chip button:hover {
+  color: #ef4444;
+}

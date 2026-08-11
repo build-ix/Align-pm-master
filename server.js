@@ -1782,6 +1782,111 @@ app.patch('/api/projects/:pid/punchlist/batch', requireAuth, auth.requireProject
   res.json({ ok: true, updated: updated, skipped: skipped });
 });
 
+/* ------------------------------------------------------------------ *
+ * PUNCHLIST ASSIGNMENTS — Phase 1 Core
+ * ------------------------------------------------------------------ */
+
+// Prepare statements (once at startup)
+const stmtGetRecord      = _db.prepare('SELECT id FROM records WHERE id = ?');
+const stmtGetUser        = _db.prepare('SELECT id, name, email FROM users WHERE id = ?');
+const stmtInsertAssign   = _db.prepare(`
+  INSERT INTO punchlist_assignments (punch_item_id, user_id, assigned_by)
+  VALUES (?, ?, ?)
+  ON CONFLICT (punch_item_id, user_id) DO NOTHING
+`);
+const stmtInsertNotif    = _db.prepare(`
+  INSERT INTO notifications (user_id, type, payload) VALUES (?, 'punchlist_assigned', ?)
+`);
+const stmtDeleteAssign   = _db.prepare(
+  'DELETE FROM punchlist_assignments WHERE punch_item_id = ? AND user_id = ?'
+);
+const stmtListAssign     = _db.prepare(`
+  SELECT pa.user_id, u.name, u.email, pa.assigned_by, pa.assigned_at
+  FROM punchlist_assignments pa
+  JOIN users u ON u.id = pa.user_id
+  WHERE pa.punch_item_id = ?
+  ORDER BY pa.assigned_at
+`);
+
+function queueAssignmentNotification(userId, punchItemId, assignedBy) {
+  stmtInsertNotif.run(userId, JSON.stringify({ punchItemId, assignedBy }));
+}
+
+// GET /api/users?companyId=X
+app.get('/api/users', (req, res) => {
+  const companyId = parseInt(req.query.companyId, 10);
+  if (Number.isNaN(companyId)) {
+    return res.status(400).json({ error: 'companyId query param is required and must be an integer' });
+  }
+  const users = _db.prepare(
+    'SELECT id, name, email FROM users WHERE company_id = ? ORDER BY name'
+  ).all(companyId);
+  res.json(users);
+});
+
+// POST /api/punchlist/:id/assignments
+app.post('/api/punchlist/:id/assignments', (req, res) => {
+  const punchItemId = req.params.id;
+  if (!punchItemId || typeof punchItemId !== 'string') {
+    return res.status(400).json({ error: 'Invalid punch item id' });
+  }
+
+  const { userIds, assignedBy } = req.body || {};
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    return res.status(400).json({ error: 'userIds must be a non-empty array' });
+  }
+  if (!Number.isInteger(assignedBy)) {
+    return res.status(400).json({ error: 'assignedBy (integer user id) is required' });
+  }
+  if (!stmtGetRecord.get(punchItemId)) {
+    return res.status(404).json({ error: 'Punch item not found' });
+  }
+
+  const assignMany = _db.transaction((ids) => {
+    const created = [];
+    for (const uid of ids) {
+      if (!stmtGetUser.get(uid)) throw Object.assign(new Error(`User ${uid} not found`), { status: 404 });
+      const info = stmtInsertAssign.run(punchItemId, uid, assignedBy);
+      if (info.changes > 0) {
+        queueAssignmentNotification(uid, punchItemId, assignedBy);
+        created.push(uid);
+      }
+    }
+    return created;
+  });
+
+  try {
+    const created = assignMany(userIds);
+    res.status(201).json({ punchItemId, assignedUserIds: created });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/punchlist/:id/assignments/:userId
+app.delete('/api/punchlist/:id/assignments/:userId', (req, res) => {
+  const punchItemId = req.params.id;
+  const userId = parseInt(req.params.userId, 10);
+  if (!punchItemId || Number.isNaN(userId)) {
+    return res.status(400).json({ error: 'Invalid id' });
+  }
+  const info = stmtDeleteAssign.run(punchItemId, userId);
+  if (info.changes === 0) return res.status(404).json({ error: 'Assignment not found' });
+  res.status(204).end();
+});
+
+// GET /api/punchlist/:id/assignments
+app.get('/api/punchlist/:id/assignments', (req, res) => {
+  const punchItemId = req.params.id;
+  if (!punchItemId || typeof punchItemId !== 'string') {
+    return res.status(400).json({ error: 'Invalid punch item id' });
+  }
+  if (!stmtGetRecord.get(punchItemId)) {
+    return res.status(404).json({ error: 'Punch item not found' });
+  }
+  res.json(stmtListAssign.all(punchItemId));
+});
+
 // Catch-all: serve SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
