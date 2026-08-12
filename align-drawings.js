@@ -2395,8 +2395,9 @@
       _mv._twoFinger = false;
       _mv._pinching = false;
       _mv.panning = false;
-      // Re-render at final zoom after pinch ends
-      _mvRerenderPdf();
+      // Just redraw annotations, don't re-render the PDF
+      // (re-render causes canvas resize which clears and repositions)
+      _mvRedraw();
       return;
     }
     _mvMouseUp({});
