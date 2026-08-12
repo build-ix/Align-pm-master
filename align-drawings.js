@@ -1380,8 +1380,8 @@
     div.style.position = 'fixed';
     div.style.inset = '0';
     div.style.zIndex = '9000';
-    // Allow custom pan/zoom via touch handlers; prevent browser defaults
-    div.style.touchAction = 'pan-x pan-y';
+    // Allow custom touch handlers for pan/zoom
+    div.style.touchAction = 'manipulation';
     div.style.overscrollBehavior = 'none';
     document.body.appendChild(div);
 
