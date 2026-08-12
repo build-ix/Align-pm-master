@@ -1251,6 +1251,183 @@ app.get('/api/projects/:pid/punchlist/apartments', requireAuth, auth.requireProj
 });
 
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// PUNCHLIST LISTS — Two-Step Creation (Phase 7 Refactor)
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+// GET /api/projects/:pid/punchlist-lists
+app.get('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
+  var pid = req.params.pid;
+  var lists = dbAll(`
+    SELECT 
+      id, project_id, name, description, scope_type, apartment_label, status, 
+      created_by, created_at, updated_at,
+      COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = punchlist_lists.id), 0) as item_count,
+      COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = punchlist_lists.id AND json_extract(data, '$.status') = 'open'), 0) as open_count
+    FROM punchlist_lists
+    WHERE project_id = ?
+    ORDER BY updated_at DESC
+  `, pid, pid, pid);
+  res.json({ lists: lists || [] });
+});
+
+// POST /api/projects/:pid/punchlist-lists
+app.post('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var body = req.body || {};
+  var name = (body.name || '').trim();
+  var description = (body.description || '').trim();
+  var scope_type = (body.scope_type || 'apartment').trim();
+  var apartment_label = body.scope_type === 'apartment' ? (body.apartment_label || '').trim() : null;
+  var status = (body.status || 'open').trim();
+  
+  // Strictly reject item-only fields to prevent accidental coupling
+  if (body.hasOwnProperty('priority') || body.hasOwnProperty('images') || body.hasOwnProperty('location') || 
+      body.hasOwnProperty('trade') || body.hasOwnProperty('assignedCompanyId')) {
+    return res.status(400).json({ error: 'List creation does not accept item fields (priority, images, location, trade, assignedCompanyId)' });
+  }
+  
+  if (!name) {
+    return res.status(400).json({ error: 'List name is required' });
+  }
+  if (scope_type !== 'apartment' && scope_type !== 'project') {
+    return res.status(400).json({ error: 'scope_type must be "apartment" or "project"' });
+  }
+  if (scope_type === 'apartment' && !apartment_label) {
+    return res.status(400).json({ error: 'apartment_label is required for apartment scope' });
+  }
+  if (!['open', 'archived'].includes(status)) {
+    return res.status(400).json({ error: 'status must be "open" or "archived"' });
+  }
+  
+  var listId = 'pll_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var now = new Date().toISOString();
+  var created_by = req.user.id || null;
+  
+  try {
+    dbRun(`
+      INSERT INTO punchlist_lists (id, project_id, name, description, scope_type, apartment_label, status, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, listId, pid, name, description, scope_type, apartment_label, status, created_by, now, now);
+    
+    var list = dbGet(`
+      SELECT id, project_id, name, description, scope_type, apartment_label, status, created_by, created_at, updated_at,
+        0 as item_count, 0 as open_count
+      FROM punchlist_lists
+      WHERE id = ?
+    `, listId);
+    
+    res.status(201).json({ list: list });
+  } catch (err) {
+    console.error('[PUNCHLIST] Create list error:', err.message);
+    res.status(500).json({ error: 'Failed to create list' });
+  }
+});
+
+// GET /api/projects/:pid/punchlist-lists/:listId
+app.get('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  
+  var list = dbGet(`
+    SELECT 
+      id, project_id, name, description, scope_type, apartment_label, status, 
+      created_by, created_at, updated_at,
+      COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?), 0) as item_count,
+      COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ? AND json_extract(data, '$.status') = 'open'), 0) as open_count
+    FROM punchlist_lists
+    WHERE id = ? AND project_id = ?
+  `, pid, listId, pid, listId, listId, pid);
+  
+  if (!list) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  
+  res.json({ list: list });
+});
+
+// PATCH /api/projects/:pid/punchlist-lists/:listId
+app.patch('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  var body = req.body || {};
+  
+  var list = dbGet('SELECT id FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  if (!list) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  
+  // Only allow updating list fields, not item fields
+  var name = body.hasOwnProperty('name') ? (body.name || '').trim() : null;
+  var description = body.hasOwnProperty('description') ? (body.description || '').trim() : null;
+  var status = body.hasOwnProperty('status') ? (body.status || '').trim() : null;
+  
+  if (body.hasOwnProperty('priority') || body.hasOwnProperty('images') || body.hasOwnProperty('location')) {
+    return res.status(400).json({ error: 'Cannot update item fields on a list' });
+  }
+  
+  var updates = [];
+  var values = [];
+  
+  if (name !== null) {
+    updates.push('name = ?');
+    values.push(name);
+  }
+  if (description !== null) {
+    updates.push('description = ?');
+    values.push(description);
+  }
+  if (status !== null && ['open', 'archived'].includes(status)) {
+    updates.push('status = ?');
+    values.push(status);
+  }
+  
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'No valid fields to update' });
+  }
+  
+  updates.push('updated_at = ?');
+  values.push(new Date().toISOString());
+  values.push(listId);
+  values.push(pid);
+  
+  try {
+    dbRun(`UPDATE punchlist_lists SET ${updates.join(', ')} WHERE id = ? AND project_id = ?`, ...values);
+    var updated = dbGet('SELECT * FROM punchlist_lists WHERE id = ?', listId);
+    res.json({ list: updated });
+  } catch (err) {
+    console.error('[PUNCHLIST] Update list error:', err.message);
+    res.status(500).json({ error: 'Failed to update list' });
+  }
+});
+
+// DELETE /api/projects/:pid/punchlist-lists/:listId
+app.delete('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  
+  var list = dbGet('SELECT id FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  if (!list) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  
+  try {
+    // Transactional delete: remove items first, then the list
+    var deletedItemCount = dbRun(`
+      DELETE FROM records 
+      WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?
+    `, pid, listId).changes;
+    
+    dbRun('DELETE FROM punchlist_lists WHERE id = ?', listId);
+    
+    res.json({ ok: true, deletedItemCount: deletedItemCount });
+  } catch (err) {
+    console.error('[PUNCHLIST] Delete list error:', err.message);
+    res.status(500).json({ error: 'Failed to delete list' });
+  }
+});
+
+
 app.get('/api/projects/:pid/:cat', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
   const search = (req.query.search || '').toLowerCase().trim();
   const sortBy = req.query.sort || 'newest';
