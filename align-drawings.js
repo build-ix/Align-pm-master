@@ -1418,7 +1418,9 @@
       return 0;
     }
 
-    // Hide any open section modal so the background is clean
+    // Save section state for restore on close
+    var hadSectionOpen = document.body.classList.contains('section-open');
+    var sectionScrollY = hadSectionOpen ? _readSectionScrollY() : 0;
     var sectionModal = document.getElementById('section-modal');
     var sectionModalWasOpen = sectionModal && !sectionModal.classList.contains('hidden');
     if (sectionModalWasOpen) {
