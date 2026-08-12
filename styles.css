@@ -1641,3 +1641,65 @@ html[data-theme="light"] #bottom-nav {
 .pl-new-list-btn:active {
   transform: translateY(0);
 }
+
+/* ─── Image Upload Section ──────────────────────────────────────────── */
+.pl-image-upload {
+  display: flex;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.pl-upload-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--card);
+  border: 2px solid var(--line);
+  border-radius: var(--radius-md);
+  color: var(--ink);
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pl-upload-btn:hover {
+  border-color: var(--brand);
+  background: var(--bg);
+}
+
+.pl-upload-btn:active {
+  background: var(--brand-light);
+}
+
+.pl-upload-btn svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+}
+
+.pl-images-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.pl-image-thumb {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-md);
+  background-size: cover;
+  background-position: center;
+  border: 2px solid var(--line);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pl-image-thumb:hover {
+  border-color: #ef4444;
+  opacity: 0.8;
+}

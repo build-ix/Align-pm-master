@@ -495,30 +495,21 @@
     h.push('<div class="pl-form-field pl-field-sm"><label class="pl-field-label">#</label><input type="text" class="pl-input" id="pl-number" value="'+esc(item.number||'')+'" readonly></div>');
     h.push('</div>');
 
-    h.push('<div class="pl-form-section"><label class="pl-field-label">Title</label><input type="text" class="pl-input" id="pl-title" value="'+esc(item.title||'')+'" placeholder="Describe the issue"></div>');
-    h.push('<div class="pl-form-section"><label class="pl-field-label">Description</label><textarea class="pl-textarea" id="pl-desc" rows="3" placeholder="Details…">'+esc(item.description||'')+'</textarea></div>');
-
-    h.push('<div class="pl-form-row pl-form-row-2">');
-    h.push('<div class="pl-form-field"><label class="pl-field-label">Location</label><input type="text" class="pl-input" id="pl-location" value="'+esc(item.location||'')+'" placeholder="e.g. Master bathroom"></div>');
-    h.push('<div class="pl-form-field"><label class="pl-field-label">Status</label><select class="pl-input" id="pl-status">');
-    STATUSES.forEach(function(s){ h.push('<option value="'+s+'"'+(item.status===s?' selected':'')+'>'+statusLabel(s)+'</option>'); });
-    h.push('</select></div>');
-    h.push('</div>');
-
-    h.push('<div class="pl-form-row pl-form-row-2">');
-    h.push('<div class="pl-form-field"><label class="pl-field-label">Priority</label><select class="pl-input" id="pl-priority">');
+    // Priority field (only required field on creation)
+    h.push('<div class="pl-form-section"><label class="pl-field-label">Priority</label><select class="pl-input" id="pl-priority">');
     ['low','medium','high','critical'].forEach(function(p){ h.push('<option value="'+p+'"'+(item.priority===p?' selected':'')+'>'+p.charAt(0).toUpperCase()+p.slice(1)+'</option>'); });
     h.push('</select></div>');
-    // Company dropdown (admin only) or assigned display
-    if (isAdmin()) {
-      h.push('<div class="pl-form-field"><label class="pl-field-label">Assigned Company</label><select class="pl-input" id="pl-company"></select></div>');
-    } else {
-      h.push('<div class="pl-form-field"><label class="pl-field-label">Assigned To</label><input type="text" class="pl-input" id="pl-assigned" value="'+esc(item.assignedTo||item.assignedCompanyName||'')+'" readonly></div>');
-    }
-    h.push('</div>');
 
-    // ── Linked Drawing ──────────────────────────────────────────────────
-    h.push('<div class="pl-form-section"><label class="pl-field-label">Linked Drawing</label><select class="pl-input" id="pl-drawing"><option value="">— None —</option></select></div>');
+    // Image upload section
+    h.push('<div class="pl-form-section">');
+    h.push('<label class="pl-field-label">Add Images</label>');
+    h.push('<div class="pl-image-upload">');
+    h.push('<button type="button" class="pl-upload-btn" id="pl-upload-camera"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg> Camera</button>');
+    h.push('<button type="button" class="pl-upload-btn" id="pl-upload-album"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"></path><rect x="6" y="9" width="12" height="8"></rect><circle cx="12" cy="13" r="2"></circle></svg> Album</button>');
+    h.push('</div>');
+    h.push('<div id="pl-images-preview" class="pl-images-preview"></div>');
+    h.push('<input type="file" id="pl-file-input" accept="image/*" style="display:none;" multiple>');
+    h.push('</div>');
 
     h.push('</div>');
     return h.join('');
@@ -530,28 +521,35 @@
       state.viewMode = 'apt'; state.editingItem = null; _paint();
     });
 
-    // Populate company dropdown for admins
-    var companySel = document.getElementById('pl-company');
-    if (companySel && isAdmin()) {
-      fetchCompanies().then(function(companies) {
-        companySel.innerHTML = '<option value="">— None —</option>' +
-          companies.map(function(c) {
-            var sel = state.editingItem && state.editingItem.assignedCompanyId === c.id ? ' selected' : '';
-            return '<option value="' + c.id + '"' + sel + '>' + (c.name || '') + (c.trade ? ' (' + c.trade + ')' : '') + '</option>';
-          }).join('');
+    // Image upload handlers
+    var fileInput = document.getElementById('pl-file-input');
+    var cameraBtn = document.getElementById('pl-upload-camera');
+    var albumBtn = document.getElementById('pl-upload-album');
+    
+    if (cameraBtn) {
+      cameraBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (fileInput) {
+          fileInput.capture = 'environment'; // Request camera
+          fileInput.click();
+        }
       });
     }
-
-    // Populate drawing dropdown
-    var drawingSel = document.getElementById('pl-drawing');
-    if (drawingSel) {
-      fetchDrawings().then(function(drawings) {
-        var html = '<option value="">— None —</option>';
-        drawings.forEach(function(d) {
-          var sel = state.editingItem && state.editingItem.drawingId === d.id ? ' selected' : '';
-          html += '<option value="' + d.id + '"' + sel + '>' + esc(d.original_name || d.id) + '</option>';
-        });
-        drawingSel.innerHTML = html;
+    
+    if (albumBtn) {
+      albumBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (fileInput) {
+          fileInput.capture = ''; // Request photo library
+          fileInput.click();
+        }
+      });
+    }
+    
+    if (fileInput) {
+      fileInput.addEventListener('change', function(e) {
+        var files = e.target.files || [];
+        _handleImageSelection(Array.from(files));
       });
     }
 
@@ -559,30 +557,15 @@
     if (saveBtn) saveBtn.addEventListener('click', function() {
       var item = state.editingItem;
       item.apartment = (document.getElementById('pl-apartment')||{}).value || state.activeApt || '';
-      item.title = (document.getElementById('pl-title')||{}).value || '';
-      item.description = (document.getElementById('pl-desc')||{}).value || '';
-      item.location = (document.getElementById('pl-location')||{}).value || '';
-      item.status = (document.getElementById('pl-status')||{}).value || 'open';
       item.priority = (document.getElementById('pl-priority')||{}).value || 'medium';
-      item.assignedTo = (document.getElementById('pl-assigned')||{}).value || '';
-      // Save company assignment
-      var companySel = document.getElementById('pl-company');
-      if (companySel && companySel.value) {
-        var co = companySel.options[companySel.selectedIndex];
-        item.assignedCompanyId = companySel.value;
-        item.assignedCompanyName = co ? co.textContent : '';
-      }
       item.updatedAt = nowISO();
-
-      // Save drawing link
-      var drawingSel2 = document.getElementById('pl-drawing');
-      item.drawingId = drawingSel2 ? drawingSel2.value || null : null;
 
       if (!item.id) {
         item.id = uid();
         item.createdAt = nowISO();
         item.createdBy = getCurrentUser();
         item.activity = [];
+        item.status = 'open'; // Default status on creation
       }
 
       S().saveRecord(state.projectId, CATEGORY, item);
@@ -590,6 +573,41 @@
       state.viewMode = 'apt';
       state.editingItem = null;
       _paint();
+    });
+  }
+
+  function _handleImageSelection(files) {
+    if (!files || files.length === 0) return;
+    var preview = document.getElementById('pl-images-preview');
+    if (!preview) return;
+
+    if (!state.editingItem.images) state.editingItem.images = [];
+
+    files.forEach(function(file) {
+      var reader = new FileReader();
+      reader.onload = function(evt) {
+        var b64 = evt.target.result;
+        state.editingItem.images.push({
+          id: uid(),
+          data: b64,
+          timestamp: nowISO()
+        });
+
+        // Show preview thumbnail
+        var thumb = document.createElement('div');
+        thumb.className = 'pl-image-thumb';
+        thumb.style.backgroundImage = 'url(' + b64 + ')';
+        thumb.title = 'Click to remove';
+        thumb.addEventListener('click', function() {
+          state.editingItem.images = state.editingItem.images.filter(function(img) {
+            return img.id !== (thumb._imageId || '');
+          });
+          thumb.remove();
+        });
+        thumb._imageId = state.editingItem.images[state.editingItem.images.length - 1].id;
+        preview.appendChild(thumb);
+      };
+      reader.readAsDataURL(file);
     });
   }
 
