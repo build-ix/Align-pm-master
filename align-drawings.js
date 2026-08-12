@@ -1376,6 +1376,12 @@
     var div = document.createElement('div');
     div.id = 'dr-mv-overlay-host';
     div.innerHTML = h.join('');
+    // Apply fixed positioning to container (NOT body)  to avoid FileReader issues
+    div.style.position = 'fixed';
+    div.style.inset = '0';
+    div.style.zIndex = '9000';
+    div.style.touchAction = 'none';
+    div.style.overscrollBehavior = 'none';
     document.body.appendChild(div);
 
     // Scroll lock — prevent background page from scrolling.
@@ -1388,13 +1394,10 @@
       touchAction: document.body.style.touchAction,
       overscrollBehavior: document.body.style.overscrollBehavior
     };
-    var hadSectionOpen = document.body.classList.contains('section-open');
-    var sectionScrollY = hadSectionOpen ? _readSectionScrollY() : 0;
-
     document.body.style.overflow = 'hidden';
-    document.body.style.position = 'fixed';
-    document.body.style.width = '100%';
-    document.body.style.top = '0px';
+    // CRITICAL: Do NOT use position:fixed on body — breaks FileReader.readAsDataURL() on iOS
+    // Instead, position:fixed is applied to the overlay container below
+    // Position is managed on #dr-mv-overlay-host (see below)
     // IMPORTANT: Do NOT remove section-open class.  The home page is hidden
     // via inline display:none (set by _openSection in script.js), which
     // survives any class changes.  Removing section-open would strip the
@@ -2752,21 +2755,14 @@
     if (annCanvas) annCanvas.width = 0;
 
     // Restore body state to what it was before the viewer opened.
-    // IMPORTANT: we never remove section-open (the home page is hidden via
-    // inline display:none on tileGrid+appHeader, not the CSS class), so
-    // we don't need to restore it — it was never touched.
+    // IMPORTANT: Position is managed on the overlay container, NOT body.
+    // We never modified body.position, so we never restore it.
     if (_mv && _mv._prevBody) {
       document.body.style.overflow = _mv._prevBody.overflow;
-      document.body.style.position = _mv._prevBody.position;
-      document.body.style.top = _mv._prevBody.top;
-      document.body.style.width = _mv._prevBody.width;
       document.body.style.touchAction = _mv._prevBody.touchAction || '';
       document.body.style.overscrollBehavior = _mv._prevBody.overscrollBehavior || '';
     } else {
       document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.top = '';
-      document.body.style.width = '';
       document.body.style.touchAction = '';
       document.body.style.overscrollBehavior = '';
     }
