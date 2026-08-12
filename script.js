@@ -191,7 +191,7 @@ function _handleRoute() {
 
   // Tile cache — skip data re-fetch if rendered recently
   // These sections manage their own state/live data; never cache them
-  var cacheEntry = (sectionKey === 'settings' || sectionKey === 'essentials-config' || sectionKey === 'daily-logs' || sectionKey === 'contacts' || sectionKey === 'project-select' || sectionKey === 'photos' || sectionKey === 'punchlist') ? null : _tileCache[sectionKey];
+  var cacheEntry = (sectionKey === 'settings' || sectionKey === 'essentials-config' || sectionKey === 'daily-logs' || sectionKey === 'contacts' || sectionKey === 'project-select' || sectionKey === 'photos' || sectionKey === 'punchlist' || sectionKey === 'drawings') ? null : _tileCache[sectionKey];
   if (cacheEntry && (Date.now() - cacheEntry.ts < TILE_STALE_MS)) {
     sectionBody.innerHTML = cacheEntry.html;
     _openSection();
