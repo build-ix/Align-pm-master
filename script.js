@@ -188,6 +188,22 @@ function _handleRoute() {
   document.body.classList.toggle('ps-open', sectionKey === 'project-select');
   _navStack = [];
   sectionTitle.textContent = section.title;
+  
+  // Add action button for punchlist (Create List)
+  var headerAction = document.getElementById('section-header-action');
+  if (headerAction) headerAction.remove();
+  if (sectionKey === 'punchlist') {
+    var btn = document.createElement('button');
+    btn.id = 'section-header-action';
+    btn.className = 'pm-btn primary small';
+    btn.textContent = '+ Create List';
+    btn.addEventListener('click', function () {
+      if (window.AlignPunchlist && window.AlignPunchlist.createNewList) {
+        window.AlignPunchlist.createNewList();
+      }
+    });
+    sectionTitle.parentNode.insertBefore(btn, sectionTitle.nextSibling);
+  }
 
   // Tile cache — skip data re-fetch if rendered recently
   // These sections manage their own state/live data; never cache them

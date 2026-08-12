@@ -110,7 +110,9 @@
       h.push('<div class="pl-apt-tile pl-list-tile" data-pl-list="' + esc(list.id) + '">');
       var items = state.listItems[list.id] || [], openCount = items.filter(function (item) { return item.status === 'open'; }).length;
       h.push('<div class="pl-apt-name">' + esc(list.apartment_label || list.name) + '</div>');
-      h.push('<span class="pl-item-status" aria-label="' + openCount + ' open items">' + openCount + '</span>');
+      if (openCount > 0) {
+        h.push('<span class="pl-item-badge">' + openCount + ' Opened</span>');
+      }
       h.push('</div>');
     });
     h.push('</div></div>');
@@ -212,6 +214,10 @@
     document.getElementById('pl-detail-edit').addEventListener('click', function () { state.editingItem = JSON.parse(JSON.stringify(state.detailItem)); state.viewMode = 'item-form'; _paint(); });
   }
 
-  global.AlignPunchlist = Object.freeze({render: render, CATEGORY: CATEGORY});
+  global.AlignPunchlist = Object.freeze({
+    render: render,
+    createNewList: function () { state.editingList = {}; state.viewMode = 'list-form'; _paint(); },
+    CATEGORY: CATEGORY
+  });
   if (window.TileRegistry) window.TileRegistry.register({id:'punchlist', title:'Punchlist', icon:'/', route:'punchlist', roles:['user','admin'], order:2});
 })(window);
