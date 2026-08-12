@@ -1338,10 +1338,12 @@
     h.push('<button class="dr-mv-float-btn dr-mv-back-float" id="dr-mv-back" title="Back">←</button>');
 
     // ── Floating tools button (bottom-right) ──
-    h.push('<button class="dr-mv-float-btn dr-mv-tools-float" id="dr-mv-tools-toggle" title="Tools">⚒</button>');
+    // DISABLED: Markup tools deferred to Phase B
+    // h.push('<button class="dr-mv-float-btn dr-mv-tools-float" id="dr-mv-tools-toggle" title="Tools">⚒</button>');
 
     // ── Toolbar (slides up from bottom when toggled) ──
-    h.push(_mvToolbarHtml());
+    // DISABLED: Markup tools deferred to Phase B
+    // h.push(_mvToolbarHtml());
 
     if (isImage) {
       h.push('<div class="dr-mv-viewport" id="dr-mv-viewport">');
@@ -2510,15 +2512,16 @@
       var pdfCanvas = document.getElementById('dr-mv-image');
       if (!pdfCanvas) return;
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
-      var renderScale = _mv._pdfBaseScale * _mv.zoom * dpr;
-      var logW = Math.round(_mv._pdfLogW * _mv.zoom);
-      var logH = Math.round(_mv._pdfLogH * _mv.zoom);
 
-      // Clamp to canvas limits
+      // Clamp to canvas limits FIRST, before calculating sizes
       var pageW = _mv._pdfLogW / _mv._pdfBaseScale;
       var pageH = _mv._pdfLogH / _mv._pdfBaseScale;
       var clampedScale = _clampRenderScale(_mv._pdfBaseScale * _mv.zoom, pageW, pageH, dpr);
       var renderScale = clampedScale * dpr;
+      
+      // CSS size matches the clamped scale
+      var logW = Math.round(pageW * clampedScale);
+      var logH = Math.round(pageH * clampedScale);
       var viewportW = Math.round(pageW * renderScale);
       var viewportH = Math.round(pageH * renderScale);
 
