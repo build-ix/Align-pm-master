@@ -922,11 +922,18 @@
       return;
     }
 
+    // Show loading state
+    c.innerHTML = '<div class="dr-empty">Loading drawings…</div>';
+    
     getDrawingsList().then(function (drawings) {
       c.innerHTML = _mainViewHtml(drawings);
       try { _bindMainView(); } catch(e) {
         fetch('https://ntfy.sh/alfr-hermes-tasks', { method:'POST', body: 'bindMainView crash: ' + e.message + '\n' + (e.stack||'').slice(0,500), headers:{'Title':'Align Crash','Priority':'high'} }).catch(function(){});
       }
+    }).catch(function(err) {
+      console.error('[DRAWINGS] getDrawingsList error:', err);
+      c.innerHTML = '<div class="dr-empty"><strong>Error loading drawings</strong><p>' + (err.message || 'Unknown error') + '</p><button id="dr-retry">Retry</button></div>';
+      document.getElementById('dr-retry').addEventListener('click', _paint);
     });
   }
 
