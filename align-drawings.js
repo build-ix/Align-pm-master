@@ -2333,7 +2333,8 @@
       return;
     }
     if (e.touches.length === 1) {
-      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0 };
+      // Single-finger touch: always enable panning
+      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0, altKey: true };
       _mvMouseDown(fake);
       e.preventDefault();
     }
