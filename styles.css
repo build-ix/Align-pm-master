@@ -1752,14 +1752,14 @@ html[data-theme="light"] #bottom-nav {
 
 .pl-images-preview {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: 12px;
   margin-top: 12px;
 }
 
 .pl-image-thumb {
-  width: 80px;
-  height: 80px;
+  width: 112px;
+  height: 112px;
   border-radius: var(--radius-md);
   background-size: cover;
   background-position: center;
