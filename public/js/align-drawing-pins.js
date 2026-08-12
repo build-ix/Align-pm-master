@@ -99,16 +99,23 @@
     /**
      * Load pins from API for current sheet
      */
-    loadPins: function() {
+    loadPins: function(sheet) {
+      if (sheet !== undefined) {
+        this.currentSheet = sheet;
+      }
       const url = `/api/drawings/${this.drawingId}/punch-items?sheet=${this.currentSheet}`;
       
-      fetch(url)
+      return fetch(url)
         .then(res => res.json())
         .then(items => {
           this.pins = items || [];
           this.render();
+          return items;
         })
-        .catch(err => console.error('[PinOverlay] Load failed:', err));
+        .catch(err => {
+          console.error('[PinOverlay] Load failed:', err);
+          throw err;
+        });
     },
 
     /**
