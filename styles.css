@@ -1614,9 +1614,8 @@ html[data-theme="light"] #bottom-nav {
 .pl-titleblock {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px 16px 16px;
-  border-bottom: 1px solid var(--line);
+  justify-content: center;
+  padding: 20px 16px 20px 16px;
   gap: 12px;
 }
 
