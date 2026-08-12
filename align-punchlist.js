@@ -171,7 +171,8 @@
   function _listFormHtml() {
     var list = state.editingList || {};
     var privacy = list.privacy === 'public' ? 'public' : 'private';
-    return '<div class="pl-form-wrap pl-list-form" data-form="list-form"><div class="pl-form-header"><button class="pm-btn" id="pl-list-form-back">← Cancel</button><h3 class="pl-form-title">' + (list.id ? 'Edit List' : 'Create List') + '</h3><button class="pm-btn primary" id="pl-list-form-save" type="button">Save</button></div><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div></div>';
+    var deleteBtn = list.id ? '<button class="pm-btn danger" id="pl-list-form-delete" type="button">Delete List</button>' : '';
+    return '<div class="pl-form-wrap pl-list-form" data-form="list-form"><div class="pl-form-header"><button class="pm-btn" id="pl-list-form-back">← Cancel</button><h3 class="pl-form-title">' + (list.id ? 'Edit List' : 'Create List') + '</h3><div class="pl-form-actions"><button class="pm-btn primary" id="pl-list-form-save" type="button">Save</button>' + deleteBtn + '</div></div><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div></div>';
   }
   function _bindListForm() {
     document.getElementById('pl-list-form-back').addEventListener('click', function () { state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); });
@@ -192,6 +193,13 @@
       var request = state.editingList.id ? api(projectPath('/' + encodeURIComponent(state.editingList.id)), {method:'PATCH', body:JSON.stringify(payload)}) : api(projectPath(), {method:'POST', body:JSON.stringify(payload)});
       request.then(function (data) { state.activeList = data.list || state.activeList; state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); }).catch(function (error) { submitting = false; saveButton.disabled = false; saveButton.removeAttribute('aria-disabled'); saveButton.removeAttribute('aria-busy'); notifyError(error); });
     });
+    var deleteButton = document.getElementById('pl-list-form-delete');
+    if (deleteButton) {
+      deleteButton.addEventListener('click', function () {
+        if (!confirm('Delete this list and all items? This cannot be undone.')) return;
+        api(projectPath('/' + encodeURIComponent(state.editingList.id)), {method:'DELETE'}).then(function () { state.activeList = null; state.editingList = null; state.viewMode = 'lists'; _loadLists(); }).catch(notifyError);
+      });
+    }
   }
 
   /* Dedicated item form: no name, description, apartment, scope, or list controls. */

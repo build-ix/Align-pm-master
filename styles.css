@@ -1772,3 +1772,17 @@ html[data-theme="light"] #bottom-nav {
   border-color: #ef4444;
   opacity: 0.8;
 }
+
+.pl-form-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.pl-form-actions .pm-btn {
+  flex-shrink: 0;
+}
+
+.pl-form-actions .pm-btn.danger {
+  margin-left: auto;
+}
