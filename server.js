@@ -1282,9 +1282,10 @@ app.post('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectM
   var status = (body.status || 'open').trim();
   
   // Strictly reject item-only fields to prevent accidental coupling
-  if (body.hasOwnProperty('priority') || body.hasOwnProperty('images') || body.hasOwnProperty('location') || 
-      body.hasOwnProperty('trade') || body.hasOwnProperty('assignedCompanyId')) {
-    return res.status(400).json({ error: 'List creation does not accept item fields (priority, images, location, trade, assignedCompanyId)' });
+  if (body.hasOwnProperty('priority') || body.hasOwnProperty('images') || body.hasOwnProperty('location') ||
+      body.hasOwnProperty('trade') || body.hasOwnProperty('title') || body.hasOwnProperty('assignedCompanyId') ||
+      body.hasOwnProperty('assignedTo')) {
+    return res.status(400).json({ error: 'List creation does not accept item fields (title, priority, images, location, trade, assignedCompanyId, assignedTo)' });
   }
   
   if (!name) {
@@ -1464,9 +1465,11 @@ app.post('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.r
     return res.status(404).json({ error: 'List not found' });
   }
   
-  // Reject list-only fields
-  if (body.hasOwnProperty('name') || body.hasOwnProperty('description') === body.description) {
-    return res.status(400).json({ error: 'Cannot create item with list fields' });
+  // Strictly reject list-only fields so the two-step boundary cannot be bypassed.
+  if (body.hasOwnProperty('name') || body.hasOwnProperty('description') ||
+      body.hasOwnProperty('apartment_label') || body.hasOwnProperty('scope_type') ||
+      body.hasOwnProperty('listId')) {
+    return res.status(400).json({ error: 'Cannot create item with list fields (name, description, apartment_label, scope_type, listId)' });
   }
   
   // Extract item fields
