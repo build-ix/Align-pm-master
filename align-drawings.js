@@ -1392,9 +1392,7 @@
     var sectionScrollY = hadSectionOpen ? _readSectionScrollY() : 0;
 
     document.body.style.overflow = 'hidden';
-    // CRITICAL: Do NOT use position:fixed on body — breaks z-index and touch on iOS
-    // Instead rely on overflow:hidden to prevent background scroll
-    // document.body.style.position = 'fixed';
+    document.body.style.position = 'fixed';
     document.body.style.width = '100%';
     document.body.style.top = '0px';
     // IMPORTANT: Do NOT remove section-open class.  The home page is hidden
