@@ -463,6 +463,55 @@ const MIGRATIONS = [
     up(db) {
       try { db.exec('ALTER TABLE files ADD COLUMN metadata TEXT'); } catch(e) {}
     }
+  },
+  /* ── v25: punchlist lists (two-step creation) ──────────────────────────────────────── */
+  {
+    version: 25,
+    name: 'punchlist_lists',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS punchlist_lists (
+          id              TEXT PRIMARY KEY,
+          project_id      TEXT NOT NULL,
+          name            TEXT NOT NULL,
+          description     TEXT NOT NULL DEFAULT '',
+          scope_type      TEXT NOT NULL DEFAULT 'apartment',
+          apartment_label TEXT,
+          status          TEXT NOT NULL DEFAULT 'open',
+          created_by      TEXT,
+          created_at      TEXT NOT NULL,
+          updated_at      TEXT NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (created_by) REFERENCES users(id)
+        )
+      `);
+      
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_pl_lists_project
+          ON punchlist_lists(project_id, updated_at DESC)
+      `);
+      
+      db.exec(`
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_pl_list_apartment
+          ON punchlist_lists(project_id, apartment_label)
+          WHERE scope_type = 'apartment' AND apartment_label IS NOT NULL
+      `);
+      
+      // Add listId column to records JSON for punchlist items
+      try {
+        db.exec(`
+          ALTER TABLE records ADD COLUMN pl_list_id TEXT
+            GENERATED ALWAYS AS (json_extract(data, '$.listId')) VIRTUAL
+        `);
+        db.exec(`
+          CREATE INDEX IF NOT EXISTS idx_rec_pl_list
+            ON records(project_id, pl_list_id)
+            WHERE category = 'punchlist'
+        `);
+      } catch(e) {
+        // Generated columns may not be available; fallback will use json_extract in queries
+      }
+    }
   }
 ];
 
