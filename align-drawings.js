@@ -3489,14 +3489,14 @@
       
       // Step A: Create punchlist item
       var itemData = {
-        data: JSON.stringify({
+        data: {
           apartment: apartment,
           title: title,
           description: '',
           location: '',
           priority: 'medium',
           status: 'open'
-        })
+        }
       };
       
       var createUrl = '/api/projects/' + encodeURIComponent(projectId) + '/punchlist';
