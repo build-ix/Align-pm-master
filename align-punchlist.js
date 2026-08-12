@@ -199,6 +199,11 @@
       verified: items.filter(function(i){return i.status==='verified';}).length
     };
 
+    // Titleblock with Start New List button
+    h.push('<div class="pl-titleblock">');
+    h.push('<button class="pl-new-list-btn" id="pl-apt-new">+ Start New List</button>');
+    h.push('</div>');
+
     // Stats bar
     h.push('<div class="pl-stats">');
     ['all','open','in_progress','resolved','verified'].forEach(function(s){
@@ -213,12 +218,6 @@
 
     // Apartment tile grid
     h.push('<div class="pl-apt-grid">');
-
-    // Start New List
-    h.push('<div class="pl-apt-tile pl-apt-new" id="pl-apt-new">');
-    h.push('<div class="pl-apt-new-icon">+</div>');
-    h.push('<div class="pl-apt-new-label">Start New List</div>');
-    h.push('</div>');
 
     state.apartments.forEach(function(a) {
       var total = state._aptCounts[a] || 0;

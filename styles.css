@@ -1609,3 +1609,36 @@ html[data-theme="light"] #bottom-nav {
 .pin-group.disabled circle {
   opacity: 0.5;
 }
+
+/* ─── Punchlist Titleblock ──────────────────────────────────────────────── */
+.pl-titleblock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px 16px 16px;
+  border-bottom: 1px solid var(--line);
+  gap: 12px;
+}
+
+.pl-new-list-btn {
+  background: var(--brand);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.pl-new-list-btn:hover {
+  background: var(--brand-dark);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.pl-new-list-btn:active {
+  transform: translateY(0);
+}
