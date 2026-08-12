@@ -168,12 +168,15 @@
 
     // 1) Fetch from server (source of truth)
     var token = localStorage.getItem('align-token') || '';
+    console.log('[DRAWINGS] Fetching from /api/projects/' + state.projectId + '/files');
     return fetch('/api/projects/' + encodeURIComponent(state.projectId) + '/files', {
       headers: { 'Authorization': 'Bearer ' + token }
     }).then(function (r) {
+      console.log('[DRAWINGS] Server response:', r.status, r.ok);
       if (!r.ok) throw new Error('Server returned ' + r.status);
       return r.json();
     }).then(function (data) {
+      console.log('[DRAWINGS] Got data:', data);
       var files = (data.files || []).filter(function (f) { return f.type === 'file' && f.trashed === 0; });
       // Mirror to localStorage cache for fast re-render
       var index = files.map(function (f) {
@@ -181,7 +184,8 @@
       });
       if (index.length > 0) _saveDrawingsIndex(state.projectId, index);
       return index;
-    }).catch(function () {
+    }).catch(function (err) {
+      console.error('[DRAWINGS] API error:', err.message, '— falling back to cache');
       // Fallback: localStorage cache
       return _loadDrawingsIndex(state.projectId);
     });
