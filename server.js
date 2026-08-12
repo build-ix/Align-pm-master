@@ -1256,7 +1256,7 @@ app.get('/api/projects/:pid/punchlist/apartments', requireAuth, auth.requireProj
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 // GET /api/projects/:pid/punchlist-lists
-app.get('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
+app.get('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'r'), (req, res) => {
   var pid = req.params.pid;
   var lists = dbAll(`
     SELECT 
@@ -1272,7 +1272,7 @@ app.get('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMe
 });
 
 // POST /api/projects/:pid/punchlist-lists
-app.post('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+app.post('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
   var pid = req.params.pid;
   var body = req.body || {};
   var name = (body.name || '').trim();
@@ -1326,7 +1326,7 @@ app.post('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectM
 });
 
 // GET /api/projects/:pid/punchlist-lists/:listId
-app.get('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
+app.get('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'r'), (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   
@@ -1348,7 +1348,7 @@ app.get('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireP
 });
 
 // PATCH /api/projects/:pid/punchlist-lists/:listId
-app.patch('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+app.patch('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   var body = req.body || {};
@@ -1403,7 +1403,7 @@ app.patch('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requir
 });
 
 // DELETE /api/projects/:pid/punchlist-lists/:listId
-app.delete('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+app.delete('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   
@@ -1434,7 +1434,7 @@ app.delete('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requi
 // ═══════════════════════════════════════════════════════════════════════════════════════════════
 
 // GET /api/projects/:pid/punchlist-lists/:listId/items
-app.get('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
+app.get('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'r'), (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   
@@ -1454,7 +1454,7 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.re
 });
 
 // POST /api/projects/:pid/punchlist-lists/:listId/items
-app.post('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+app.post('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   var body = req.body || {};
@@ -1527,7 +1527,7 @@ app.post('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.r
 });
 
 // GET /api/projects/:pid/punchlist-lists/:listId/items/:itemId
-app.get('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
+app.get('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'r'), (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   var itemId = req.params.itemId;
@@ -1549,7 +1549,7 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth,
 });
 
 // PATCH /api/projects/:pid/punchlist-lists/:listId/items/:itemId
-app.patch('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+app.patch('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   var itemId = req.params.itemId;
@@ -1604,7 +1604,7 @@ app.patch('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAut
 });
 
 // DELETE /api/projects/:pid/punchlist-lists/:listId/items/:itemId
-app.delete('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+app.delete('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   var itemId = req.params.itemId;

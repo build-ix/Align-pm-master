@@ -46,7 +46,11 @@
     var project = storage && storage.getActiveProject && storage.getActiveProject();
     state.projectId = project ? project.id : null;
   }
-  function notifyError(error) { alert(error && error.message ? error.message : 'Something went wrong.'); }
+  function notifyError(error) { 
+    var msg = error && error.message ? error.message : 'Something went wrong.';
+    console.error('[PUNCHLIST]', msg, error);
+    alert(msg);
+  }
 
   function render(container) {
     state.container = container;
@@ -71,7 +75,10 @@
 
   function _loadLists() {
     state.container.innerHTML = '<div class="pl-empty">Loading punchlist lists…</div>';
-    api(projectPath()).then(function (data) {
+    var url = projectPath();
+    console.log('[PUNCHLIST] Loading lists from:', url);
+    api(url).then(function (data) {
+      console.log('[PUNCHLIST] Lists loaded:', data);
       state.lists = data.lists || [];
       if (state.viewMode === 'lists') { state.container.innerHTML = _listsHtml(); _bindLists(); }
     }).catch(notifyError);
