@@ -1337,6 +1337,9 @@
     // ── Floating back button (top-left) ──
     h.push('<button class="dr-mv-float-btn dr-mv-back-float" id="dr-mv-back" title="Back">←</button>');
 
+    // ── Floating placement mode toggle (top-left, below back) ──
+    h.push('<button class="dr-mv-float-btn dr-mv-placement-toggle" id="dr-mv-placement-toggle" title="Add Pin">📍</button>');
+
     // ── Floating tools button (bottom-right) ──
     // DISABLED: Markup tools deferred to Phase B
     // h.push('<button class="dr-mv-float-btn dr-mv-tools-float" id="dr-mv-tools-toggle" title="Tools">⚒</button>');
@@ -1438,6 +1441,30 @@
       }
       _paint();
     });
+
+    // Placement mode toggle button
+    var placementBtn = document.getElementById('dr-mv-placement-toggle');
+    var placementMode = false;
+    if (placementBtn) {
+      placementBtn.addEventListener('click', function () {
+        placementMode = !placementMode;
+        placementBtn.classList.toggle('active', placementMode);
+        
+        // Change cursor when in placement mode
+        var viewport = document.getElementById('dr-mv-viewport');
+        if (viewport) {
+          viewport.style.cursor = placementMode ? 'crosshair' : 'auto';
+        }
+        
+        console.log('[AlignDrawings] Placement mode:', placementMode);
+      });
+    }
+
+    // Canvas click handler for pin placement
+    if (isPdf && placementBtn) {
+      // We'll hook this up in _mvRenderPdf after canvas is ready
+      window._mvPlacementMode = { enabled: false, mode: placementMode };
+    }
 
     // Escape key closes
     var escHandler = function (e) {
@@ -3366,6 +3393,30 @@
         } else {
           console.warn('[AlignDrawings] AlignPunchlist not available');
         }
+      });
+    }
+    
+    // ── Canvas click handler for pin placement (Phase 3 Step 4) ──
+    var canvas = document.getElementById('dr-mv-canvas');
+    if (canvas && _pinOverlay) {
+      canvas.addEventListener('click', function(e) {
+        // Check if placement mode is enabled
+        var placementBtn = document.getElementById('dr-mv-placement-toggle');
+        if (!placementBtn || !placementBtn.classList.contains('active')) return;
+        
+        // Get click position relative to canvas
+        var rect = canvas.getBoundingClientRect();
+        var clickX = e.clientX - rect.left;
+        var clickY = e.clientY - rect.top;
+        
+        // Convert to normalized coordinates (0-1)
+        var normX = Math.max(0, Math.min(1, clickX / canvas.width));
+        var normY = Math.max(0, Math.min(1, clickY / canvas.height));
+        
+        console.log('[AlignDrawings] Placement click:', { clickX, clickY, normX, normY, canvasW: canvas.width, canvasH: canvas.height });
+        
+        // TODO: Open a dialog to create a new punchlist item at this location
+        // For now, just log the coordinates
       });
     }
     
