@@ -27,7 +27,7 @@
   var MAX_CANVAS_DIM    = 4096;  // iOS single-dimension cap
   // Zoom limits
   var MV_ZOOM_MIN = 0.25;
-  var MV_ZOOM_MAX = 10;
+  var MV_ZOOM_MAX = 5;
   var _mvWheelTimer = 0;  // debounce wheel re-renders
 
   // Sheet number → category mapping for auto-classification
@@ -166,15 +166,14 @@
   function getDrawingsList() {
     if (!state.projectId) return Promise.resolve([]);
 
-    // 1) Fetch from server (source of truth) via centralized API
-    return (window.Api ? window.Api.get('/api/projects/' + encodeURIComponent(state.projectId) + '/files') :
-      fetch('/api/projects/' + encodeURIComponent(state.projectId) + '/files', {
-        headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('align-token') || '') }
-      }).then(function (r) {
-        if (!r.ok) throw new Error('Server returned ' + r.status);
-        return r.json();
-      })
-    ).then(function (data) {
+    // 1) Fetch from server (source of truth)
+    var token = localStorage.getItem('align-token') || '';
+    return fetch('/api/projects/' + encodeURIComponent(state.projectId) + '/files', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    }).then(function (r) {
+      if (!r.ok) throw new Error('Server returned ' + r.status);
+      return r.json();
+    }).then(function (data) {
       var files = (data.files || []).filter(function (f) { return f.type === 'file' && f.trashed === 0; });
       // Mirror to localStorage cache for fast re-render
       var index = files.map(function (f) {
@@ -439,17 +438,11 @@
     var lib = _ensurePdfJs();
     if (!lib) return null;          // PDF.js not loaded → fall back to whole file
     if (!file.type || file.type.indexOf('pdf') === -1) return null; // not a PDF
-    // Cap page count to avoid memory exhaustion on mobile
-    var MAX_SPLIT_PAGES = 50;
 
     return readFileAsArrayBuffer(file).then(function (buffer) {
       return lib.getDocument({ data: buffer.slice(0) }).promise.then(function (pdfDoc) {
         var numPages = pdfDoc.numPages;
         if (numPages <= 1) return null; // single page — no split needed
-        if (numPages > MAX_SPLIT_PAGES) {
-          console.warn('[AlignDrawings] PDF has ' + numPages + ' pages, exceeds split limit of ' + MAX_SPLIT_PAGES + '. Uploading whole file.');
-          return null;
-        }
         return { pdfDoc: pdfDoc, numPages: numPages, buffer: buffer };
       });
     }).then(function (info) {
@@ -458,85 +451,85 @@
       var pdfDoc = info.pdfDoc;
       var numPages = info.numPages;
 
-      // 1) Extract text + render thumbnail for each page SEQUENTIALLY
-      //    to avoid loading all pages into memory at once.
-      function processPageSequential(pn) {
-        if (pn > numPages) return Promise.resolve([]);
-        return pdfDoc.getPage(pn).then(function (page) {
-          return page.getTextContent().then(function (tc) {
-            var vp1 = page.getViewport({ scale: 1.0 });
-            var thumbScale = Math.min(180 / vp1.width, 180 / vp1.height, 1);
-            var tvp = page.getViewport({ scale: thumbScale });
-            var canvas = document.createElement('canvas');
-            canvas.width = Math.ceil(tvp.width);
-            canvas.height = Math.ceil(tvp.height);
-            return page.render({ canvasContext: canvas.getContext('2d'), viewport: tvp }).promise.then(function () {
-              var thumbUrl = null;
-              try { thumbUrl = canvas.toDataURL('image/png'); } catch (e) { /* tainted/oom — icon fallback */ }
-              // Clean up canvas immediately to free memory
-              canvas.width = 0; canvas.height = 0;
-              return [{ pageNum: pn, items: tc.items, viewport: vp1, thumbUrl: thumbUrl }];
-            }).catch(function () {
-              canvas.width = 0; canvas.height = 0;
-              return [{ pageNum: pn, items: tc.items, viewport: vp1, thumbUrl: null }];
-            });
-          });
-        }).then(function (result) {
-          return processPageSequential(pn + 1).then(function (rest) {
-            return result.concat(rest);
-          });
-        });
+      // 1) Extract text for naming each page using pdf.js.
+      //    CRITICAL: getTextContent() coordinates are in unscaled PDF user
+      //    space — the viewport used for region math MUST be scale 1.0.
+      //    (A 1.5x viewport made the bottom-right filter reject everything,
+      //    so every page fell back to "Page N".)
+      //    Also render a small PNG thumbnail per page for the preview list —
+      //    <img> tags cannot display application/pdf data URLs.
+      var textPromises = [];
+      for (var i = 1; i <= numPages; i++) {
+        (function (pn) {
+          textPromises.push(
+            pdfDoc.getPage(pn).then(function (page) {
+              return page.getTextContent().then(function (tc) {
+                var vp1 = page.getViewport({ scale: 1.0 });
+                var thumbScale = Math.min(180 / vp1.width, 180 / vp1.height, 1);
+                var tvp = page.getViewport({ scale: thumbScale });
+                var canvas = document.createElement('canvas');
+                canvas.width = Math.ceil(tvp.width);
+                canvas.height = Math.ceil(tvp.height);
+                return page.render({ canvasContext: canvas.getContext('2d'), viewport: tvp }).promise.then(function () {
+                  var thumbUrl = null;
+                  try { thumbUrl = canvas.toDataURL('image/png'); } catch (e) { /* tainted/oom — icon fallback */ }
+                  return { pageNum: pn, items: tc.items, viewport: vp1, thumbUrl: thumbUrl };
+                }).catch(function () {
+                  return { pageNum: pn, items: tc.items, viewport: vp1, thumbUrl: null };
+                });
+              });
+            })
+          );
+        })(i);
       }
 
-      return processPageSequential(1).then(function (textResults) {
-        // 2) Use pdf-lib to extract each page as a standalone PDF SEQUENTIALLY
+      return Promise.all(textPromises).then(function (textResults) {
+        // 2) Use pdf-lib to extract each page as a standalone PDF
         if (typeof PDFLib === 'undefined') {
           console.warn('[AlignDrawings] pdf-lib not loaded, falling back to whole file');
           return null;
         }
         return PDFLib.PDFDocument.load(info.buffer).then(function (srcDoc) {
           var pages = [];
+          var splitPromises = [];
+          for (var j = 0; j < textResults.length; j++) {
+            (function (tr) {
+              var pageName = _extractBottomRightText(tr.items, tr.viewport);
+              if (!pageName) pageName = 'Page ' + tr.pageNum;
+              pageName = _sanitizePageName(pageName, tr.pageNum);
 
-          function splitPageSequential(idx) {
-            if (idx >= textResults.length) return Promise.resolve();
-            var tr = textResults[idx];
-            var pageName = _extractBottomRightText(tr.items, tr.viewport);
-            // If scanner can't find a name, leave empty — user will enter manually
-            if (!pageName) pageName = '';
-            pageName = _sanitizePageName(pageName, tr.pageNum);
-
-            return PDFLib.PDFDocument.create().then(function (newDoc) {
-              return newDoc.copyPages(srcDoc, [tr.pageNum - 1]).then(function (copied) {
-                newDoc.addPage(copied[0]);
-                return newDoc.save();
-              });
-            }).then(function (pdfBytes) {
-              // Proper Uint8Array → base64 (btoa chokes on raw binary)
-              var bytes = new Uint8Array(pdfBytes);
-              var chunks = [];
-              var chunkSize = 0x8000; // 32KB chunks
-              for (var b = 0; b < bytes.length; b += chunkSize) {
-                var chunk = bytes.subarray(b, Math.min(b + chunkSize, bytes.length));
-                var bin = '';
-                for (var c = 0; c < chunk.length; c++) {
-                  bin += String.fromCharCode(chunk[c]);
-                }
-                chunks.push(btoa(bin));
-              }
-              var dataUrl = 'data:application/pdf;base64,' + chunks.join('');
-              pages.push({
-                name: pageName,
-                dataUrl: dataUrl,
-                pdfBytes: bytes,   // ← raw bytes for upload (avoids fetch(dataUrl) limits)
-                thumbUrl: tr.thumbUrl || null,
-                pageNum: tr.pageNum
-              });
-              // Proceed to next page
-              return splitPageSequential(idx + 1);
-            });
+              splitPromises.push(
+                PDFLib.PDFDocument.create().then(function (newDoc) {
+                  return newDoc.copyPages(srcDoc, [tr.pageNum - 1]).then(function (copied) {
+                    newDoc.addPage(copied[0]);
+                    return newDoc.save();
+                  });
+                }).then(function (pdfBytes) {
+                  // Proper Uint8Array → base64 (btoa chokes on raw binary)
+                  var bytes = new Uint8Array(pdfBytes);
+                  var chunks = [];
+                  var chunkSize = 0x8000; // 32KB chunks
+                  for (var b = 0; b < bytes.length; b += chunkSize) {
+                    var chunk = bytes.subarray(b, Math.min(b + chunkSize, bytes.length));
+                    var bin = '';
+                    for (var c = 0; c < chunk.length; c++) {
+                      bin += String.fromCharCode(chunk[c]);
+                    }
+                    chunks.push(btoa(bin));
+                  }
+                  var dataUrl = 'data:application/pdf;base64,' + chunks.join('');
+                  pages.push({
+                    name: pageName,
+                    dataUrl: dataUrl,
+                    thumbUrl: tr.thumbUrl || null,
+                    pageNum: tr.pageNum
+                  });
+                })
+              );
+            })(textResults[j]);
           }
 
-          return splitPageSequential(0).then(function () {
+          return Promise.all(splitPromises).then(function () {
             pages.sort(function (a, b) {
               return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
             });
@@ -590,103 +583,94 @@
     }
   }
 
-  /* ── Title block field extraction (label-based) ───────────────────────── */
-
-  var _KNOWN_LABELS = [
-    'DRAWING NO', 'DRAWING NUMBER', 'SHEET NO', 'SHEET NUMBER',
-    'DWG NO', 'PAGE NO', 'CHECKED BY', 'DRAWN BY',
-    'PROJECT NO', 'PROJECT NUMBER', 'PROJECT', 'DATE',
-    'SCALE', 'REV', 'REVISION', 'DOB', 'D.O.B.',
-    'ARCHITECT', 'STRUCTURAL ENGINEER', 'MECHANICAL ENGINEER',
-    'DRAWING TITLE', 'TITLE', 'DRAWING NAME', 'SHEET TITLE'
-  ];
-
-  function _isKnownLabel(text) {
-    var t = text.toUpperCase().replace(/[:\.\s]/g, '');
-    for (var i = 0; i < _KNOWN_LABELS.length; i++) {
-      if (t.indexOf(_KNOWN_LABELS[i].replace(/[:\.\s]/g, '')) !== -1) return true;
-    }
-    return false;
-  }
-
-  function _findFieldValue(candidates, labelPatterns) {
-    // Find the label
-    var labelItem = null;
-    for (var i = 0; i < candidates.length; i++) {
-      var ct = candidates[i].text.toUpperCase().replace(/[:\.\s]/g, '');
-      for (var p = 0; p < labelPatterns.length; p++) {
-        var pat = labelPatterns[p].toUpperCase().replace(/[:\.\s]/g, '');
-        if (ct.indexOf(pat) !== -1) {
-          labelItem = candidates[i];
-          break;
-        }
-      }
-      if (labelItem) break;
-    }
-    if (!labelItem) return null;
-
-    // Find the best value near this label
-    var best = null;
-    var bestScore = -1;
-    for (var i = 0; i < candidates.length; i++) {
-      var c = candidates[i];
-      if (c === labelItem) continue;
-      if (_isKnownLabel(c.text)) continue;
-
-      var dx = Math.abs(c.x - labelItem.x);
-      var dy = Math.abs(c.y - labelItem.y);
-
-      // Must be reasonably close
-      if (dx > 400 || dy > 50) continue;
-
-      // Score: same row = big bonus, closer X = better, larger font = better
-      var score = 0;
-      if (dy < 15) score += 500;          // same row
-      score -= dx * 2;                     // horizontal proximity
-      score -= dy * 10;                    // vertical proximity
-      score += c.fontSize * 5;             // larger font = likely value
-
-      if (score > bestScore) {
-        bestScore = score;
-        best = c;
-      }
-    }
-
-    return best ? best.text : null;
-  }
-
   function _extractBottomRightText(textItems, viewport) {
 
     if (!textItems || textItems.length === 0) return null;
 
-    // ── Label-based scanner: scan ALL text items on the page ──
-    // No coordinate filtering — architectural title blocks can be anywhere.
+    var vw = viewport.width;
+    var vh = viewport.height;
+
+    // Bottom-right region: rightmost 35% of width, bottom 20% of height
+    var leftBound = vw * 0.65;
+    var topBound  = vh * 0.80;
+
     var candidates = [];
+
     for (var i = 0; i < textItems.length; i++) {
       var item = textItems[i];
       if (!item.str || !item.transform) continue;
+      var tx = item.transform[4];
+      var ty = item.transform[5];
       var str = item.str.trim();
-      if (!str || str.length < 2) continue;
-      candidates.push({
-        text: str,
-        x: item.transform[4],
-        y: item.transform[5],
-        fontSize: item.height || (item.transform ? Math.abs(item.transform[3]) : 8)
-      });
-    }
 
-    var drawingNo = _findFieldValue(candidates, ['DRAWING NO.', 'DRAWING NO', 'DRAWING NUMBER', 'SHEET NO.', 'SHEET NO', 'SHEET NUMBER', 'DWG NO.', 'DWG NO']);
-    var drawingTitle = _findFieldValue(candidates, ['DRAWING TITLE', 'TITLE', 'DRAWING NAME', 'SHEET TITLE']);
+      if (!str) continue;
 
-    if (drawingNo || drawingTitle) {
-      if (drawingNo && drawingTitle) {
-        return drawingNo + ' — ' + drawingTitle;
+      // Bottom-right region
+      if (tx >= leftBound && ty <= (vh * 0.20) && str.length >= 1) {
+        if (/^[\d.,\s\-]+$/.test(str) && str.length < 8) continue;
+        if (str.length < 2) continue;
+
+        candidates.push({
+          text: str,
+          x: tx,
+          y: ty,
+          fontSize: item.height || (item.transform ? Math.abs(item.transform[3]) : 8)
+        });
       }
-      return drawingNo || drawingTitle;
     }
 
-    // Nothing found — let user enter manually (return null, caller handles it)
-    return null;
+    if (candidates.length === 0) return null;
+
+    // Sort by Y (bottom-to-top), then X (left-to-right)
+    candidates.sort(function (a, b) {
+      var yDiff = a.y - b.y;
+      if (Math.abs(yDiff) < 5) return a.x - b.x;
+      return yDiff;
+    });
+
+    // ── Smart extraction: look for sheet number pattern (A-101, S-201, etc.) ──
+    var sheetPattern = /^[A-Z]\d*[-.]?\d+[A-Za-z]?$/;  // e.g. A-101, S201, M-2.1, E001a
+    var sheetNum = null;
+    var otherParts = [];
+
+    for (var j = 0; j < candidates.length; j++) {
+      var t = candidates[j].text;
+      if (!sheetNum && sheetPattern.test(t)) {
+        sheetNum = t;
+      } else if (t.length >= 3) {
+        otherParts.push(t);
+      }
+    }
+
+    // Build name: SHEET NUMBER: Title
+    var name = '';
+    if (sheetNum) {
+      name = sheetNum;
+      if (otherParts.length > 0) {
+        // Take first meaningful title piece (skip scale, revision, dates)
+        var title = otherParts.filter(function (p) {
+          return !/^(SCALE|REV|DATE|DWG|CHK|APPR|\d{1,2}\/\d{1,2}\/\d{2,4}|NTS|NOT TO SCALE)$/i.test(p);
+        });
+        if (title.length > 0) {
+          name += ' — ' + title.slice(0, 3).join(' ');
+        }
+      }
+    } else {
+      // No sheet number found — use the best text we have
+      var seen = {};
+      var parts = [];
+      for (var k = 0; k < candidates.length; k++) {
+        var ct = candidates[k].text;
+        var key = ct.toLowerCase();
+        if (seen[key]) continue;
+        seen[key] = true;
+        if (ct.length < 3 && candidates.length > 3) continue;
+        parts.push(ct);
+      }
+      name = parts.join(' — ');
+    }
+
+    return name || null;
   }
 
   function _sanitizePageName(raw, fallbackNum) {
@@ -717,33 +701,31 @@
 
   /* ── Server upload (source of truth) ──────────────────────────────────── */
 
-  function _uploadToServer(pid, drawingId, name, mime, dataUrl, folderId, pdfBytes) {
-    // If we have raw bytes (from pdf-lib split), use them directly — avoids
-    // Safari fetch(dataUrl) size limits and "Load failed" errors.
-    var blobPromise;
-    if (pdfBytes && pdfBytes.length) {
-      blobPromise = Promise.resolve(new Blob([pdfBytes], { type: mime }));
-    } else {
-      blobPromise = fetch(dataUrl).then(function (r) { return r.blob(); });
-    }
+  function _uploadToServer(pid, drawingId, name, mime, dataUrl, folderId) {
+    return new Promise(function (resolve, reject) {
+      var parts = dataUrl.split(',');
+      var byteString = atob(parts[1]);
+      var ab = new ArrayBuffer(byteString.length);
+      var ia = new Uint8Array(ab);
+      for (var i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      var blob = new Blob([ab], { type: mime });
 
-    return blobPromise.then(function (blob) {
       var fd = new FormData();
       fd.append('file', blob, name);
       fd.append('project_id', pid);
       if (folderId) fd.append('folder_id', folderId);
 
       var token = localStorage.getItem('align-token') || '';
-      return fetch('/api/files/upload', {
+      fetch('/api/files/upload', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },
         body: fd
       }).then(function (r) {
-        if (!r.ok) return r.json().then(function (d) { throw new Error(d.error || 'Upload failed'); });
+        if (!r.ok) return r.json().then(function (d) { reject(new Error(d.error || 'Upload failed')); });
         return r.json();
       }).then(function (data) {
-        return data.file || { id: drawingId };
-      });
+        resolve(data.file || { id: drawingId });
+      }).catch(reject);
     });
   }
 
@@ -862,36 +844,38 @@
       try { filesFolderId = ensureDrawingsFolder(); } catch (e) { /* best effort */ }
     }
 
-    // Upload sequentially to avoid memory spikes from concurrent atob/Blob conversion
-    function uploadSequential(idx) {
-      if (idx >= files.length) return Promise.resolve();
-      var f = files[idx];
-      var name = f.customName || customName || f.name || 'drawing';
-      var mime = f.type || 'application/octet-stream';
-      var content = f.dataUrl || '';
-      var bytes = f.pdfBytes || null;
-      var drawingId = _drawingUid();
-
-      return _uploadToServer(pid, drawingId, name, mime, content, filesFolderId, bytes).then(function (serverFile) {
-        // Reload index each time to avoid race conditions
-        var currentIndex = _loadDrawingsIndex(pid);
-        currentIndex.push({
-          id: serverFile.id || drawingId,
+    var promises = [];
+    for (var i = 0; i < files.length; i++) {
+      (function (f) {
+        var name = f.customName || customName || f.name || 'drawing';
+        var mime = f.type || 'application/octet-stream';
+        var content = f.dataUrl || '';
+        var drawingId = _drawingUid();
+        var entry = {
+          id: drawingId,
           name: name,
           mimeType: mime,
           size: content.length,
           createdAt: now,
           updatedAt: now,
           drawingType: f.drawingType || ''
+        };
+
+        // 1) Upload to server (source of truth — shared across all users)
+        var p = _uploadToServer(pid, drawingId, name, mime, content, filesFolderId).then(function (serverFile) {
+          entry.id = serverFile.id || drawingId;
+          index.push(entry);
+          _saveDrawingsIndex(pid, index);
+          // Also cache in IndexedDB for offline access
+          _saveDrawingBlob(pid, entry.id, content).catch(function(){});
+          return entry;
         });
-        _saveDrawingsIndex(pid, currentIndex);
-        // Cache in IndexedDB for offline access (best-effort)
-        _saveDrawingBlob(pid, serverFile.id || drawingId, content).catch(function(){});
-        return uploadSequential(idx + 1);
-      });
+
+        promises.push(p);
+      })(files[i]);
     }
 
-    return uploadSequential(0);
+    return Promise.all(promises);
   }
 
   /* ════════════════════════════════════════════════════════════════════════════
@@ -902,7 +886,8 @@
     if (!container) return;
 
     state.container = container;
-    _resolveProjectId();
+    state.projectId = null;
+    state.drawingsFolderId = null;
     state.showAddModal = false;
     state.pendingFiles = [];
     state.uploadName = '';
@@ -911,6 +896,7 @@
     state.selectMode = false;
     state.selectedIds = {};
     state.drawingType = '';
+    _resolveProjectId();
 
     try { _paint(); } catch(e) {
       container.innerHTML = '<div class="pm-empty"><strong>Error</strong><p>' + e.message + '</p></div>';
@@ -1189,18 +1175,17 @@
       });
     });
 
-    // Lazy-load image thumbnails (use server-generated thumbs for speed)
+    // Lazy-load image thumbnails
     var thumbs = document.querySelectorAll('.dr-thumb[data-thumb-id]');
     thumbs.forEach(function (thumb) {
       var fileId = thumb.getAttribute('data-thumb-id');
       if (fileId) {
-        _loadDrawingThumb(fileId).then(function (thumbUrl) {
-          if (thumbUrl) {
+        _loadDrawingForViewer(state.projectId, fileId).then(function (viewData) {
+          if (viewData && viewData.content) {
             var img = document.createElement('img');
-            img.src = thumbUrl;
-            img.alt = '';
+            img.src = viewData.content;
+            img.alt = viewData.meta.name;
             img.className = 'dr-thumb-img';
-            img.loading = 'lazy';
             thumb.innerHTML = '';
             thumb.appendChild(img);
           }
@@ -1235,23 +1220,6 @@
     }).catch(function () {
       // Fallback: IndexedDB
       return _loadFromIndexedDB(projectId, drawingId);
-    });
-  }
-
-  /**
-   * Load a thumbnail URL for an image drawing. Uses server ?thumb=1 when available.
-   */
-  function _loadDrawingThumb(drawingId) {
-    var token = localStorage.getItem('align-token') || '';
-    return fetch('/api/files/' + encodeURIComponent(drawingId) + '?thumb=1', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    }).then(function (r) {
-      if (!r.ok) throw new Error('Thumb not available');
-      return r.blob();
-    }).then(function (blob) {
-      return URL.createObjectURL(blob);
-    }).catch(function () {
-      return null;
     });
   }
 
@@ -1331,22 +1299,22 @@
 
     var h = [];
 
-    // ── Full-screen overlay (no top bar — floating controls only) ──
+    // ── Full-screen overlay ──
     h.push('<div class="dr-mv-overlay" id="dr-mv-overlay">');
 
-    // ── Floating back button (top-left) ──
-    h.push('<button class="dr-mv-float-btn dr-mv-back-float" id="dr-mv-back" title="Back">←</button>');
+    // ── Top bar ──
+    h.push('<div class="dr-mv-topbar">');
+    h.push('<button class="pm-btn small dr-mv-back-btn" id="dr-mv-back">← Back to Drawings</button>');
+    h.push('<h3 class="dr-mv-title">' + esc(file.meta.name) + '</h3>');
+    h.push('<span class="dr-mv-meta">' + fmtSize(file.meta.size) + ' · ' + fmtDate(file.meta.updatedAt) + '</span>');
+    if (isImage) {
+      h.push('<button class="dr-mv-markup-toggle" id="dr-mv-markup-toggle">✏️ Markup Drawing</button>');
+    }
+    h.push('<button class="dr-mv-tool-btn" id="dr-mv-toggle" title="Toggle markups on/off">👁️ Markups</button>');
+    h.push('</div>');
 
-    // ── Floating placement mode toggle (top-left, below back) ──
-    h.push('<button class="dr-mv-float-btn dr-mv-placement-toggle" id="dr-mv-placement-toggle" title="Add Pin">📍</button>');
-
-    // ── Floating tools button (bottom-right) ──
-    // DISABLED: Markup tools deferred to Phase B
-    // h.push('<button class="dr-mv-float-btn dr-mv-tools-float" id="dr-mv-tools-toggle" title="Tools">⚒</button>');
-
-    // ── Toolbar (slides up from bottom when toggled) ──
-    // DISABLED: Markup tools deferred to Phase B
-    // h.push(_mvToolbarHtml());
+    // ── Toolbar (hidden by default; slides in when "Markup Drawing" clicked) ──
+    h.push(_mvToolbarHtml());
 
     if (isImage) {
       h.push('<div class="dr-mv-viewport" id="dr-mv-viewport">');
@@ -1379,13 +1347,6 @@
     var div = document.createElement('div');
     div.id = 'dr-mv-overlay-host';
     div.innerHTML = h.join('');
-    // Apply fixed positioning to container (NOT body)  to avoid FileReader issues
-    div.style.position = 'fixed';
-    div.style.inset = '0';
-    div.style.zIndex = '9000';
-    // Allow custom touch handlers for pan/zoom
-    div.style.touchAction = 'manipulation';
-    div.style.overscrollBehavior = 'none';
     document.body.appendChild(div);
 
     // Scroll lock — prevent background page from scrolling.
@@ -1398,10 +1359,13 @@
       touchAction: document.body.style.touchAction,
       overscrollBehavior: document.body.style.overscrollBehavior
     };
+    var hadSectionOpen = document.body.classList.contains('section-open');
+    var sectionScrollY = hadSectionOpen ? _readSectionScrollY() : 0;
+
     document.body.style.overflow = 'hidden';
-    // CRITICAL: Do NOT use position:fixed on body — breaks FileReader.readAsDataURL() on iOS
-    // Instead, position:fixed is applied to the overlay container below
-    // Position is managed on #dr-mv-overlay-host (see below)
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.top = '0px';
     // IMPORTANT: Do NOT remove section-open class.  The home page is hidden
     // via inline display:none (set by _openSection in script.js), which
     // survives any class changes.  Removing section-open would strip the
@@ -1422,9 +1386,7 @@
       return 0;
     }
 
-    // Save section state for restore on close
-    var hadSectionOpen = document.body.classList.contains('section-open');
-    var sectionScrollY = hadSectionOpen ? _readSectionScrollY() : 0;
+    // Hide any open section modal so the background is clean
     var sectionModal = document.getElementById('section-modal');
     var sectionModalWasOpen = sectionModal && !sectionModal.classList.contains('hidden');
     if (sectionModalWasOpen) {
@@ -1441,30 +1403,6 @@
       }
       _paint();
     });
-
-    // Placement mode toggle button
-    var placementBtn = document.getElementById('dr-mv-placement-toggle');
-    var placementMode = false;
-    if (placementBtn) {
-      placementBtn.addEventListener('click', function () {
-        placementMode = !placementMode;
-        placementBtn.classList.toggle('active', placementMode);
-        
-        // Change cursor when in placement mode
-        var viewport = document.getElementById('dr-mv-viewport');
-        if (viewport) {
-          viewport.style.cursor = placementMode ? 'crosshair' : 'auto';
-        }
-        
-        console.log('[AlignDrawings] Placement mode:', placementMode);
-      });
-    }
-
-    // Canvas click handler for pin placement
-    if (isPdf && placementBtn) {
-      // We'll hook this up in _mvRenderPdf after canvas is ready
-      window._mvPlacementMode = { enabled: false, mode: placementMode };
-    }
 
     // Escape key closes
     var escHandler = function (e) {
@@ -1748,8 +1686,6 @@
               _mvSyncCanvas();
               // Pre-render adjacent pages for instant page turning
               _mvPreRenderAdjacent();
-              // Phase 3: Initialize pin overlay for this drawing
-              _mvInitPinOverlay();
             });
           });
         });
@@ -1782,8 +1718,6 @@
         requestAnimationFrame(function () {
           _mvFitToViewport();
           _mvSyncCanvas();
-          // Phase 3: Initialize pin overlay for this drawing
-          _mvInitPinOverlay();
         });
       }
       if (img) {
@@ -1880,22 +1814,25 @@
       _mvFitToViewport();
     });
 
-    // ── Tools toggle button (floating top-right, shows/hides toolbar) ──
-    var toolsToggle = document.getElementById('dr-mv-tools-toggle');
-    if (toolsToggle) {
-      toolsToggle.addEventListener('click', function () {
+    // ── "Markup Drawing" toggle button (shows/hides toolbar with animation) ──
+    var markupToggle = document.getElementById('dr-mv-markup-toggle');
+    if (markupToggle) {
+      markupToggle.addEventListener('click', function () {
         _mv.markupMode = !_mv.markupMode;
         var toolbar = document.getElementById('dr-mv-toolbar');
         var canvas = document.getElementById('dr-mv-canvas');
         if (toolbar) {
           if (_mv.markupMode) {
             toolbar.classList.add('open');
-            toolsToggle.classList.add('active');
+            markupToggle.classList.add('active');
+            markupToggle.innerHTML = '✏️ Hide Tools';
             if (canvas) canvas.style.cursor = 'crosshair';
           } else {
             toolbar.classList.remove('open');
-            toolsToggle.classList.remove('active');
+            markupToggle.classList.remove('active');
+            markupToggle.innerHTML = '✏️ Markup Drawing';
             if (canvas) canvas.style.cursor = 'grab';
+            // Cancel any in-progress drawing
             _mv.drawing = false;
             _mv.currentStroke = null;
           }
@@ -2360,8 +2297,7 @@
       return;
     }
     if (e.touches.length === 1) {
-      // Single-finger touch: always enable panning
-      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0, altKey: true };
+      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0 };
       _mvMouseDown(fake);
       e.preventDefault();
     }
@@ -2422,10 +2358,8 @@
       _mv._twoFinger = false;
       _mv._pinching = false;
       _mv.panning = false;
-      // Re-render at final zoom, then apply transform
-      _mvRerenderPdf().then(function() {
-        _mvApplyTransform();
-      });
+      // Re-render at final zoom after pinch ends
+      _mvRerenderPdf();
       return;
     }
     _mvMouseUp({});
@@ -2548,16 +2482,15 @@
       var pdfCanvas = document.getElementById('dr-mv-image');
       if (!pdfCanvas) return;
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var renderScale = _mv._pdfBaseScale * _mv.zoom * dpr;
+      var logW = Math.round(_mv._pdfLogW * _mv.zoom);
+      var logH = Math.round(_mv._pdfLogH * _mv.zoom);
 
-      // Clamp to canvas limits FIRST, before calculating sizes
+      // Clamp to canvas limits
       var pageW = _mv._pdfLogW / _mv._pdfBaseScale;
       var pageH = _mv._pdfLogH / _mv._pdfBaseScale;
       var clampedScale = _clampRenderScale(_mv._pdfBaseScale * _mv.zoom, pageW, pageH, dpr);
       var renderScale = clampedScale * dpr;
-      
-      // CSS size matches the clamped scale
-      var logW = Math.round(pageW * clampedScale);
-      var logH = Math.round(pageH * clampedScale);
       var viewportW = Math.round(pageW * renderScale);
       var viewportH = Math.round(pageH * renderScale);
 
@@ -2598,8 +2531,8 @@
   /* ── Re-render PDF canvas at current zoom level (crisp at any zoom) ────── */
   function _mvRerenderPdf() {
     var pdfCanvas = document.getElementById('dr-mv-image');
-    if (!pdfCanvas || !_mv._pdfDoc) return Promise.resolve();
-    return _mvRenderPage(_mv._pdfPageNum);
+    if (!pdfCanvas || !_mv._pdfDoc) return;
+    _mvRenderPage(_mv._pdfPageNum);
   }
 
   /* ── Pre-render adjacent PDF pages for instant page turning ──────────── */
@@ -2788,14 +2721,21 @@
     if (annCanvas) annCanvas.width = 0;
 
     // Restore body state to what it was before the viewer opened.
-    // IMPORTANT: Position is managed on the overlay container, NOT body.
-    // We never modified body.position, so we never restore it.
+    // IMPORTANT: we never remove section-open (the home page is hidden via
+    // inline display:none on tileGrid+appHeader, not the CSS class), so
+    // we don't need to restore it — it was never touched.
     if (_mv && _mv._prevBody) {
       document.body.style.overflow = _mv._prevBody.overflow;
+      document.body.style.position = _mv._prevBody.position;
+      document.body.style.top = _mv._prevBody.top;
+      document.body.style.width = _mv._prevBody.width;
       document.body.style.touchAction = _mv._prevBody.touchAction || '';
       document.body.style.overscrollBehavior = _mv._prevBody.overscrollBehavior || '';
     } else {
       document.body.style.overflow = '';
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
       document.body.style.touchAction = '';
       document.body.style.overscrollBehavior = '';
     }
@@ -2867,7 +2807,6 @@
 
         for (var p = 0; p < pdfInfo.pages.length; p++) {
           var pg = pdfInfo.pages[p];
-          var hasName = pg.name && pg.name.trim().length > 0;
           h.push('<div class="dr-preview dr-preview-page">');
           h.push('<div class="dr-preview-thumb">');
           if (pg.thumbUrl) {
@@ -2878,12 +2817,7 @@
           }
           h.push('</div>');
           h.push('<div class="dr-preview-info">');
-          if (hasName) {
-            h.push('<strong>' + esc(pg.name) + '</strong>');
-          } else {
-            // Scanner couldn't find a name — let user type it
-            h.push('<input type="text" class="dr-page-name-input" id="dr-page-name-' + p + '" placeholder="Enter drawing name (e.g. G-004.00 — ADA NOTES)" value="">');
-          }
+          h.push('<strong>' + esc(pg.name) + '</strong>');
           h.push('<span>Page ' + pg.pageNum + ' of ' + pdfInfo.totalPages + '</span>');
           h.push('</div>');
           h.push('</div>');
@@ -3138,16 +3072,12 @@
       // PDF-split pages — each is a standalone PDF (from pdf-lib)
       for (var p = 0; p < state.pdfSplitInfo.pages.length; p++) {
         var pg = state.pdfSplitInfo.pages[p];
-        // Read user-edited name from input field if present
-        var nameInput = document.getElementById('dr-page-name-' + p);
-        var pageName = (nameInput ? nameInput.value.trim() : pg.name) || pg.name || ('Page ' + pg.pageNum);
         itemsToSave.push({
-          name: pageName + '.pdf',
+          name: pg.name + '.pdf',
           type: 'application/pdf',
           size: pg.dataUrl.length,
           dataUrl: pg.dataUrl,
-          pdfBytes: pg.pdfBytes || null,
-          customName: pageName + '.pdf'
+          customName: pg.name + '.pdf'
         });
       }
     } else {
@@ -3267,7 +3197,7 @@
     });  // close _getSelectedIds().then()
   }
 
-  /** Delete selected drawings. Calls server API for each, then cleans up local state. */
+  /** Delete selected drawings. Prompts confirmation first. */
   function _deleteSelectedDrawings(selectAll) {
     _getSelectedIds(selectAll).then(function (ids) {
     if (ids.length === 0) return;
@@ -3276,410 +3206,44 @@
     if (!confirm('Delete ' + label + '? This cannot be undone.')) return;
 
     var pid = state.projectId;
+    var index = _loadDrawingsIndex(pid);
 
-    // 1) Soft-delete each file on the server via centralized API
-    var serverDeletes = [];
+    // Remove from IndexedDB
+    var delPromises = [];
     for (var i = 0; i < ids.length; i++) {
-      (function (fileId) {
-        serverDeletes.push(
-          window.Api ? window.Api.del('/api/files/' + encodeURIComponent(fileId)) :
-          fetch('/api/files/' + encodeURIComponent(fileId), {
-            method: 'DELETE',
-            headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('align-token') || '') }
-          }).then(function (r) {
-            if (!r.ok) throw new Error('Server delete failed: ' + r.status);
-            return r.json();
-          })
-        );
-      })(ids[i]);
+      delPromises.push(_deleteDrawingBlob(pid, ids[i]));
     }
 
-    Promise.all(serverDeletes).then(function () {
-      // 2) Clean up local IndexedDB blobs
-      var delPromises = [];
-      for (var j = 0; j < ids.length; j++) {
-        delPromises.push(_deleteDrawingBlob(pid, ids[j]));
-      }
-      return Promise.all(delPromises);
-    }).then(function () {
-      // 3) Clean up local index
-      var index = _loadDrawingsIndex(pid);
+    Promise.all(delPromises).then(function () {
+      // Remove from index
+      var keep = [];
       var deletedSet = {};
       for (var d = 0; d < ids.length; d++) deletedSet[ids[d]] = true;
-      var keep = [];
-      for (var k = 0; k < index.length; k++) {
-        if (!deletedSet[index[k].id]) keep.push(index[k]);
+      for (var j = 0; j < index.length; j++) {
+        if (!deletedSet[index[j].id]) keep.push(index[j]);
       }
       _saveDrawingsIndex(pid, keep);
 
-      // 4) Clear selection and re-render
+      // Also remove from AlignFiles if present
+      var filesAPI = window.AlignFiles || null;
+      if (filesAPI) {
+        for (var k = 0; k < ids.length; k++) {
+          try { filesAPI.deleteFile(pid, ids[k]); } catch(e) { /* best effort */ }
+        }
+      }
+
+      // Clear selection and re-render
       state.selectMode = false;
       state.selectedIds = {};
       _paint();
     }).catch(function (err) {
-      state.uploadError = 'Delete failed: ' + (err.message || 'Unknown error');
-      _paint();
+      console.warn('[AlignDrawings] Delete failed:', err);
     });
     });  // close _getSelectedIds().then()
   }
 
   /* ── Public API ─────────────────────────────────────────────────────────── */
-  /* ── Phase 3: Pin Overlay Integration ──────────────────────────────────── */
-  
-  var _pinOverlay = null; // Global reference to current pin overlay
-  
-  /* ── Phase 4: Pin Creation Dialog ────────────────────────────────────────── */
-  
-  function _mvOpenPinCreationDialog(drawingId, sheet, normX, normY) {
-    // Validate input
-    if (!_mv || !_mv.projectId || !drawingId || sheet === undefined || normX === undefined || normY === undefined) {
-      console.error('[AlignDrawings] Invalid pin creation params', { drawingId, sheet, normX, normY });
-      return;
-    }
-    if (normX < 0 || normX > 1 || normY < 0 || normY > 1) {
-      console.error('[AlignDrawings] Coords out of range [0-1]', { normX, normY });
-      return;
-    }
-    
-    // Store coords in closure (not DOM)
-    var coords = { sheet: sheet, x: normX, y: normY };
-    var projectId = _mv.projectId;
-    
-    // Exit placement mode immediately
-    var placementBtn = document.getElementById('dr-mv-placement-toggle');
-    if (placementBtn && placementBtn.classList.contains('active')) {
-      placementBtn.classList.remove('active');
-    }
-    
-    // Build modal HTML
-    var overlayId = 'dr-pin-creation-' + Date.now();
-    var html = '<div class="dr-pin-creation-overlay" id="' + overlayId + '">';
-    html += '<div class="dr-pin-creation-modal">';
-    html += '<h3>Add Punchlist Item</h3>';
-    html += '<p>Select an apartment and enter a title</p>';
-    html += '<select id="dr-apt-select" class="pl-input" style="margin-bottom:12px;"><option value="">Loading apartments...</option></select>';
-    html += '<input type="text" id="dr-item-title" class="pl-input" placeholder="Item title" maxlength="200" style="margin-bottom:12px;">';
-    html += '<div id="dr-error-msg" style="color:var(--danger,#dc2626);font-size:0.9rem;margin-bottom:12px;display:none;"></div>';
-    html += '<div class="dr-pin-creation-buttons">';
-    html += '<button id="dr-cancel-btn" class="pm-btn" style="flex:1;">Cancel</button>';
-    html += '<button id="dr-create-btn" class="pm-btn primary" style="flex:1;" disabled>Create</button>';
-    html += '</div>';
-    html += '</div>';
-    html += '</div>';
-    
-    // Insert overlay into DOM
-    var container = document.createElement('div');
-    container.innerHTML = html;
-    document.body.appendChild(container.firstElementChild);
-    
-    var overlay = document.getElementById(overlayId);
-    var aptSelect = document.getElementById('dr-apt-select');
-    var titleInput = document.getElementById('dr-item-title');
-    var errorMsg = document.getElementById('dr-error-msg');
-    var createBtn = document.getElementById('dr-create-btn');
-    var cancelBtn = document.getElementById('dr-cancel-btn');
-    
-    // Helper: show error
-    function showError(msg) {
-      errorMsg.textContent = msg;
-      errorMsg.style.display = 'block';
-    }
-    
-    // Helper: clear error
-    function clearError() {
-      errorMsg.textContent = '';
-      errorMsg.style.display = 'none';
-    }
-    
-    // Helper: close dialog
-    function closeDialog() {
-      overlay.remove();
-    }
-    
-    // Fetch apartments
-    var fetchUrl = '/api/projects/' + encodeURIComponent(projectId) + '/apartments';
-    fetch(fetchUrl)
-      .then(function(r) { return r.json(); })
-      .then(function(apartments) {
-        if (!Array.isArray(apartments)) {
-          showError('Failed to load apartments');
-          aptSelect.disabled = true;
-          return;
-        }
-        
-        if (apartments.length === 0) {
-          showError('No apartments configured. Create one in Directory first.');
-          aptSelect.disabled = true;
-          createBtn.disabled = true;
-          return;
-        }
-        
-        // Populate apartment select
-        aptSelect.innerHTML = '<option value="">— Select Apartment —</option>';
-        apartments.forEach(function(apt) {
-          var opt = document.createElement('option');
-          opt.value = apt;
-          opt.textContent = apt;
-          aptSelect.appendChild(opt);
-        });
-        aptSelect.disabled = false;
-      })
-      .catch(function(err) {
-        showError('Error loading apartments: ' + (err.message || 'Network error'));
-        aptSelect.disabled = true;
-      });
-    
-    // Validate form on input
-    function validateForm() {
-      var hasTitle = titleInput.value.trim().length > 0;
-      var hasApt = aptSelect.value.length > 0;
-      createBtn.disabled = !(hasTitle && hasApt);
-    }
-    
-    titleInput.addEventListener('input', function() {
-      clearError();
-      validateForm();
-    });
-    
-    aptSelect.addEventListener('change', function() {
-      clearError();
-      validateForm();
-    });
-    
-    // Cancel button
-    cancelBtn.addEventListener('click', function() {
-      closeDialog();
-    });
-    
-    // Escape key
-    overlay.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') {
-        closeDialog();
-      }
-    });
-    
-    // Overlay click closes
-    overlay.addEventListener('click', function(e) {
-      if (e.target === overlay) {
-        closeDialog();
-      }
-    });
-    
-    // Create button
-    createBtn.addEventListener('click', function() {
-      clearError();
-      
-      var title = titleInput.value.trim();
-      var apartment = aptSelect.value;
-      
-      // Client validation
-      if (!title) {
-        showError('Title is required');
-        return;
-      }
-      if (!apartment) {
-        showError('Apartment is required');
-        return;
-      }
-      
-      // Disable button + show spinner
-      createBtn.disabled = true;
-      var originalText = createBtn.textContent;
-      createBtn.textContent = 'Creating...';
-      
-      // Step A: Create punchlist item
-      var itemData = {
-        data: {
-          apartment: apartment,
-          title: title,
-          description: '',
-          location: '',
-          priority: 'medium',
-          status: 'open'
-        }
-      };
-      
-      var createUrl = '/api/projects/' + encodeURIComponent(projectId) + '/punchlist';
-      fetch(createUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(itemData)
-      })
-        .then(function(r) {
-          if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Creation failed'); });
-          return r.json();
-        })
-        .then(function(result) {
-          if (!result.record || !result.record.id) {
-            throw new Error('Invalid response: no item ID');
-          }
-          
-          var itemId = result.record.id;
-          
-          // Step B: Save pin location
-          var pinData = {
-            sheet: coords.sheet,
-            x: coords.x,
-            y: coords.y,
-            projectId: projectId,
-            userId: window.currentUserId || 'system'
-          };
-          
-          var pinUrl = '/api/drawings/' + encodeURIComponent(drawingId) + '/punch-items/' + encodeURIComponent(itemId);
-          return fetch(pinUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(pinData)
-          })
-            .then(function(r) {
-              if (!r.ok) {
-                return r.json().then(function(e) { 
-                  var err = new Error(e.error || 'Pin placement failed');
-                  err.stepB = true;
-                  err.itemId = itemId;
-                  throw err;
-                });
-              }
-              return r.json();
-            })
-            .then(function(pinResult) {
-              // Success: reload pins
-              if (_pinOverlay && _pinOverlay.loadPins) {
-                _pinOverlay.loadPins(coords.sheet).then(function() {
-                  closeDialog();
-                  console.log('[AlignDrawings] Pin created: ' + itemId);
-                });
-              } else {
-                closeDialog();
-              }
-            });
-        })
-        .catch(function(err) {
-          createBtn.disabled = false;
-          createBtn.textContent = originalText;
-          
-          if (err.stepB) {
-            // Step B failed: item exists, retry pin placement
-            showError(err.message + '. Item created. Retry pin placement?');
-            createBtn.textContent = 'Retry Pin';
-            createBtn.disabled = false;
-            
-            // Store itemId for retry
-            createBtn._retryItemId = err.itemId;
-          } else {
-            // Step A failed: no item created
-            showError(err.message);
-          }
-        });
-    });
-    
-    // Trigger validation on open
-    validateForm();
-  }
-  
-  function _mvInitPinOverlay() {
-    // Don't load pins for markup mode — pins are read-only annotations
-    // Only init after viewer is fully set up
-    var canvas = document.getElementById('dr-mv-canvas');
-    if (!canvas || !_mv || !_mv.drawingId) return;
-    
-    // Init the pin overlay library
-    if (!window.PinOverlay) {
-      console.warn('[AlignDrawings] PinOverlay library not loaded');
-      return;
-    }
-    
-    // Set context variables for the API
-    window.currentProjectId = _mv.projectId;
-    window.currentUserId = 'system'; // TODO: get from auth
-    
-    // Initialize overlay
-    window.PinOverlay.init(canvas, _mv.drawingId);
-    _pinOverlay = window.PinOverlay;
-    
-    // Set initial sheet for PDF viewers
-    if (_mv.isPdf && _mv.currentPdfPage !== undefined) {
-      _pinOverlay.updateSheet(_mv.currentPdfPage);
-    } else {
-      _pinOverlay.updateSheet(0);
-    }
-    
-    // Listen for pin clicks → open punchlist item detail
-    var overlay = document.querySelector('.pin-overlay');
-    if (overlay) {
-      overlay.addEventListener('pinClicked', function(e) {
-        var itemId = e.detail.punchItemId;
-        var pin = e.detail.pin;
-        
-        // Open punchlist detail view using the global AlignPunchlist state machine
-        if (window.AlignPunchlist) {
-          // Fetch the punch item from the database
-          fetch('/api/punchlist/' + encodeURIComponent(itemId))
-            .then(r => r.json())
-            .then(item => {
-              if (item && !item.error) {
-                // Set punchlist state to detail view
-                window.AlignPunchlist.state.detailItem = item;
-                window.AlignPunchlist.state.viewMode = 'detail';
-                
-                // Scroll punchlist section into view
-                var punchSection = document.querySelector('[data-section="punchlist"]');
-                if (punchSection) {
-                  punchSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-                
-                // Repaint punchlist UI with detail view
-                if (window.AlignPunchlist.repaint) {
-                  window.AlignPunchlist.repaint();
-                }
-                
-                console.log('[AlignDrawings] Opened punchlist detail:', itemId);
-              } else {
-                console.warn('[AlignDrawings] Failed to load punch item:', itemId);
-              }
-            })
-            .catch(err => console.error('[AlignDrawings] Punch item fetch error:', err));
-        } else {
-          console.warn('[AlignDrawings] AlignPunchlist not available');
-        }
-      });
-    }
-    
-    // ── Canvas click handler for pin placement (Phase 3 Step 4) ──
-    var canvas = document.getElementById('dr-mv-canvas');
-    if (canvas && _pinOverlay) {
-      canvas.addEventListener('click', function(e) {
-        // Check if placement mode is enabled
-        var placementBtn = document.getElementById('dr-mv-placement-toggle');
-        if (!placementBtn || !placementBtn.classList.contains('active')) return;
-        
-        // Get click position relative to canvas
-        var rect = canvas.getBoundingClientRect();
-        var clickX = e.clientX - rect.left;
-        var clickY = e.clientY - rect.top;
-        
-        // Convert to normalized coordinates (0-1)
-        var normX = Math.max(0, Math.min(1, clickX / canvas.width));
-        var normY = Math.max(0, Math.min(1, clickY / canvas.height));
-        
-        console.log('[AlignDrawings] Placement click:', { clickX, clickY, normX, normY, canvasW: canvas.width, canvasH: canvas.height });
-        
-        // Open creation dialog with coords
-        var sheet = _mv.currentPdfPage !== undefined ? _mv.currentPdfPage : 0;
-        _mvOpenPinCreationDialog(_mv.drawingId, sheet, normX, normY);
-      });
-    }
-    
-    console.log('[AlignDrawings] Pin overlay initialized for drawing:', _mv.drawingId);
-  }
-  
-  function _mvUpdatePinSheet(sheetNumber) {
-    if (_pinOverlay) {
-      _pinOverlay.updateSheet(sheetNumber);
-    }
-  }
-
-  window.AlignDrawings = {
+  global.AlignDrawings = {
     render: render
   };
 

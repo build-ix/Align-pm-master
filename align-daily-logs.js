@@ -18,51 +18,13 @@
     return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
   }
 
-  var state = { container: null, projectId: null, selectedDate: null, currentLogData: null, editing: false };
+  var state = { container: null, projectId: null, selectedDate: null, currentLogData: null, dayRecords: [], editing: false };
 
   /* ── Helpers ──────────────────────────────────────────────────────── */
   function esc(s)  { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function today() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function uid()   { return 'dlog_'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
   function nowISO(){ return new Date().toISOString(); }
-
-  /* ── Draft persistence (survives refresh, cleared on explicit save) ── */
-  function _draftKey(pid, date) { return 'dlog_draft_' + pid + '_' + date; }
-
-  function _saveDraft(pid, date) {
-    var rows = document.querySelectorAll('#dlog-companies .dlog-company-row');
-    var companies = [];
-    rows.forEach(function(row) {
-      var nameEl = row.querySelector('.dlog-company-name');
-      var textEl = row.querySelector('.dlog-company-text');
-      var name = (nameEl && nameEl.style.display !== 'none') ? (nameEl.value || '') : (textEl ? textEl.textContent : '');
-      var count = parseInt((row.querySelector('.dlog-company-count') || {}).value, 10);
-      var desc = (row.querySelector('.dlog-company-desc') || {}).value || '';
-      name = name.trim();
-      if (name || !isNaN(count)) {
-        companies.push({ name: name, count: isNaN(count) ? 0 : count, description: desc.trim() });
-      }
-    });
-    var draft = {
-      companies: companies,
-      notes: (document.getElementById('dlog-notes') || {}).value || '',
-      visitors: (document.getElementById('dlog-visitors') || {}).value || '',
-      inspections: (document.getElementById('dlog-inspections') || {}).value || '',
-      delays: (document.getElementById('dlog-delays') || {}).value || ''
-    };
-    try { localStorage.setItem(_draftKey(pid, date), JSON.stringify(draft)); } catch(e) {}
-  }
-
-  function _loadDraft(pid, date) {
-    try {
-      var raw = localStorage.getItem(_draftKey(pid, date));
-      return raw ? JSON.parse(raw) : null;
-    } catch(e) { return null; }
-  }
-
-  function _clearDraft(pid, date) {
-    try { localStorage.removeItem(_draftKey(pid, date)); } catch(e) {}
-  }
   function _toTemp(c) {
     var raw = localStorage.getItem('align.settings.tempUnit');
     var u = (function() { try { return raw ? JSON.parse(raw) : 'F'; } catch(e) { return raw || 'F'; } })();
@@ -80,6 +42,12 @@
   function render(container) {
     if (!container) return;
     state.container = container;
+    state.projectId = null;
+    state.selectedDate = null;
+    state.currentLogData = null;
+    state.dayRecords = [];
+    state.editing = false;
+    WEATHER_GEN++;
     _resolveProjectId();
     if (!state.projectId) {
       container.innerHTML = '<div class="pm-empty"><strong>No active project</strong> Select a project first.</div>';
@@ -133,7 +101,7 @@
       fetch(_apiUrl(state.projectId), {
         method: 'POST',
         headers: _authHeaders(),
-        body: JSON.stringify({ data: rec })
+        body: JSON.stringify(rec)
       }).then(function(r) {
         done++;
         if (!r.ok) console.error('[DailyLog] Migration failed for ' + rec.id, r.status);
@@ -251,15 +219,6 @@
           _setField('dlog-delays', '');
           if (notesEl) notesEl.value = '';
           _renderAttachments([]);
-          // Restore unsaved draft for today
-          var draft = _loadDraft(pid, state.selectedDate);
-          if (draft) {
-            if (draft.companies && draft.companies.length) _renderCompanyRows(draft.companies);
-            if (draft.notes && notesEl) notesEl.value = draft.notes;
-            if (draft.visitors) _setField('dlog-visitors', draft.visitors);
-            if (draft.inspections) _setField('dlog-inspections', draft.inspections);
-            if (draft.delays) _setField('dlog-delays', draft.delays);
-          }
         }
       }
       _renderList(pid, state.selectedDate);
@@ -444,18 +403,6 @@
       }
     });
 
-    // Auto-save draft on any input change (debounced 800ms)
-    var _draftTimer = null;
-    var formArea = document.getElementById('dlog-form-always');
-    if (formArea) {
-      formArea.addEventListener('input', function() {
-        clearTimeout(_draftTimer);
-        _draftTimer = setTimeout(function() {
-          _saveDraft(state.projectId, state.selectedDate);
-        }, 800);
-      });
-    }
-
     document.getElementById('dlog-add-company').addEventListener('click', function(){
       var container = document.getElementById('dlog-companies');
       if (!container) return;
@@ -503,7 +450,6 @@
       if (result === null) return; // blocked by validation
       result.then(function(record) {
         if (!record) return; // fetch failed
-        _clearDraft(pid, state.selectedDate);
         var saveBtn = document.getElementById('dlog-save-btn');
         var savedMsg = document.getElementById('dlog-saved-msg');
         if (saveBtn) { saveBtn.textContent = 'Update Log'; saveBtn.classList.add('done'); }
@@ -1662,6 +1608,6 @@
   }
 
   /* ── Expose ────────────────────────────────────────────────────────── */
-  window.AlignDailyLogs = { render: render, CATEGORY: CATEGORY };
+  global.AlignDailyLogs = { render: render, CATEGORY: CATEGORY };
   if (window.TileRegistry) window.TileRegistry.register({ id: 'daily-logs', title: 'Daily Logs', icon: '📋', route: 'daily-logs', roles: ['user','admin'], order: 1 });
 })(window);

@@ -57,6 +57,9 @@
   function render(container) {
     if (!container) return;
     state.container = container;
+    state.projectId = null;
+    state.filter = 'all';
+    state.sectionFilter = 'all';
     state.viewMode = 'list';
     state.editingItem = null;
     _resolveProjectId();

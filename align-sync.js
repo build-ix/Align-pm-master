@@ -279,7 +279,7 @@
   }
 
   /* ── Public API ─────────────────────────────────────────────────────── */
-  window.AlignSync = {
+  global.AlignSync = {
     enqueue: enqueue,
     drain: drain,
     pending: pending,

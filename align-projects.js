@@ -65,6 +65,10 @@
   function render(container) {
     if (!container) return;
     uiState.container = container;
+    uiState.search = '';
+    uiState.showAddForm = false;
+    uiState.editingId = null;
+    uiState.confirmDeleteId = null;
     _paint();
   }
 

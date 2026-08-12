@@ -5,22 +5,18 @@
  * Network-only for API (data freshness)
  */
 
-var CACHE = 'align-v64';
+var CACHE = 'align-v52';
 
 // Install: pre-cache nothing — load on demand
 self.addEventListener('install', function () {
   self.skipWaiting();
 });
 
-// Activate: clean OLD caches only, keep current, claim clients
+// Activate: clean old caches, claim clients immediately
 self.addEventListener('activate', function (ev) {
   ev.waitUntil(
     caches.keys().then(function (keys) {
-      return Promise.all(
-        keys.map(function (k) {
-          if (k !== CACHE) return caches.delete(k);
-        })
-      );
+      return Promise.all(keys.map(function (k) { return caches.delete(k); }));
     }).then(function () {
       return self.clients.claim();
     })

@@ -153,8 +153,17 @@
   function render(container) {
     if (!container) return;
     st.container = container;
+    st.projectId = null;
+    st.filter = 'all';
+    st.searchQuery = '';
+    st.sortBy = 'priority';
     st.mode = 'list';
     st.editing = null;
+    st.records = [];
+    st.page = 1;
+    st.totalPages = 1;
+    st.total = 0;
+    st.counts = { all: 0, pending: 0, in_progress: 0, done: 0 };
     st._photoCache = {};
     _resolveProjectId();
     _fetchPage();
