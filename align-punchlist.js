@@ -170,16 +170,27 @@
   /* Dedicated list form: no priority, images, location, or trade controls. */
   function _listFormHtml() {
     var list = state.editingList || {};
-    return '<div class="pl-form-wrap pl-list-form" data-form="list-form"><div class="pl-form-header"><button class="pm-btn" id="pl-list-form-back">← Cancel</button><h3 class="pl-form-title">' + (list.id ? 'Edit List' : 'Create List') + '</h3><button class="pm-btn primary" id="pl-list-form-save">Save</button></div><div class="pl-form-section"><label class="pl-field-label">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" required></div><div class="pl-form-section"><label class="pl-field-label">Description</label><textarea class="pl-input" id="pl-list-description" rows="3">' + esc(list.description) + '</textarea></div><div class="pl-form-row pl-form-row-2"><div class="pl-form-field"><label class="pl-field-label">Apartment Label</label><input class="pl-input" id="pl-list-apartment-label" value="' + esc(list.apartment_label) + '" placeholder="e.g. Apt 3A"></div><div class="pl-form-field"><label class="pl-field-label">Scope</label><select class="pl-input" id="pl-list-scope"><option value="apartment"' + (list.scope_type !== 'project' ? ' selected' : '') + '>Apartment</option><option value="project"' + (list.scope_type === 'project' ? ' selected' : '') + '>Project</option></select></div></div><div class="pl-form-section"><label class="pl-field-label">Status</label><select class="pl-input" id="pl-list-status"><option value="open"' + (list.status !== 'archived' ? ' selected' : '') + '>Open</option><option value="archived"' + (list.status === 'archived' ? ' selected' : '') + '>Archived</option></select></div></div>';
+    var privacy = list.privacy === 'public' ? 'public' : 'private';
+    return '<div class="pl-form-wrap pl-list-form" data-form="list-form"><div class="pl-form-header"><button class="pm-btn" id="pl-list-form-back">← Cancel</button><h3 class="pl-form-title">' + (list.id ? 'Edit List' : 'Create List') + '</h3><button class="pm-btn primary" id="pl-list-form-save" type="button">Save</button></div><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div></div>';
   }
   function _bindListForm() {
     document.getElementById('pl-list-form-back').addEventListener('click', function () { state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); });
-    document.getElementById('pl-list-form-save').addEventListener('click', function () {
-      var name = document.getElementById('pl-list-name').value.trim(), scope = document.getElementById('pl-list-scope').value, label = document.getElementById('pl-list-apartment-label').value.trim();
-      if (!name || (scope === 'apartment' && !label)) { alert('Name is required; apartment scope requires an apartment label.'); return; }
-      var payload = {name:name, description:document.getElementById('pl-list-description').value.trim(), apartment_label:label, scope_type:scope, status:document.getElementById('pl-list-status').value};
+    var saveButton = document.getElementById('pl-list-form-save'), submitting = false;
+    saveButton.addEventListener('click', function () {
+      if (submitting) return;
+      var name = document.getElementById('pl-list-name').value.trim();
+      var privacyInput = document.querySelector('input[name="pl-list-privacy"]:checked');
+      var privacy = privacyInput ? privacyInput.value : '';
+      if (!name) { alert('Name is required.'); return; }
+      if (name.length > 120) { alert('Name must be 120 characters or fewer.'); return; }
+      if (privacy !== 'private' && privacy !== 'public') { alert('Privacy must be private or public.'); return; }
+      var payload = {name:name, privacy:privacy};
+      submitting = true;
+      saveButton.disabled = true;
+      saveButton.setAttribute('aria-disabled', 'true');
+      saveButton.setAttribute('aria-busy', 'true');
       var request = state.editingList.id ? api(projectPath('/' + encodeURIComponent(state.editingList.id)), {method:'PATCH', body:JSON.stringify(payload)}) : api(projectPath(), {method:'POST', body:JSON.stringify(payload)});
-      request.then(function (data) { state.activeList = data.list || state.activeList; state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); }).catch(notifyError);
+      request.then(function (data) { state.activeList = data.list || state.activeList; state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); }).catch(function (error) { submitting = false; saveButton.disabled = false; saveButton.removeAttribute('aria-disabled'); saveButton.removeAttribute('aria-busy'); notifyError(error); });
     });
   }
 

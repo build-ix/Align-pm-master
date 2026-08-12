@@ -1662,6 +1662,55 @@ html[data-theme="light"] #bottom-nav {
 .summary-critical { color: #C2410C; background: #FFEDD5; }
 .summary-closed { color: #15803D; background: #DCFCE7; }
 
+/* Punchlist list privacy controls */
+.pl-privacy-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.pl-privacy-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 14px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.pl-privacy-option:hover {
+  border-color: var(--brand);
+  background: var(--bg);
+}
+
+.pl-privacy-option input[type="radio"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--brand);
+  cursor: pointer;
+}
+
+.pl-privacy-option input[type="radio"]:checked + span {
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.pm-btn:disabled,
+.pm-btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 /* ─── Image Upload Section ──────────────────────────────────────────── */
 .pl-image-upload {
   display: flex;
