@@ -1568,3 +1568,24 @@ html[data-theme="light"] #bottom-nav {
 .assignee-chip button:hover {
   color: #ef4444;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Punchlist drawing pins (Phase 3)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.pin-overlay {
+  display: block !important;
+}
+
+.pin-group {
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pin-group:hover circle {
+  filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.6));
+}
+
+.pin-group:hover text {
+  font-size: 16px;
+  font-weight: 800;
+}
