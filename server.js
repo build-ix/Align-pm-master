@@ -1809,6 +1809,31 @@ const stmtListAssign     = _db.prepare(`
   ORDER BY pa.assigned_at
 `);
 
+// Phase 3: Punch item locations (drawing integration)
+const stmtInsertLocation = _db.prepare(`
+  INSERT INTO punch_item_locations (id, punch_item_id, drawing_id, project_id, sheet_number, x, y, created_at, created_by, updated_at, updated_by)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT (punch_item_id, drawing_id, sheet_number) DO UPDATE SET
+    x = excluded.x, y = excluded.y, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+`);
+const stmtGetLocation    = _db.prepare(`
+  SELECT id, punch_item_id, x, y, sheet_number, created_at, created_by
+  FROM punch_item_locations
+  WHERE punch_item_id = ? AND drawing_id = ? AND sheet_number = ?
+`);
+const stmtListLocationsByDrawing = _db.prepare(`
+  SELECT pil.id, pil.punch_item_id, pil.x, pil.y, pil.sheet_number, 
+         r.data, pil.created_at, pil.created_by
+  FROM punch_item_locations pil
+  JOIN records r ON r.id = pil.punch_item_id
+  WHERE pil.drawing_id = ? AND pil.sheet_number = ?
+  ORDER BY pil.created_at
+`);
+const stmtDeleteLocation = _db.prepare(`
+  DELETE FROM punch_item_locations 
+  WHERE punch_item_id = ? AND drawing_id = ? AND sheet_number = ?
+`);
+
 function queueAssignmentNotification(userId, punchItemId, assignedBy) {
   try {
     const user = stmtGetUser.get(userId);
@@ -1898,6 +1923,71 @@ app.get('/api/punchlist/:id/assignments', (req, res) => {
     return res.status(404).json({ error: 'Punch item not found' });
   }
   res.json(stmtListAssign.all(punchItemId));
+});
+
+// ── Phase 3: Drawing Integration ──
+
+// GET /api/drawings/:drawingId/punch-items?sheet=N
+// Returns all punch items pinned on a specific drawing sheet with normalized coords
+app.get('/api/drawings/:drawingId/punch-items', (req, res) => {
+  const drawingId = req.params.drawingId;
+  const sheet = parseInt(req.query.sheet, 10);
+  if (!drawingId || Number.isNaN(sheet)) {
+    return res.status(400).json({ error: 'drawing id and sheet number required' });
+  }
+  const items = stmtListLocationsByDrawing.all(drawingId, sheet);
+  res.json(items);
+});
+
+// POST /api/drawings/:drawingId/punch-items/:itemId
+// Pin a punch item on a drawing at normalized coordinates
+app.post('/api/drawings/:drawingId/punch-items/:itemId', (req, res) => {
+  const drawingId = req.params.drawingId;
+  const punchItemId = req.params.itemId;
+  const { sheet, x, y, projectId, userId } = req.body || {};
+  
+  if (!drawingId || !punchItemId || Number.isNaN(sheet) || x === undefined || y === undefined) {
+    return res.status(400).json({ error: 'drawingId, itemId, sheet, x, y required' });
+  }
+  if (x < 0 || x > 1 || y < 0 || y > 1) {
+    return res.status(400).json({ error: 'x and y must be 0-1 (normalized)' });
+  }
+  
+  // Validate punch item exists
+  if (!stmtGetRecord.get(punchItemId)) {
+    return res.status(404).json({ error: 'Punch item not found' });
+  }
+  
+  const locId = crypto.randomBytes(8).toString('hex');
+  const now = new Date().toISOString();
+  
+  try {
+    stmtInsertLocation.run(
+      locId, punchItemId, drawingId, projectId, sheet, x, y, 
+      now, userId || 'system', now, userId || 'system'
+    );
+    res.status(201).json({ id: locId, punchItemId, drawingId, sheet, x, y });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to pin item' });
+  }
+});
+
+// DELETE /api/drawings/:drawingId/punch-items/:itemId?sheet=N
+// Remove a punch item pin from a drawing
+app.delete('/api/drawings/:drawingId/punch-items/:itemId', (req, res) => {
+  const drawingId = req.params.drawingId;
+  const punchItemId = req.params.itemId;
+  const sheet = parseInt(req.query.sheet, 10);
+  
+  if (!drawingId || !punchItemId || Number.isNaN(sheet)) {
+    return res.status(400).json({ error: 'drawing id, item id, and sheet number required' });
+  }
+  
+  const info = stmtDeleteLocation.run(punchItemId, drawingId, sheet);
+  if (info.changes === 0) {
+    return res.status(404).json({ error: 'Pin not found' });
+  }
+  res.status(204).end();
 });
 
 // Catch-all: serve SPA
