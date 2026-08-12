@@ -2395,17 +2395,10 @@
       _mv._twoFinger = false;
       _mv._pinching = false;
       _mv.panning = false;
-      // Re-render at final zoom, but preserve pan/zoom state
-      // Save current pan/zoom before render
-      var savedPanX = _mv.panX;
-      var savedPanY = _mv.panY;
-      var savedZoom = _mv.zoom;
-      _mvRerenderPdf();
-      // Restore pan/zoom after render (in case it got reset)
-      _mv.panX = savedPanX;
-      _mv.panY = savedPanY;
-      _mv.zoom = savedZoom;
-      _mvApplyTransform();
+      // Re-render at final zoom, then apply transform
+      _mvRerenderPdf().then(function() {
+        _mvApplyTransform();
+      });
       return;
     }
     _mvMouseUp({});
@@ -2578,8 +2571,8 @@
   /* ── Re-render PDF canvas at current zoom level (crisp at any zoom) ────── */
   function _mvRerenderPdf() {
     var pdfCanvas = document.getElementById('dr-mv-image');
-    if (!pdfCanvas || !_mv._pdfDoc) return;
-    _mvRenderPage(_mv._pdfPageNum);
+    if (!pdfCanvas || !_mv._pdfDoc) return Promise.resolve();
+    return _mvRenderPage(_mv._pdfPageNum);
   }
 
   /* ── Pre-render adjacent PDF pages for instant page turning ──────────── */
