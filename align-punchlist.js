@@ -155,7 +155,16 @@
       if (!name || (scope === 'apartment' && !label)) { alert('Name is required; apartment scope requires an apartment label.'); return; }
       var payload = {name:name, description:document.getElementById('pl-list-description').value.trim(), apartment_label:label, scope_type:scope, status:document.getElementById('pl-list-status').value};
       var request = state.editingList.id ? api(projectPath('/' + encodeURIComponent(state.editingList.id)), {method:'PATCH', body:JSON.stringify(payload)}) : api(projectPath(), {method:'POST', body:JSON.stringify(payload)});
-      request.then(function (data) { state.activeList = data.list || state.activeList; state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); }).catch(notifyError);
+      request.then(function (data) { 
+        if (!data.list) { alert('Error: No list returned from server'); return; }
+        state.activeList = data.list; 
+        state.editingList = null; 
+        state.viewMode = 'list'; 
+        _loadListItems(); 
+      }).catch(function(err) { 
+        console.error('[PUNCHLIST] List save error:', err);
+        alert('Error saving list: ' + (err.message || 'Unknown error'));
+      });
     });
   }
 
