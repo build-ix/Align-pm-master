@@ -1650,10 +1650,25 @@ html[data-theme="light"] #bottom-nav {
 /* Punchlist apartment-list overview */
 .pl-wrap { padding: 16px; }
 .pl-apt-grid { grid-template-columns: 1fr 1fr; gap: 16px; }
-.pl-apt-tile { min-height: 140px; display: flex; flex-direction: column; justify-content: space-between; }
+.pl-apt-tile { 
+  min-height: 140px; 
+  display: flex; 
+  flex-direction: column; 
+  justify-content: space-between;
+  position: relative;
+}
 .pl-apt-name { font-size: 28px; font-weight: 700; }
 .pl-item-status { background: #EF4444; min-width: 40px; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: 700; }
-.pl-item-badge { color: #EF4444; font-size: 13px; font-weight: 600; }
+.pl-item-badge { 
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: #EF4444; 
+  font-size: 13px; 
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+}
 .summary-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px; }
 .summary-item { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 76px; padding: 12px 8px; border-radius: var(--radius-md); font-weight: 700; }
 .summary-count { font-size: 24px; line-height: 1.1; }
