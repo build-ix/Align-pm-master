@@ -83,7 +83,11 @@
       console.log('[PUNCHLIST] Lists loaded:', data);
       state.lists = data.lists || [];
       if (state.viewMode === 'lists') { state.container.innerHTML = _listsHtml(); _bindLists(); }
-    }).catch(notifyError);
+    }).catch(function(err) {
+      console.error('[PUNCHLIST] API Error:', err);
+      state.container.innerHTML = '<div class="pl-empty"><strong>Error loading lists</strong><p>' + (err.message || 'Unknown error') + '</p><button id="pl-retry">Retry</button></div>';
+      document.getElementById('pl-retry').addEventListener('click', _loadLists);
+    });
   }
 
   /* Lists are the first-level tiles. Apartment labels are metadata, never implicit grouping. */
