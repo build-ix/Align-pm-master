@@ -13,7 +13,7 @@
     editingList: null, editingItem: null,
     activeApt: null, detailItem: null,
     viewMode: 'lists', // lists | list-form | list | item-form | detail | profile-edit
-    items: []
+    items: [], allItems: [], listItems: {}
   };
 
   function esc(value) {
@@ -51,7 +51,7 @@
   function render(container) {
     state.container = container;
     state.viewMode = 'lists'; state.activeList = null; state.editingList = null; state.editingItem = null;
-    state.lists = []; state.items = []; state.detailItem = null; // Reset all data on re-render
+    state.lists = []; state.items = []; state.allItems = []; state.listItems = {}; state.detailItem = null; // Reset all data on re-render
     resolveProject();
     _paint();
   }
@@ -74,21 +74,43 @@
     state.container.innerHTML = '<div class="pl-empty">Loading punchlist lists…</div>';
     api(projectPath()).then(function (data) {
       state.lists = data.lists || [];
+      return Promise.all(state.lists.map(function (list) {
+        return api(projectPath('/' + encodeURIComponent(list.id) + '/items')).then(function (items) {
+          state.listItems[list.id] = items.items || [];
+        }).catch(function () { state.listItems[list.id] = []; });
+      }));
+    }).then(function () {
+      state.allItems = state.lists.reduce(function (items, list) {
+        return items.concat(state.listItems[list.id] || []);
+      }, []);
       if (state.viewMode === 'lists') { state.container.innerHTML = _listsHtml(); _bindLists(); }
     }).catch(notifyError);
   }
 
-  /* Lists are the first-level tiles. Apartment labels are metadata, never implicit grouping. */
+  function getOpenCount() {
+    return state.allItems.filter(function (item) { return item.status === 'open'; }).length;
+  }
+  function getCriticalCount() {
+    return state.allItems.filter(function (item) { return item.priority === 'critical'; }).length;
+  }
+  function getClosedCount() {
+    return state.allItems.filter(function (item) { return item.status === 'resolved' || item.status === 'verified'; }).length;
+  }
+
+  /* Lists are the first-level tiles. The apartment label is the only card content. */
   function _listsHtml() {
-    var h = ['<div class="pl-wrap"><div class="pl-titleblock"><h2>Punchlist Lists</h2><button class="pl-new-list-btn" id="pl-new-list">+ Create List</button></div>'];
+    var h = ['<div class="pl-wrap"><div class="summary-row">',
+      '<div class="summary-item summary-open"><span class="summary-count">' + getOpenCount() + '</span><span class="summary-label">Open</span></div>',
+      '<div class="summary-item summary-critical"><span class="summary-count">' + getCriticalCount() + '</span><span class="summary-label">Critical</span></div>',
+      '<div class="summary-item summary-closed"><span class="summary-count">' + getClosedCount() + '</span><span class="summary-label">Closed</span></div>',
+      '</div>'];
     if (!state.lists.length) h.push('<div class="pl-empty">No punchlist lists yet. Create a list to get started.</div>');
     h.push('<div class="pl-apt-grid pl-list-grid">');
     state.lists.forEach(function (list) {
       h.push('<div class="pl-apt-tile pl-list-tile" data-pl-list="' + esc(list.id) + '">');
-      h.push('<div class="pl-apt-name">' + esc(list.name) + '</div>');
-      if (list.apartment_label) h.push('<div class="pl-apt-info">Apartment: ' + esc(list.apartment_label) + '</div>');
-      h.push('<div class="pl-apt-info"><span>' + (list.item_count || 0) + ' item' + ((list.item_count || 0) === 1 ? '' : 's') + '</span><span class="pl-item-status" style="background:' + statusColor(list.status === 'archived' ? 'resolved' : list.status) + '">' + esc(list.status || 'open') + '</span></div>');
-      if (list.description) h.push('<div class="pl-item-meta">' + esc(list.description) + '</div>');
+      var items = state.listItems[list.id] || [], openCount = items.filter(function (item) { return item.status === 'open'; }).length;
+      h.push('<div class="pl-apt-name">' + esc(list.apartment_label || list.name) + '</div>');
+      h.push('<span class="pl-item-status" aria-label="' + openCount + ' open items">' + openCount + '</span>');
       h.push('</div>');
     });
     h.push('</div></div>');

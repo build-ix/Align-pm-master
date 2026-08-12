@@ -4,7 +4,7 @@
  */
 
 /* ── Wrapper ────────────────────────────────────────────────────────────── */
-.pl-wrap { padding: 0 8px; }
+.pl-wrap { padding: 16px; }
 
 /* ── Stats bar ──────────────────────────────────────────────────────────── */
 .pl-stats {
@@ -517,7 +517,7 @@ select.pl-input {
 .pl-apt-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: 16px;
   margin-top: 12px;
 }
 @media (max-width: 400px) {
@@ -527,7 +527,7 @@ select.pl-input {
 .pl-apt-tile {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-between;
   padding: 18px 14px;
   background: var(--card);
   border: 1px solid var(--line);
@@ -535,7 +535,7 @@ select.pl-input {
   cursor: pointer;
   transition: all 0.15s;
   touch-action: manipulation;
-  min-height: 88px;
+  min-height: 140px;
   position: relative;
   overflow: hidden;
 }
@@ -545,13 +545,52 @@ select.pl-input {
   box-shadow: 0 0 0 2px rgba(26,95,212,0.15);
 }
 .pl-apt-name {
-  font-size: 0.9rem;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 700;
   color: var(--ink);
   word-break: break-word;
   overflow-wrap: break-word;
   padding-right: 60px;
 }
+.pl-item-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-end;
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  background: #EF4444;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 76px;
+  padding: 12px 8px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+}
+.summary-count { font-size: 24px; line-height: 1.1; }
+.summary-label { margin-top: 4px; font-size: 13px; }
+.summary-open { color: #B91C1C; background: #FEE2E2; }
+.summary-critical { color: #C2410C; background: #FFEDD5; }
+.summary-closed { color: #15803D; background: #DCFCE7; }
+
 .pl-apt-info {
   display: flex;
   align-items: center;
@@ -914,4 +953,18 @@ select.pl-input {
     padding: 3px 6px;
     font-size: 0.65rem;
   }
+}
+
+/* Overview card badges must remain circular; item-row status stamps are separate. */
+.pl-list-tile .pl-item-status {
+  position: static;
+  display: inline-flex;
+  align-self: flex-end;
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  transform: none;
+  background: #EF4444;
+  border-radius: 50%;
 }
