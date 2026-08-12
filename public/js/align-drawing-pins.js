@@ -45,6 +45,52 @@
       this._syncOverlaySize();
       window.addEventListener('resize', () => this._syncOverlaySize());
 
+      // ── PHASE 3: DEBUG HANDLER — Coordinate round-trip validation ──────────
+      // Click anywhere on the canvas to log normalized coordinates
+      // This validates the inverse transform (screen pixels → normalized 0-1 coords)
+      var self = this;
+      this.canvas.addEventListener('click', function(e) {
+        var rect = self.canvas.getBoundingClientRect();
+        var screenX = e.clientX - rect.left;
+        var screenY = e.clientY - rect.top;
+        
+        // Convert screen pixels to normalized coords (0-1)
+        var normX = screenX / self.canvas.width;
+        var normY = screenY / self.canvas.height;
+        
+        // Round to 3 decimals for readability
+        normX = Math.round(normX * 1000) / 1000;
+        normY = Math.round(normY * 1000) / 1000;
+        
+        var msg = `[DEBUG] Clicked at screen (${Math.round(screenX)}, ${Math.round(screenY)}) = normalized (${normX}, ${normY})`;
+        console.log(msg);
+        
+        // Also show in UI as ghost text
+        var ghost = document.createElement('div');
+        ghost.style.position = 'fixed';
+        ghost.style.pointerEvents = 'none';
+        ghost.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
+        ghost.style.color = '#0f0';
+        ghost.style.fontFamily = 'monospace';
+        ghost.style.fontSize = '12px';
+        ghost.style.padding = '8px 12px';
+        ghost.style.borderRadius = '4px';
+        ghost.style.top = (e.clientY + 10) + 'px';
+        ghost.style.left = (e.clientX + 10) + 'px';
+        ghost.style.zIndex = '9999';
+        ghost.style.whiteSpace = 'nowrap';
+        ghost.textContent = `(${normX}, ${normY})`;
+        document.body.appendChild(ghost);
+        
+        // Fade out after 1.5 seconds
+        setTimeout(function() {
+          ghost.style.transition = 'opacity 0.5s ease-out';
+          ghost.style.opacity = '0';
+          setTimeout(function() { ghost.remove(); }, 500);
+        }, 1500);
+      });
+      // ────────────────────────────────────────────────────────────────────────
+
       // Fetch and render pins for initial sheet
       this.loadPins();
     },
