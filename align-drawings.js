@@ -3323,14 +3323,44 @@
       _pinOverlay.updateSheet(0);
     }
     
-    // Listen for pin clicks
+    // Listen for pin clicks → open punchlist item detail
     var overlay = document.querySelector('.pin-overlay');
     if (overlay) {
       overlay.addEventListener('pinClicked', function(e) {
         var itemId = e.detail.punchItemId;
         var pin = e.detail.pin;
-        // TODO: Open punch item detail drawer
-        console.log('[AlignDrawings] Pin clicked:', itemId, pin);
+        
+        // Open punchlist detail view using the global AlignPunchlist state machine
+        if (window.AlignPunchlist) {
+          // Fetch the punch item from the database
+          fetch('/api/punchlist/' + encodeURIComponent(itemId))
+            .then(r => r.json())
+            .then(item => {
+              if (item && !item.error) {
+                // Set punchlist state to detail view
+                window.AlignPunchlist.state.detailItem = item;
+                window.AlignPunchlist.state.viewMode = 'detail';
+                
+                // Scroll punchlist section into view
+                var punchSection = document.querySelector('[data-section="punchlist"]');
+                if (punchSection) {
+                  punchSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+                
+                // Repaint punchlist UI with detail view
+                if (window.AlignPunchlist.repaint) {
+                  window.AlignPunchlist.repaint();
+                }
+                
+                console.log('[AlignDrawings] Opened punchlist detail:', itemId);
+              } else {
+                console.warn('[AlignDrawings] Failed to load punch item:', itemId);
+              }
+            })
+            .catch(err => console.error('[AlignDrawings] Punch item fetch error:', err));
+        } else {
+          console.warn('[AlignDrawings] AlignPunchlist not available');
+        }
       });
     }
     
