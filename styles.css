@@ -1755,6 +1755,8 @@ html[data-theme="light"] #bottom-nav {
   grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: 12px;
   margin-top: 12px;
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .pl-image-thumb {

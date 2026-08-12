@@ -211,7 +211,7 @@
     document.getElementById('pl-item-form-back').addEventListener('click', function () { state.editingItem = null; state.viewMode = 'list'; _loadListItems(); });
     var input = document.getElementById('pl-file-input');
     document.getElementById('pl-upload-attachments').addEventListener('click', function () { input.click(); });
-    input.addEventListener('change', function () { Array.prototype.forEach.call(input.files || [], _addImage); });
+    input.addEventListener('change', function () { Array.prototype.forEach.call(input.files || [], _addImage); input.value = ''; });
     document.getElementById('pl-item-form-save').addEventListener('click', function () {
       var title = document.getElementById('pl-item-title').value.trim();
       if (!title) { alert('Title is required.'); return; }
