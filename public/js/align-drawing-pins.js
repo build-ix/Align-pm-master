@@ -18,6 +18,7 @@
     pins: [],
     overlay: null, // SVG container for pins
     viewTransform: { panX: 0, panY: 0, zoom: 1 },
+    selectedPinId: null, // Track which pin is selected
 
     /**
      * Init: Create overlay layer and fetch initial pins
@@ -204,9 +205,20 @@
     },
 
     /**
-     * Handle pin click — open punch item detail
+     * Handle pin click — open punch item detail + set selection state
      */
     _onPinClick: function(pin) {
+      // Clear previous selection
+      if (this.selectedPinId) {
+        const prevPin = document.querySelector(`[data-pin-id="${this.selectedPinId}"]`);
+        if (prevPin) prevPin.classList.remove('selected');
+      }
+      
+      // Set new selection
+      this.selectedPinId = pin.id;
+      const g = document.querySelector(`[data-pin-id="${pin.id}"]`);
+      if (g) g.classList.add('selected');
+      
       // Dispatch custom event so the caller can handle it
       const event = new CustomEvent('pinClicked', {
         detail: { pinId: pin.id, punchItemId: pin.punch_item_id, pin: pin },
@@ -216,6 +228,17 @@
       
       // Also log for now
       console.log('[PinOverlay] Clicked pin:', pin.punch_item_id);
+    },
+    
+    /**
+     * Clear selection (called when drawer closes)
+     */
+    clearSelection: function() {
+      if (this.selectedPinId) {
+        const pin = document.querySelector(`[data-pin-id="${this.selectedPinId}"]`);
+        if (pin) pin.classList.remove('selected');
+      }
+      this.selectedPinId = null;
     },
 
     /**
