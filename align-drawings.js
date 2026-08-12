@@ -3328,6 +3328,255 @@
   
   var _pinOverlay = null; // Global reference to current pin overlay
   
+  /* ── Phase 4: Pin Creation Dialog ────────────────────────────────────────── */
+  
+  function _mvOpenPinCreationDialog(drawingId, sheet, normX, normY) {
+    // Validate input
+    if (!_mv || !_mv.projectId || !drawingId || sheet === undefined || normX === undefined || normY === undefined) {
+      console.error('[AlignDrawings] Invalid pin creation params', { drawingId, sheet, normX, normY });
+      return;
+    }
+    if (normX < 0 || normX > 1 || normY < 0 || normY > 1) {
+      console.error('[AlignDrawings] Coords out of range [0-1]', { normX, normY });
+      return;
+    }
+    
+    // Store coords in closure (not DOM)
+    var coords = { sheet: sheet, x: normX, y: normY };
+    var projectId = _mv.projectId;
+    
+    // Exit placement mode immediately
+    var placementBtn = document.getElementById('dr-mv-placement-toggle');
+    if (placementBtn && placementBtn.classList.contains('active')) {
+      placementBtn.classList.remove('active');
+    }
+    
+    // Build modal HTML
+    var overlayId = 'dr-pin-creation-' + Date.now();
+    var html = '<div class="dr-pin-creation-overlay" id="' + overlayId + '">';
+    html += '<div class="dr-pin-creation-modal">';
+    html += '<h3>Add Punchlist Item</h3>';
+    html += '<p>Select an apartment and enter a title</p>';
+    html += '<select id="dr-apt-select" class="pl-input" style="margin-bottom:12px;"><option value="">Loading apartments...</option></select>';
+    html += '<input type="text" id="dr-item-title" class="pl-input" placeholder="Item title" maxlength="200" style="margin-bottom:12px;">';
+    html += '<div id="dr-error-msg" style="color:var(--danger,#dc2626);font-size:0.9rem;margin-bottom:12px;display:none;"></div>';
+    html += '<div class="dr-pin-creation-buttons">';
+    html += '<button id="dr-cancel-btn" class="pm-btn" style="flex:1;">Cancel</button>';
+    html += '<button id="dr-create-btn" class="pm-btn primary" style="flex:1;" disabled>Create</button>';
+    html += '</div>';
+    html += '</div>';
+    html += '</div>';
+    
+    // Insert overlay into DOM
+    var container = document.createElement('div');
+    container.innerHTML = html;
+    document.body.appendChild(container.firstElementChild);
+    
+    var overlay = document.getElementById(overlayId);
+    var aptSelect = document.getElementById('dr-apt-select');
+    var titleInput = document.getElementById('dr-item-title');
+    var errorMsg = document.getElementById('dr-error-msg');
+    var createBtn = document.getElementById('dr-create-btn');
+    var cancelBtn = document.getElementById('dr-cancel-btn');
+    
+    // Helper: show error
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    }
+    
+    // Helper: clear error
+    function clearError() {
+      errorMsg.textContent = '';
+      errorMsg.style.display = 'none';
+    }
+    
+    // Helper: close dialog
+    function closeDialog() {
+      overlay.remove();
+    }
+    
+    // Fetch apartments
+    var fetchUrl = '/api/projects/' + encodeURIComponent(projectId) + '/apartments';
+    fetch(fetchUrl)
+      .then(function(r) { return r.json(); })
+      .then(function(apartments) {
+        if (!Array.isArray(apartments)) {
+          showError('Failed to load apartments');
+          aptSelect.disabled = true;
+          return;
+        }
+        
+        if (apartments.length === 0) {
+          showError('No apartments configured. Create one in Directory first.');
+          aptSelect.disabled = true;
+          createBtn.disabled = true;
+          return;
+        }
+        
+        // Populate apartment select
+        aptSelect.innerHTML = '<option value="">— Select Apartment —</option>';
+        apartments.forEach(function(apt) {
+          var opt = document.createElement('option');
+          opt.value = apt;
+          opt.textContent = apt;
+          aptSelect.appendChild(opt);
+        });
+        aptSelect.disabled = false;
+      })
+      .catch(function(err) {
+        showError('Error loading apartments: ' + (err.message || 'Network error'));
+        aptSelect.disabled = true;
+      });
+    
+    // Validate form on input
+    function validateForm() {
+      var hasTitle = titleInput.value.trim().length > 0;
+      var hasApt = aptSelect.value.length > 0;
+      createBtn.disabled = !(hasTitle && hasApt);
+    }
+    
+    titleInput.addEventListener('input', function() {
+      clearError();
+      validateForm();
+    });
+    
+    aptSelect.addEventListener('change', function() {
+      clearError();
+      validateForm();
+    });
+    
+    // Cancel button
+    cancelBtn.addEventListener('click', function() {
+      closeDialog();
+    });
+    
+    // Escape key
+    overlay.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        closeDialog();
+      }
+    });
+    
+    // Overlay click closes
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) {
+        closeDialog();
+      }
+    });
+    
+    // Create button
+    createBtn.addEventListener('click', function() {
+      clearError();
+      
+      var title = titleInput.value.trim();
+      var apartment = aptSelect.value;
+      
+      // Client validation
+      if (!title) {
+        showError('Title is required');
+        return;
+      }
+      if (!apartment) {
+        showError('Apartment is required');
+        return;
+      }
+      
+      // Disable button + show spinner
+      createBtn.disabled = true;
+      var originalText = createBtn.textContent;
+      createBtn.textContent = 'Creating...';
+      
+      // Step A: Create punchlist item
+      var itemData = {
+        data: JSON.stringify({
+          apartment: apartment,
+          title: title,
+          description: '',
+          location: '',
+          priority: 'medium',
+          status: 'open'
+        })
+      };
+      
+      var createUrl = '/api/projects/' + encodeURIComponent(projectId) + '/punchlist';
+      fetch(createUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(itemData)
+      })
+        .then(function(r) {
+          if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Creation failed'); });
+          return r.json();
+        })
+        .then(function(result) {
+          if (!result.record || !result.record.id) {
+            throw new Error('Invalid response: no item ID');
+          }
+          
+          var itemId = result.record.id;
+          
+          // Step B: Save pin location
+          var pinData = {
+            sheet: coords.sheet,
+            x: coords.x,
+            y: coords.y,
+            projectId: projectId,
+            userId: window.currentUserId || 'system'
+          };
+          
+          var pinUrl = '/api/drawings/' + encodeURIComponent(drawingId) + '/punch-items/' + encodeURIComponent(itemId);
+          return fetch(pinUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(pinData)
+          })
+            .then(function(r) {
+              if (!r.ok) {
+                return r.json().then(function(e) { 
+                  var err = new Error(e.error || 'Pin placement failed');
+                  err.stepB = true;
+                  err.itemId = itemId;
+                  throw err;
+                });
+              }
+              return r.json();
+            })
+            .then(function(pinResult) {
+              // Success: reload pins
+              if (_pinOverlay && _pinOverlay.loadPins) {
+                _pinOverlay.loadPins(coords.sheet).then(function() {
+                  closeDialog();
+                  console.log('[AlignDrawings] Pin created: ' + itemId);
+                });
+              } else {
+                closeDialog();
+              }
+            });
+        })
+        .catch(function(err) {
+          createBtn.disabled = false;
+          createBtn.textContent = originalText;
+          
+          if (err.stepB) {
+            // Step B failed: item exists, retry pin placement
+            showError(err.message + '. Item created. Retry pin placement?');
+            createBtn.textContent = 'Retry Pin';
+            createBtn.disabled = false;
+            
+            // Store itemId for retry
+            createBtn._retryItemId = err.itemId;
+          } else {
+            // Step A failed: no item created
+            showError(err.message);
+          }
+        });
+    });
+    
+    // Trigger validation on open
+    validateForm();
+  }
+  
   function _mvInitPinOverlay() {
     // Don't load pins for markup mode — pins are read-only annotations
     // Only init after viewer is fully set up
@@ -3415,8 +3664,9 @@
         
         console.log('[AlignDrawings] Placement click:', { clickX, clickY, normX, normY, canvasW: canvas.width, canvasH: canvas.height });
         
-        // TODO: Open a dialog to create a new punchlist item at this location
-        // For now, just log the coordinates
+        // Open creation dialog with coords
+        var sheet = _mv.currentPdfPage !== undefined ? _mv.currentPdfPage : 0;
+        _mvOpenPinCreationDialog(_mv.drawingId, sheet, normX, normY);
       });
     }
     
