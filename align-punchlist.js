@@ -55,6 +55,7 @@
   function render(container) {
     state.container = container;
     state.viewMode = 'lists'; state.activeList = null; state.editingList = null; state.editingItem = null;
+    state.lists = []; state.items = []; state.detailItem = null; // Reset all data on re-render
     resolveProject();
     _paint();
   }
@@ -70,6 +71,7 @@
     if (state.viewMode === 'item-form') { state.container.innerHTML = _itemFormHtml(); _bindItemForm(); return; }
     if (state.viewMode === 'detail' && state.detailItem) { state.container.innerHTML = _detailHtml(state.detailItem); _bindDetail(); return; }
     if (state.viewMode === 'list' && state.activeList) { state.container.innerHTML = _listHtml(); _bindList(); return; }
+    if (state.viewMode === 'lists' && state.lists.length > 0) { state.container.innerHTML = _listsHtml(); _bindLists(); return; }
     _loadLists();
   }
 
