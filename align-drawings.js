@@ -169,7 +169,15 @@
     // 1) Fetch from server (source of truth)
     var token = localStorage.getItem('align-token') || '';
     console.log('[DRAWINGS] Fetching from /api/projects/' + state.projectId + '/files');
-    return fetch('/api/projects/' + encodeURIComponent(state.projectId) + '/files', {
+    
+    // Create a timeout promise
+    var timeoutPromise = new Promise(function(_, reject) {
+      setTimeout(function() {
+        reject(new Error('API call timed out after 10 seconds'));
+      }, 10000);
+    });
+    
+    var fetchPromise = fetch('/api/projects/' + encodeURIComponent(state.projectId) + '/files', {
       headers: { 'Authorization': 'Bearer ' + token }
     }).then(function (r) {
       console.log('[DRAWINGS] Server response:', r.status, r.ok);
@@ -178,20 +186,24 @@
     }).then(function (data) {
       console.log('[DRAWINGS] Got data:', data);
       var files = (data.files || []).filter(function (f) { return f.type === 'file' && f.trashed === 0; });
-      // Mirror to localStorage cache for fast re-render
       var index = files.map(function (f) {
         return { id: f.id, name: f.original_name, mimeType: f.mime_type, size: f.size_bytes, createdAt: f.created_at, updatedAt: f.created_at };
       });
       if (index.length > 0) _saveDrawingsIndex(state.projectId, index);
       return index;
-    }).catch(function (err) {
-      console.error('[DRAWINGS] API error:', err.message, '— falling back to cache');
-      // Show error on page so user can see it
+    });
+    
+    // Race between fetch and timeout
+    return Promise.race([fetchPromise, timeoutPromise]).catch(function (err) {
+      console.error('[DRAWINGS] API error:', err.message);
       var cached = _loadDrawingsIndex(state.projectId);
       if (!cached || cached.length === 0) {
-        // If no cache either, show the actual error
         if (state.container) {
-          state.container.innerHTML = '<div class="dr-empty"><strong>Error loading drawings</strong><p>API Error: ' + (err.message || 'Unknown error') + '</p><p style="font-size:12px;color:#999;">Check network or try refreshing.</p></div>';
+          state.container.innerHTML = '<div class="dr-empty"><strong>Error loading drawings</strong><p>' + (err.message || 'Unknown error') + '</p><p style="font-size:12px;color:#999;"><button id="dr-retry-btn" style="padding:8px 12px;background:#666;color:#fff;border:none;cursor:pointer;">Retry</button></p></div>';
+          document.getElementById('dr-retry-btn').addEventListener('click', function() {
+            state.container.innerHTML = '<div class="dr-empty">Loading drawings…</div>';
+            _paint();
+          });
         }
         return [];
       }
