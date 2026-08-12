@@ -1033,3 +1033,60 @@
   box-shadow: 0 0 8px rgba(26,95,212,0.4);
 }
 .dr-anno-tool svg { width: 20px; height: 20px; }
+
+/* ── Phase 4: Pin Creation Dialog ──────────────────────────────────────── */
+.dr-pin-creation-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.dr-pin-creation-modal {
+  background: var(--card, #fff);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 380px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  color: var(--ink, #1b1f24);
+}
+
+.dr-pin-creation-modal h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 8px 0;
+  color: var(--ink, #1b1f24);
+}
+
+.dr-pin-creation-modal p {
+  font-size: 0.9rem;
+  color: var(--muted, #6b7480);
+  margin: 0 0 16px 0;
+}
+
+.dr-pin-creation-modal select,
+.dr-pin-creation-modal input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line, #e2e6ea);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: var(--bg, #fff);
+  color: var(--ink, #1b1f24);
+  box-sizing: border-box;
+  margin-bottom: 12px;
+}
+
+.dr-pin-creation-modal input:last-of-type {
+  margin-bottom: 0;
+}
+
+.dr-pin-creation-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
