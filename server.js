@@ -1428,6 +1428,204 @@ app.delete('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requi
 });
 
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// PUNCHLIST ITEMS (nested under lists) — Two-Step Creation
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+
+// GET /api/projects/:pid/punchlist-lists/:listId/items
+app.get('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  
+  // Verify list exists
+  var list = dbGet('SELECT id FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  if (!list) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  
+  var items = dbAll(`
+    SELECT id, data FROM records
+    WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?
+    ORDER BY json_extract(data, '$.createdAt') DESC
+  `, pid, listId);
+  
+  res.json({ items: items.map(function(r) { return r.data ? JSON.parse(r.data) : null; }).filter(Boolean) || [] });
+});
+
+// POST /api/projects/:pid/punchlist-lists/:listId/items
+app.post('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  var body = req.body || {};
+  
+  // Verify list exists
+  var list = dbGet('SELECT id FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  if (!list) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  
+  // Reject list-only fields
+  if (body.hasOwnProperty('name') || body.hasOwnProperty('description') === body.description) {
+    return res.status(400).json({ error: 'Cannot create item with list fields' });
+  }
+  
+  // Extract item fields
+  var title = (body.title || '').trim();
+  var description = (body.description || '').trim();
+  var location = (body.location || '').trim();
+  var priority = (body.priority || 'medium').trim();
+  var trade = (body.trade || '').trim();
+  var status = (body.status || 'open').trim();
+  var images = Array.isArray(body.images) ? body.images : [];
+  var assignedCompanyId = body.assignedCompanyId || null;
+  var assignedTo = Array.isArray(body.assignedTo) ? body.assignedTo : [];
+  
+  // Validate priority and status
+  if (!['low', 'medium', 'high', 'critical'].includes(priority)) {
+    return res.status(400).json({ error: 'priority must be low/medium/high/critical' });
+  }
+  if (!['open', 'in_progress', 'resolved', 'verified'].includes(status)) {
+    return res.status(400).json({ error: 'status must be open/in_progress/resolved/verified' });
+  }
+  
+  var itemId = 'pl_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  var now = new Date().toISOString();
+  var createdBy = (req.user && req.user.id) ? req.user.id : 'unknown';
+  
+  var itemData = {
+    id: itemId,
+    listId: listId,
+    title: title,
+    description: description,
+    location: location,
+    priority: priority,
+    trade: trade,
+    status: status,
+    images: images,
+    assignedCompanyId: assignedCompanyId,
+    assignedTo: assignedTo,
+    createdBy: createdBy,
+    createdAt: now,
+    updatedAt: now,
+    activity: []
+  };
+  
+  try {
+    dbRun(`
+      INSERT INTO records (id, project_id, category, data, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `, itemId, pid, 'punchlist', JSON.stringify(itemData), now, now);
+    
+    res.status(201).json({ item: itemData });
+  } catch (err) {
+    console.error('[PUNCHLIST] Create item error:', err.message);
+    res.status(500).json({ error: 'Failed to create item' });
+  }
+});
+
+// GET /api/projects/:pid/punchlist-lists/:listId/items/:itemId
+app.get('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  var itemId = req.params.itemId;
+  
+  var record = dbGet('SELECT data FROM records WHERE id = ? AND project_id = ? AND category = ?', itemId, pid, 'punchlist');
+  if (!record) {
+    return res.status(404).json({ error: 'Item not found' });
+  }
+  
+  try {
+    var item = JSON.parse(record.data);
+    if (item.listId !== listId) {
+      return res.status(404).json({ error: 'Item does not belong to this list' });
+    }
+    res.json({ item: item });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to parse item data' });
+  }
+});
+
+// PATCH /api/projects/:pid/punchlist-lists/:listId/items/:itemId
+app.patch('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  var itemId = req.params.itemId;
+  var body = req.body || {};
+  
+  var record = dbGet('SELECT data FROM records WHERE id = ? AND project_id = ? AND category = ?', itemId, pid, 'punchlist');
+  if (!record) {
+    return res.status(404).json({ error: 'Item not found' });
+  }
+  
+  try {
+    var item = JSON.parse(record.data);
+    if (item.listId !== listId) {
+      return res.status(404).json({ error: 'Item does not belong to this list' });
+    }
+    
+    // Prevent changing listId
+    if (body.hasOwnProperty('listId') && body.listId !== listId) {
+      return res.status(400).json({ error: 'Cannot change item parent list' });
+    }
+    
+    // Update allowed fields
+    if (body.hasOwnProperty('title')) item.title = (body.title || '').trim();
+    if (body.hasOwnProperty('description')) item.description = (body.description || '').trim();
+    if (body.hasOwnProperty('location')) item.location = (body.location || '').trim();
+    if (body.hasOwnProperty('priority')) {
+      if (!['low', 'medium', 'high', 'critical'].includes(body.priority)) {
+        return res.status(400).json({ error: 'Invalid priority' });
+      }
+      item.priority = body.priority;
+    }
+    if (body.hasOwnProperty('trade')) item.trade = (body.trade || '').trim();
+    if (body.hasOwnProperty('status')) {
+      if (!['open', 'in_progress', 'resolved', 'verified'].includes(body.status)) {
+        return res.status(400).json({ error: 'Invalid status' });
+      }
+      item.status = body.status;
+    }
+    if (body.hasOwnProperty('images')) item.images = Array.isArray(body.images) ? body.images : [];
+    if (body.hasOwnProperty('assignedCompanyId')) item.assignedCompanyId = body.assignedCompanyId || null;
+    if (body.hasOwnProperty('assignedTo')) item.assignedTo = Array.isArray(body.assignedTo) ? body.assignedTo : [];
+    
+    item.updatedAt = new Date().toISOString();
+    
+    dbRun('UPDATE records SET data = ?, updated_at = ? WHERE id = ?', JSON.stringify(item), item.updatedAt, itemId);
+    
+    res.json({ item: item });
+  } catch (err) {
+    console.error('[PUNCHLIST] Update item error:', err.message);
+    res.status(500).json({ error: 'Failed to update item' });
+  }
+});
+
+// DELETE /api/projects/:pid/punchlist-lists/:listId/items/:itemId
+app.delete('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  var itemId = req.params.itemId;
+  
+  var record = dbGet('SELECT data FROM records WHERE id = ? AND project_id = ? AND category = ?', itemId, pid, 'punchlist');
+  if (!record) {
+    return res.status(404).json({ error: 'Item not found' });
+  }
+  
+  try {
+    var item = JSON.parse(record.data);
+    if (item.listId !== listId) {
+      return res.status(404).json({ error: 'Item does not belong to this list' });
+    }
+    
+    dbRun('DELETE FROM records WHERE id = ?', itemId);
+    res.status(204).end();
+  } catch (err) {
+    console.error('[PUNCHLIST] Delete item error:', err.message);
+    res.status(500).json({ error: 'Failed to delete item' });
+  }
+});
+
+
 app.get('/api/projects/:pid/:cat', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
   const search = (req.query.search || '').toLowerCase().trim();
   const sortBy = req.query.sort || 'newest';
