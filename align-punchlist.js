@@ -210,7 +210,7 @@
   function _bindItemForm() {
     document.getElementById('pl-item-form-back').addEventListener('click', function () { state.editingItem = null; state.viewMode = 'list'; _loadListItems(); });
     var input = document.getElementById('pl-file-input');
-    function choose(capture) { input.capture = capture || ''; input.click(); }
+    function choose(capture) { if (capture) { input.setAttribute('capture', capture); } else { input.removeAttribute('capture'); } input.click(); }
     document.getElementById('pl-upload-camera').addEventListener('click', function () { choose('environment'); });
     document.getElementById('pl-upload-album').addEventListener('click', function () { choose(''); });
     input.addEventListener('change', function () { Array.prototype.forEach.call(input.files || [], _addImage); });
