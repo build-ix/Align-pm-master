@@ -1221,6 +1221,16 @@ app.patch('/api/files/:id/photo-meta', requireAuth, requireFileProjectMember, au
   res.json({ ok: true, metadata: meta });
 });
 
+// ── All apartments in project (for dialog) ──
+app.get('/api/projects/:id/apartments', requireAuth, auth.requireProjectMember(dbGet), (req, res) => {
+  var pid = req.params.id;
+  var apartments = dbAll(
+    "SELECT DISTINCT pl_apartment as name FROM records WHERE project_id = ? AND category = 'punchlist' AND pl_apartment IS NOT NULL AND pl_apartment != '' ORDER BY pl_apartment",
+    pid
+  );
+  res.json(apartments.map(function(r) { return r.name; }));
+});
+
 // ── Punchlist apartments ──
 app.get('/api/projects/:pid/punchlist/apartments', requireAuth, auth.requireProjectMember(dbGet), (req, res) => {
   var pid = req.params.pid;
