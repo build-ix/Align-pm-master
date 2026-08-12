@@ -512,6 +512,15 @@ const MIGRATIONS = [
         // Generated columns may not be available; fallback will use json_extract in queries
       }
     }
+  },
+  /* ── v26: punchlist list privacy ───────────────────────────────────────────── */
+  {
+    version: 26,
+    name: 'punchlist_list_privacy',
+    up(db) {
+      // Existing lists remain private; the CHECK constraint is enforced for new values.
+      db.exec("ALTER TABLE punchlist_lists ADD COLUMN privacy TEXT NOT NULL DEFAULT 'private' CHECK (privacy IN ('private', 'public'))");
+    }
   }
 ];
 

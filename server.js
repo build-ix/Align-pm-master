@@ -202,6 +202,29 @@ function sanitizeMembershipRole(role) {
   return 'member'; // default fallback
 }
 
+// Punchlist privacy: project membership is checked by route middleware; this
+// helper applies the additional list-level visibility rule.
+function isListAuthorized(user, list, userProjectRole) {
+  if (!user || !list) return false;
+  if (user.role === 'admin') userProjectRole = 'admin';
+  return (list.privacy === 'public' && !!userProjectRole) ||
+    list.created_by === user.id ||
+    userProjectRole === 'admin' || userProjectRole === 'owner';
+}
+
+function getProjectRole(user, pid, attachedRole) {
+  if (attachedRole) return attachedRole;
+  if (user && user.role === 'admin') return 'admin';
+  var membership = dbGet('SELECT role FROM user_projects WHERE user_id = ? AND project_id = ?', user.id, pid);
+  return membership ? membership.role : null;
+}
+
+function getAuthorizedPunchlist(req, pid, listId) {
+  var list = dbGet('SELECT * FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  if (!list || !isListAuthorized(req.user, list, getProjectRole(req.user, pid, req.projectRole))) return null;
+  return list;
+}
+
 // Normalize room permissions — strip invalid rooms, coerce to valid levels
 const VALID_ROOMS = ['drawings','daily-logs','specs','rfis','punchlist','schedule','budget','contacts','photos','tasks','procurement','files','settings'];
 const VALID_LEVELS = ['none', 'r', 'rw'];
@@ -1260,7 +1283,7 @@ app.get('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMe
   var pid = req.params.pid;
   var lists = dbAll(`
     SELECT 
-      id, project_id, name, description, scope_type, apartment_label, status, 
+      id, project_id, name, description, scope_type, apartment_label, status, privacy,
       created_by, created_at, updated_at,
       COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = punchlist_lists.id), 0) as item_count,
       COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = punchlist_lists.id AND json_extract(data, '$.status') = 'open'), 0) as open_count
@@ -1268,7 +1291,10 @@ app.get('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMe
     WHERE project_id = ?
     ORDER BY updated_at DESC
   `, pid, pid, pid);
-  res.json({ lists: lists || [] });
+  lists = (lists || []).filter(function(list) {
+    return isListAuthorized(req.user, list, getProjectRole(req.user, pid, req.projectRole));
+  });
+  res.json({ lists: lists });
 });
 
 // POST /api/projects/:pid/punchlist-lists
@@ -1280,6 +1306,7 @@ app.post('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectM
   var scope_type = (body.scope_type || 'apartment').trim();
   var apartment_label = body.scope_type === 'apartment' ? (body.apartment_label || '').trim() : null;
   var status = (body.status || 'open').trim();
+  var privacy = (body.privacy || 'private').trim();
   
   // Strictly reject item-only fields to prevent accidental coupling
   if (body.hasOwnProperty('priority') || body.hasOwnProperty('images') || body.hasOwnProperty('location') ||
@@ -1300,6 +1327,9 @@ app.post('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectM
   if (!['open', 'archived'].includes(status)) {
     return res.status(400).json({ error: 'status must be "open" or "archived"' });
   }
+  if (!['private', 'public'].includes(privacy)) {
+    return res.status(400).json({ error: 'privacy must be "private" or "public"' });
+  }
   
   var listId = 'pll_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   var now = new Date().toISOString();
@@ -1307,9 +1337,9 @@ app.post('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectM
   
   try {
     dbRun(`
-      INSERT INTO punchlist_lists (id, project_id, name, description, scope_type, apartment_label, status, created_by, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, listId, pid, name, description, scope_type, apartment_label, status, created_by, now, now);
+      INSERT INTO punchlist_lists (id, project_id, name, description, scope_type, apartment_label, status, privacy, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, listId, pid, name, description, scope_type, apartment_label, status, privacy, created_by, now, now);
     
     var list = dbGet(`
       SELECT id, project_id, name, description, scope_type, apartment_label, status, created_by, created_at, updated_at,
@@ -1332,7 +1362,7 @@ app.get('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireP
   
   var list = dbGet(`
     SELECT 
-      id, project_id, name, description, scope_type, apartment_label, status, 
+      id, project_id, name, description, scope_type, apartment_label, status, privacy,
       created_by, created_at, updated_at,
       COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?), 0) as item_count,
       COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ? AND json_extract(data, '$.status') = 'open'), 0) as open_count
@@ -1341,6 +1371,9 @@ app.get('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requireP
   `, pid, listId, pid, listId, listId, pid);
   
   if (!list) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  if (!isListAuthorized(req.user, list, getProjectRole(req.user, pid, req.projectRole))) {
     return res.status(404).json({ error: 'List not found' });
   }
   
@@ -1353,8 +1386,8 @@ app.patch('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requir
   var listId = req.params.listId;
   var body = req.body || {};
   
-  var list = dbGet('SELECT id FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
-  if (!list) {
+  var list = dbGet('SELECT * FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  if (!list || !isListAuthorized(req.user, list, getProjectRole(req.user, pid, req.projectRole))) {
     return res.status(404).json({ error: 'List not found' });
   }
   
@@ -1362,7 +1395,7 @@ app.patch('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requir
   var name = body.hasOwnProperty('name') ? (body.name || '').trim() : null;
   var description = body.hasOwnProperty('description') ? (body.description || '').trim() : null;
   var status = body.hasOwnProperty('status') ? (body.status || '').trim() : null;
-  
+  var privacy = body.hasOwnProperty('privacy') ? (body.privacy || '').trim() : null;
   if (body.hasOwnProperty('priority') || body.hasOwnProperty('images') || body.hasOwnProperty('location')) {
     return res.status(400).json({ error: 'Cannot update item fields on a list' });
   }
@@ -1381,6 +1414,13 @@ app.patch('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requir
   if (status !== null && ['open', 'archived'].includes(status)) {
     updates.push('status = ?');
     values.push(status);
+  }
+  if (privacy !== null) {
+    if (!['private', 'public'].includes(privacy)) {
+      return res.status(400).json({ error: 'privacy must be "private" or "public"' });
+    }
+    updates.push('privacy = ?');
+    values.push(privacy);
   }
   
   if (updates.length === 0) {
@@ -1407,8 +1447,8 @@ app.delete('/api/projects/:pid/punchlist-lists/:listId', requireAuth, auth.requi
   var pid = req.params.pid;
   var listId = req.params.listId;
   
-  var list = dbGet('SELECT id FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
-  if (!list) {
+  var list = dbGet('SELECT * FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  if (!list || !isListAuthorized(req.user, list, getProjectRole(req.user, pid, req.projectRole))) {
     return res.status(404).json({ error: 'List not found' });
   }
   
@@ -1438,8 +1478,8 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.re
   var pid = req.params.pid;
   var listId = req.params.listId;
   
-  // Verify list exists
-  var list = dbGet('SELECT id FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  // Verify list exists and is visible to this user.
+  var list = getAuthorizedPunchlist(req, pid, listId);
   if (!list) {
     return res.status(404).json({ error: 'List not found' });
   }
@@ -1459,8 +1499,8 @@ app.post('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.r
   var listId = req.params.listId;
   var body = req.body || {};
   
-  // Verify list exists
-  var list = dbGet('SELECT id FROM punchlist_lists WHERE id = ? AND project_id = ?', listId, pid);
+  // Verify list exists and is visible to this user.
+  var list = getAuthorizedPunchlist(req, pid, listId);
   if (!list) {
     return res.status(404).json({ error: 'List not found' });
   }
@@ -1532,6 +1572,10 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAuth,
   var listId = req.params.listId;
   var itemId = req.params.itemId;
   
+  if (!getAuthorizedPunchlist(req, pid, listId)) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+
   var record = dbGet('SELECT data FROM records WHERE id = ? AND project_id = ? AND category = ?', itemId, pid, 'punchlist');
   if (!record) {
     return res.status(404).json({ error: 'Item not found' });
@@ -1609,6 +1653,10 @@ app.delete('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAu
   var listId = req.params.listId;
   var itemId = req.params.itemId;
   
+  if (!getAuthorizedPunchlist(req, pid, listId)) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+
   var record = dbGet('SELECT data FROM records WHERE id = ? AND project_id = ? AND category = ?', itemId, pid, 'punchlist');
   if (!record) {
     return res.status(404).json({ error: 'Item not found' });
