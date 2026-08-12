@@ -186,8 +186,16 @@
       return index;
     }).catch(function (err) {
       console.error('[DRAWINGS] API error:', err.message, '— falling back to cache');
-      // Fallback: localStorage cache
-      return _loadDrawingsIndex(state.projectId);
+      // Show error on page so user can see it
+      var cached = _loadDrawingsIndex(state.projectId);
+      if (!cached || cached.length === 0) {
+        // If no cache either, show the actual error
+        if (state.container) {
+          state.container.innerHTML = '<div class="dr-empty"><strong>Error loading drawings</strong><p>API Error: ' + (err.message || 'Unknown error') + '</p><p style="font-size:12px;color:#999;">Check network or try refreshing.</p></div>';
+        }
+        return [];
+      }
+      return cached;
     });
   }
 
