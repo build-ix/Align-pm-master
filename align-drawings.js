@@ -1713,6 +1713,8 @@
               _mvSyncCanvas();
               // Pre-render adjacent pages for instant page turning
               _mvPreRenderAdjacent();
+              // Phase 3: Initialize pin overlay for this drawing
+              _mvInitPinOverlay();
             });
           });
         });
@@ -1745,6 +1747,8 @@
         requestAnimationFrame(function () {
           _mvFitToViewport();
           _mvSyncCanvas();
+          // Phase 3: Initialize pin overlay for this drawing
+          _mvInitPinOverlay();
         });
       }
       if (img) {
@@ -3288,6 +3292,57 @@
   }
 
   /* ── Public API ─────────────────────────────────────────────────────────── */
+  /* ── Phase 3: Pin Overlay Integration ──────────────────────────────────── */
+  
+  var _pinOverlay = null; // Global reference to current pin overlay
+  
+  function _mvInitPinOverlay() {
+    // Don't load pins for markup mode — pins are read-only annotations
+    // Only init after viewer is fully set up
+    var canvas = document.getElementById('dr-mv-canvas');
+    if (!canvas || !_mv || !_mv.drawingId) return;
+    
+    // Init the pin overlay library
+    if (!window.PinOverlay) {
+      console.warn('[AlignDrawings] PinOverlay library not loaded');
+      return;
+    }
+    
+    // Set context variables for the API
+    window.currentProjectId = _mv.projectId;
+    window.currentUserId = 'system'; // TODO: get from auth
+    
+    // Initialize overlay
+    window.PinOverlay.init(canvas, _mv.drawingId);
+    _pinOverlay = window.PinOverlay;
+    
+    // Set initial sheet for PDF viewers
+    if (_mv.isPdf && _mv.currentPdfPage !== undefined) {
+      _pinOverlay.updateSheet(_mv.currentPdfPage);
+    } else {
+      _pinOverlay.updateSheet(0);
+    }
+    
+    // Listen for pin clicks
+    var overlay = document.querySelector('.pin-overlay');
+    if (overlay) {
+      overlay.addEventListener('pinClicked', function(e) {
+        var itemId = e.detail.punchItemId;
+        var pin = e.detail.pin;
+        // TODO: Open punch item detail drawer
+        console.log('[AlignDrawings] Pin clicked:', itemId, pin);
+      });
+    }
+    
+    console.log('[AlignDrawings] Pin overlay initialized for drawing:', _mv.drawingId);
+  }
+  
+  function _mvUpdatePinSheet(sheetNumber) {
+    if (_pinOverlay) {
+      _pinOverlay.updateSheet(sheetNumber);
+    }
+  }
+
   window.AlignDrawings = {
     render: render
   };
