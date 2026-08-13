@@ -133,11 +133,13 @@
         g.setAttribute('data-item-id', pin.punch_item_id);
 
         // Convert normalized coords (0-1) to canvas pixel coords, via the
-        // coord mapper when a crop document is active.
+        // coord mapper (full-sheet normalized -> document normalized) when a
+        // crop document is active.
         let cx, cy;
         if (this.coordMapper) {
           const doc = this.coordMapper(pin.x, pin.y);
-          cx = doc.x; cy = doc.y;
+          cx = doc.x * this.canvas.width;
+          cy = doc.y * this.canvas.height;
         } else {
           cx = pin.x * this.canvas.width;
           cy = pin.y * this.canvas.height;

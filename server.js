@@ -1784,7 +1784,9 @@ async function renderAndStoreCropImage(pid, drawingId, sheetNumber, vertices, li
   const genDir = path.join(UPLOADS_DIR, 'generated', 'punchlist-crops');
   fs.mkdirSync(genDir, { recursive: true });
   const fileId = uid();
-  const finalPath = path.join(genDir, fileId + '.png');
+  // PDF sources produce a vector PDF; image sources produce a PNG.
+  const ext = drawing.mime_type === 'application/pdf' ? 'pdf' : 'png';
+  const finalPath = path.join(genDir, fileId + '.' + ext);
 
   let meta;
   try {
@@ -1803,9 +1805,10 @@ async function renderAndStoreCropImage(pid, drawingId, sheetNumber, vertices, li
   }
 
   const size = fs.statSync(finalPath).size;
+  const mimeType = meta.mimeType || (ext === 'pdf' ? 'application/pdf' : 'image/png');
   const ts = nowISO();
   dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    fileId, pid, null, 'punchlist-crop', fileId + '.png', (listName || 'Location Map') + ' - location map.png', 'image/png', size, finalPath, ts, 'system', JSON.stringify({ kind: 'punchlist-crop', listName: listName || '' }));
+    fileId, pid, null, 'punchlist-crop', fileId + '.' + ext, (listName || 'Location Map') + ' - location map.' + ext, mimeType, size, finalPath, ts, 'system', JSON.stringify({ kind: 'punchlist-crop', listName: listName || '' }));
 
   return { fileId: fileId, meta: meta, error: null };
 }

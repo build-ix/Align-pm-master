@@ -1281,6 +1281,7 @@
   // ── List-map mode state (crop authoring + pin placement), driven from Punchlist ──
   var _mvModeArgs = null; // { mode, projectId, drawingId, sheet, listId, itemId, cropMode, vertices, onSaved, onPlaced, onCancel }
   var _cropTool = null;   // active DrawingCropTool instance (crop mode)
+  var _mvPinDown = null;  // { x, y, moved, lastX, lastY } — pin tap-vs-pan gesture state
 
   // Transform-change subscription (crop tool re-sizes markers on zoom/pan)
   var _mvTransformListeners = new Set();
@@ -1932,10 +1933,10 @@
         _mvZoomToCrop(args.vertices);
       }
     }
-    // Set the pin-overlay coordinate mapper (full-sheet normalized -> document px).
+    // Set the pin-overlay coordinate mapper (full-sheet normalized -> document normalized).
     if (window.PinOverlay) {
       window.PinOverlay.coordMapper = _mv.cropDocMeta
-        ? function (nx, ny) { return _mvSheetToDocPx(nx, ny); }
+        ? function (nx, ny) { return _mvSheetToDocNormalized(nx, ny); }
         : null;
     }
     _mvInitPinOverlay();
@@ -1945,15 +1946,14 @@
     if (backBtn) backBtn.textContent = '← Cancel';
   }
 
-  // Convert a full-sheet normalized point to crop-document pixel coords.
-  function _mvSheetToDocPx(nx, ny) {
+  // Convert a full-sheet normalized point to crop-document normalized (0-1).
+  function _mvSheetToDocNormalized(nx, ny) {
     var m = _mv && _mv.cropDocMeta;
-    if (!m) {
-      var c = document.getElementById('dr-mv-canvas');
-      return { x: nx * (c ? c.width : 1), y: ny * (c ? c.height : 1) };
-    }
+    if (!m) return { x: nx, y: ny };
     var sheetX = nx * m.sheetWidth, sheetY = ny * m.sheetHeight;
-    return { x: m.document.drawingLeft + (sheetX - m.bbox.x), y: m.document.drawingTop + (sheetY - m.bbox.y) };
+    var docX = m.document.drawingLeft + (sheetX - m.bbox.x);
+    var docY = m.document.drawingTop + (sheetY - m.bbox.y);
+    return { x: docX / m.document.width, y: docY / m.document.height };
   }
 
   function _mvApplyWhiteBackground() {
@@ -2104,6 +2104,7 @@
 
   function _mvEndMode() {
     if (_cropTool) { try { _cropTool.destroy(); } catch (e) {} _cropTool = null; }
+    _mvPinDown = null;
     var args = _mv && _mv.modeArgs;
     _mvClose();
     if (args && args.onCancel) args.onCancel();
@@ -2548,7 +2549,7 @@
     }
     if (_mv.mode === 'list-pin') {
       e.preventDefault();
-      _mvPlacePin(e.clientX, e.clientY);
+      _mvPinDown = { x: e.clientX, y: e.clientY, moved: false, lastX: e.clientX, lastY: e.clientY };
       return;
     }
 
@@ -2617,6 +2618,24 @@
       _cropTool.pointerMove(e.clientX, e.clientY);
       return;
     }
+    if (_mv.mode === 'list-pin') {
+      if (_mvPinDown) {
+        var pdx = e.clientX - _mvPinDown.x, pdy = e.clientY - _mvPinDown.y;
+        if (!_mvPinDown.moved && Math.sqrt(pdx * pdx + pdy * pdy) > 10) {
+          _mvPinDown.moved = true;
+          _mvPinDown.lastX = e.clientX;
+          _mvPinDown.lastY = e.clientY;
+          return;
+        }
+        if (_mvPinDown.moved) {
+          var mdx = e.clientX - _mvPinDown.lastX, mdy = e.clientY - _mvPinDown.lastY;
+          _mvPinDown.lastX = e.clientX;
+          _mvPinDown.lastY = e.clientY;
+          _mvPanByClientDelta(mdx, mdy);
+        }
+      }
+      return;
+    }
     if (!_mv.drawing || !_mv.markupMode) return;
 
     var pos = _mvGetPos(e);
@@ -2649,6 +2668,15 @@
       _cropTool.pointerUp(e.clientX, e.clientY);
       return;
     }
+    if (_mv.mode === 'list-pin') {
+      if (_mvPinDown) {
+        if (!_mvPinDown.moved) {
+          _mvPlacePin(e.clientX, e.clientY);
+        }
+        _mvPinDown = null;
+      }
+      return;
+    }
     if (!_mv.drawing) return;
     _mv.drawing = false;
 
@@ -2666,7 +2694,8 @@
   function _mvTouchStart(e) {
     e.stopPropagation();
     if (e.touches.length === 2) {
-      // A second finger landed — cancel any in-flight crop gesture.
+      // A second finger landed — cancel any in-flight crop/pin gesture.
+      _mvPinDown = null;
       if (_mv.mode === 'list-crop' && _cropTool) { try { _cropTool.pointerCancel(); } catch (err) {} }
       // Two-finger: record center + initial distance for pan/pinch detection
       var dx = e.touches[0].clientX - e.touches[1].clientX;
@@ -3682,7 +3711,8 @@
     return _loadDrawingForViewer(opts.projectId, loadId).then(function (file) {
       if (!file) throw new Error('Drawing not found');
       if (hasRenderedCrop) {
-        file.meta.mimeType = 'image/png';
+        // Let the blob's real mime type drive image-vs-PDF routing (crop PDFs
+        // reuse the pdf.js viewer; crop PNGs reuse the image viewer).
         file.meta._isCropImage = true;
       }
       _viewDrawing(file);

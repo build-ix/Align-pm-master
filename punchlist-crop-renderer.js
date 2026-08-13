@@ -1,13 +1,15 @@
 /*
  * punchlist-crop-renderer.js
- * Server-side rasterizer: turns a punchlist crop (normalized polygon on a
- * drawing) into a standalone high-quality PNG "document" with a white
- * background and a punchlist-name header.
+ * Server-side crop "document" generator for punchlist location maps.
  *
- * Pipeline: source file (PDF page via pdftocairo, or image via sharp)
- *   -> normalized full-sheet PNG -> normalized vertices to pixels -> bbox
- *   -> SVG alpha mask (dest-in) -> clipped RGBA crop -> white framed document
- *   with list-name header -> flattened opaque PNG.
+ * PDF sources  -> VECTOR single-page PDF (crisp text at any zoom):
+ *     pdftocairo -eps -> PostScript wrapper (white bg + polygon clip + header)
+ *     -> Ghostscript pdfwrite.
+ * Image sources -> raster PNG (white bg + header), via sharp (no vector exists).
+ *
+ * Returns unified metadata (top-left origin) used by the client for pin mapping:
+ *   { mimeType, sheetWidth, sheetHeight, bbox:{x,y,width,height},
+ *     document:{width,height,drawingLeft,drawingTop} }
  */
 'use strict';
 
@@ -20,7 +22,10 @@ const os = require('node:os');
 
 const execFileAsync = promisify(execFile);
 
-const MIN_CROP_SIDE_PX = 32;
+const MIN_CROP_SIDE = 1;        // PDF points (vector: even tiny crops are valid)
+const MIN_RASTER_SIDE_PX = 32;
+const HEADER_HEIGHT = 42;       // PDF points
+const HEADER_FONT_SIZE = 16;
 
 function xmlEscape(s) {
   return String(s).replace(/[&<>"']/g, function (c) {
@@ -28,103 +33,179 @@ function xmlEscape(s) {
   });
 }
 
-async function pdfPageSize(pdfPath, pageNum) {
-  const { stdout } = await execFileAsync(
-    '/usr/bin/pdfinfo', ['-f', String(pageNum), '-l', String(pageNum), pdfPath],
-    { timeout: 30000, maxBuffer: 4 * 1024 * 1024 }
-  );
-  const m = String(stdout).match(/Page size:\s*([\d.]+)\s*x\s*([\d.]+)/i);
-  if (!m) return null;
-  return { widthPts: parseFloat(m[1]), heightPts: parseFloat(m[2]) };
+function psNumber(value) {
+  if (!Number.isFinite(value)) throw new Error('Non-finite PostScript number');
+  return Number(value.toFixed(4)).toString();
 }
 
-function adaptiveDpi(widthPts, heightPts) {
-  const preferred = 300, min = 144, maxSide = 10000, maxPixels = 50000000;
-  const dpiSide = Math.min(maxSide * 72 / widthPts, maxSide * 72 / heightPts);
-  const dpiArea = Math.sqrt(maxPixels * 72 * 72 / (widthPts * heightPts));
-  return Math.max(min, Math.floor(Math.min(preferred, dpiSide, dpiArea)));
+function psHexString(value) {
+  const ascii = String(value)
+    .normalize('NFKD')
+    .replace(/[^\x20-\x7e]/g, '?');
+  return '<' + Buffer.from(ascii, 'ascii').toString('hex') + '>';
 }
 
-// Render the source (PDF page or image) into a normalized full-sheet PNG.
-// Returns { normPath, tmpDir }.
-async function renderSheetToPng(drawingFilePath, drawingMimeType, sheetNumber) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'align-crop-'));
-  const norm = path.join(tmp, 'normalized.png');
-
-  if (drawingMimeType === 'application/pdf') {
-    const pdfPage = (Number(sheetNumber) || 0) + 1; // 0-based sheet -> 1-based page
-    let size = null;
-    try { size = await pdfPageSize(drawingFilePath, pdfPage); } catch (e) { size = null; }
-    const dpi = size ? adaptiveDpi(size.widthPts, size.heightPts) : 200;
-    const prefix = path.join(tmp, 'page');
-    await execFileAsync(
-      '/usr/bin/pdftocairo',
-      ['-png', '-singlefile', '-f', String(pdfPage), '-l', String(pdfPage), '-r', String(dpi), '-antialias', 'best', drawingFilePath, prefix],
-      { timeout: 120000, maxBuffer: 4 * 1024 * 1024 }
-    );
-    await sharp(prefix + '.png')
-      .flatten({ background: '#ffffff' })
-      .toColourspace('srgb')
-      .png({ compressionLevel: 6 })
-      .toFile(norm);
-  } else {
-    await sharp(drawingFilePath, { failOn: 'error', limitInputPixels: 100000000 })
-      .rotate()
-      .flatten({ background: '#ffffff' })
-      .toColourspace('srgb')
-      .png({ compressionLevel: 6 })
-      .toFile(norm);
+function polygonPath(points) {
+  if (!Array.isArray(points) || points.length < 3) {
+    throw new Error('Crop polygon must have at least three vertices');
   }
-
-  return { normPath: norm, tmpDir: tmp };
+  const first = points[0];
+  const lines = ['newpath', `${psNumber(first.x)} ${psNumber(first.y)} moveto`];
+  for (let i = 1; i < points.length; i++) {
+    lines.push(`${psNumber(points[i].x)} ${psNumber(points[i].y)} lineto`);
+  }
+  lines.push('closepath');
+  return lines.join('\n');
 }
 
-async function renderPunchlistCrop({ drawingFilePath, drawingMimeType, sheetNumber, vertices, listName, outputPath }) {
-  if (!vertices || vertices.length < 3) throw new Error('At least 3 crop vertices required');
-  for (const v of vertices) {
-    if (!isFinite(v.x) || !isFinite(v.y) || v.x < 0 || v.x > 1 || v.y < 0 || v.y > 1) {
-      throw new Error('Crop vertices must be within 0..1');
-    }
+function parseEpsBoundingBox(epsBuffer) {
+  const head = epsBuffer.subarray(0, Math.min(epsBuffer.length, 256 * 1024)).toString('latin1');
+  const hiRes = head.match(/^%%HiResBoundingBox:\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)/m);
+  const normal = head.match(/^%%BoundingBox:\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s+(-?[\d.]+)/m);
+  const match = hiRes || normal;
+  if (!match) throw new Error('pdftocairo EPS has no bounding box');
+  const [llx, lly, urx, ury] = match.slice(1).map(Number);
+  if (![llx, lly, urx, ury].every(Number.isFinite) || urx <= llx || ury <= lly) {
+    throw new Error('Invalid EPS bounding box');
   }
+  return { llx, lly, urx, ury, width: urx - llx, height: ury - lly };
+}
 
-  const { normPath, tmpDir } = await renderSheetToPng(drawingFilePath, drawingMimeType, sheetNumber);
+// ── PDF source → vector single-page PDF ────────────────────────────────
+async function renderPdfCrop({ drawingFilePath, sheetNumber, vertices, listName, outputPath }) {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'align-map-'));
+  const epsPath = path.join(workDir, 'source-page.eps');
+  const wrapperPath = path.join(workDir, 'wrapper.ps');
+
   try {
-    const meta = await sharp(normPath).metadata();
-    const sheetW = meta.width, sheetH = meta.height;
-    if (!sheetW || !sheetH) throw new Error('Could not read drawing dimensions');
+    const pdfPage = (Number(sheetNumber) || 0) + 1; // 0-based sheet -> 1-based page
 
-    // Normalized -> full-sheet pixels.
+    await execFileAsync('/usr/bin/pdftocairo', [
+      '-f', String(pdfPage), '-l', String(pdfPage),
+      '-eps', drawingFilePath, epsPath
+    ], { timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+
+    const epsBuffer = fs.readFileSync(epsPath);
+    const epsBox = parseEpsBoundingBox(epsBuffer);
+
+    // Normalized polygon (top-left origin, like pdf.js) -> EPS coords (bottom-left).
+    const leftN = Math.min(...vertices.map(p => p.x));
+    const rightN = Math.max(...vertices.map(p => p.x));
+    const topN = Math.min(...vertices.map(p => p.y));
+    const bottomN = Math.max(...vertices.map(p => p.y));
+
+    const cropLeft = epsBox.llx + leftN * epsBox.width;
+    const cropBottom = epsBox.lly + (1 - bottomN) * epsBox.height;
+    const cropWidth = (rightN - leftN) * epsBox.width;
+    const cropHeight = (bottomN - topN) * epsBox.height;
+
+    if (cropWidth < MIN_CROP_SIDE || cropHeight < MIN_CROP_SIDE) {
+      throw new Error('Crop area is too small');
+    }
+
+    // Local polygon (relative to crop bbox, bottom-left origin).
+    const localPolygon = vertices.map(p => ({
+      x: (epsBox.llx + p.x * epsBox.width) - cropLeft,
+      y: (epsBox.lly + (1 - p.y) * epsBox.height) - cropBottom
+    }));
+
+    const outputWidth = cropWidth;
+    const outputHeight = cropHeight + HEADER_HEIGHT;
+
+    const prefix = `%!PS-Adobe-3.0
+%%Pages: 1
+%%BoundingBox: 0 0 ${Math.ceil(outputWidth)} ${Math.ceil(outputHeight)}
+<< /PageSize [${psNumber(outputWidth)} ${psNumber(outputHeight)}] >> setpagedevice
+/finalshowpage /showpage load def
+/showpage {} bind def
+gsave
+  1 1 1 setrgbcolor
+  0 0 ${psNumber(outputWidth)} ${psNumber(outputHeight)} rectfill
+grestore
+gsave
+  ${polygonPath(localPolygon)}
+  clip
+  newpath
+  ${psNumber(-cropLeft)} ${psNumber(-cropBottom)} translate
+`;
+
+    const suffix = `
+grestore
+gsave
+  1 1 1 setrgbcolor
+  0 ${psNumber(cropHeight)} ${psNumber(outputWidth)} ${psNumber(HEADER_HEIGHT)} rectfill
+grestore
+gsave
+  0.72 setgray
+  0.5 setlinewidth
+  newpath
+  0 ${psNumber(cropHeight)} moveto
+  ${psNumber(outputWidth)} ${psNumber(cropHeight)} lineto
+  stroke
+grestore
+gsave
+  0 setgray
+  /Helvetica-Bold findfont ${HEADER_FONT_SIZE} scalefont setfont
+  12 ${psNumber(cropHeight + 16)} moveto
+  ${psHexString(listName || '')} show
+grestore
+finalshowpage
+%%EOF
+`;
+
+    await fs.promises.writeFile(wrapperPath, Buffer.concat([
+      Buffer.from(prefix, 'ascii'), epsBuffer, Buffer.from(suffix, 'ascii')
+    ]));
+
+    await execFileAsync('/usr/bin/gs', [
+      '-q', '-dBATCH', '-dNOPAUSE', '-dSAFER',
+      '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.7', '-dAutoRotatePages=/None',
+      '-dEmbedAllFonts=true', '-dSubsetFonts=true',
+      '-sOutputFile=' + outputPath,
+      wrapperPath
+    ], { timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+
+    const st = fs.statSync(outputPath);
+    if (st.size === 0) throw new Error('Generated PDF is empty');
+
+    return {
+      mimeType: 'application/pdf',
+      sheetWidth: epsBox.width,
+      sheetHeight: epsBox.height,
+      bbox: { x: leftN * epsBox.width, y: topN * epsBox.height, width: cropWidth, height: cropHeight },
+      document: { width: outputWidth, height: outputHeight, drawingLeft: 0, drawingTop: HEADER_HEIGHT }
+    };
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// ── Image source → raster PNG (no vector exists) ───────────────────────
+async function renderImageCrop({ drawingFilePath, vertices, listName, outputPath }) {
+  const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'align-map-'));
+  const norm = path.join(workDir, 'normalized.png');
+  try {
+    await sharp(drawingFilePath, { failOn: 'error', limitInputPixels: 100000000 })
+      .rotate().flatten({ background: '#ffffff' }).toColourspace('srgb')
+      .png({ compressionLevel: 6 }).toFile(norm);
+
+    const meta = await sharp(norm).metadata();
+    const sheetW = meta.width, sheetH = meta.height;
     const px = vertices.map(v => ({ x: v.x * sheetW, y: v.y * sheetH }));
 
-    // Integer bounding box fully containing the polygon.
     const x0 = Math.max(0, Math.floor(Math.min(...px.map(p => p.x))));
     const y0 = Math.max(0, Math.floor(Math.min(...px.map(p => p.y))));
     const x1 = Math.min(sheetW, Math.ceil(Math.max(...px.map(p => p.x))));
     const y1 = Math.min(sheetH, Math.ceil(Math.max(...px.map(p => p.y))));
     const bw = x1 - x0, bh = y1 - y0;
-    if (bw < MIN_CROP_SIDE_PX || bh < MIN_CROP_SIDE_PX) throw new Error('Crop area is too small');
+    if (bw < MIN_RASTER_SIDE_PX || bh < MIN_RASTER_SIDE_PX) throw new Error('Crop area is too small');
 
     const local = px.map(p => ({ x: p.x - x0, y: p.y - y0 }));
-
-    // Extract the polygon bbox from the full sheet.
-    const extracted = await sharp(normPath)
-      .extract({ left: x0, top: y0, width: bw, height: bh })
-      .ensureAlpha()
-      .png()
-      .toBuffer();
-
-    // Alpha mask: white polygon on transparent background, applied with dest-in.
+    const extracted = await sharp(norm).extract({ left: x0, top: y0, width: bw, height: bh }).ensureAlpha().png().toBuffer();
     const pts = local.map(p => p.x.toFixed(3) + ',' + p.y.toFixed(3)).join(' ');
-    const maskSvg = Buffer.from(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${bw}" height="${bh}" viewBox="0 0 ${bw} ${bh}">` +
-      `<polygon points="${pts}" fill="#ffffff" fill-rule="evenodd"/></svg>`
-    );
-    const clipped = await sharp(extracted)
-      .composite([{ input: maskSvg, blend: 'dest-in' }])
-      .png()
-      .toBuffer();
+    const maskSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${bw}" height="${bh}" viewBox="0 0 ${bw} ${bh}"><polygon points="${pts}" fill="#ffffff" fill-rule="evenodd"/></svg>`);
+    const clipped = await sharp(extracted).composite([{ input: maskSvg, blend: 'dest-in' }]).png().toBuffer();
 
-    // Document layout.
     const clamp = (v, mn, mx) => Math.max(mn, Math.min(mx, v));
     const margin = clamp(Math.round(bw * 0.025), 24, 96);
     const fontSize = clamp(Math.round(bw * 0.035), 32, 96);
@@ -144,13 +225,8 @@ async function renderPunchlistCrop({ drawingFilePath, drawingMimeType, sheetNumb
       `</svg>`
     );
 
-    await sharp({
-      create: { width: docW, height: docH, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } }
-    })
-      .composite([
-        { input: clipped, left: drawLeft, top: drawTop },
-        { input: headerSvg, left: 0, top: 0 }
-      ])
+    await sharp({ create: { width: docW, height: docH, channels: 4, background: { r: 255, g: 255, b: 255, alpha: 1 } } })
+      .composite([{ input: clipped, left: drawLeft, top: drawTop }, { input: headerSvg, left: 0, top: 0 }])
       .flatten({ background: '#ffffff' })
       .png({ compressionLevel: 9, adaptiveFiltering: true })
       .toFile(outputPath);
@@ -163,8 +239,21 @@ async function renderPunchlistCrop({ drawingFilePath, drawingMimeType, sheetNumb
       document: { width: docW, height: docH, drawingLeft: drawLeft, drawingTop: drawTop }
     };
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(workDir, { recursive: true, force: true });
   }
+}
+
+async function renderPunchlistCrop({ drawingFilePath, drawingMimeType, sheetNumber, vertices, listName, outputPath }) {
+  if (!vertices || vertices.length < 3) throw new Error('At least 3 crop vertices required');
+  for (const v of vertices) {
+    if (!isFinite(v.x) || !isFinite(v.y) || v.x < 0 || v.x > 1 || v.y < 0 || v.y > 1) {
+      throw new Error('Crop vertices must be within 0..1');
+    }
+  }
+  if (drawingMimeType === 'application/pdf') {
+    return renderPdfCrop({ drawingFilePath, sheetNumber, vertices, listName, outputPath });
+  }
+  return renderImageCrop({ drawingFilePath, vertices, listName, outputPath });
 }
 
 module.exports = { renderPunchlistCrop };
