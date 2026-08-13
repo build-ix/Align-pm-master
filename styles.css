@@ -2190,6 +2190,28 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   min-width: 120px;
 }
 
+/* Teardrop map-pin marker (punchlist pin overlay) */
+.drawing-pin__svg {
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.28));
+}
+.drawing-pin__shape {
+  fill: #1769e0;
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.drawing-pin__face {
+  fill: #fff;
+}
+.drawing-pin__number {
+  fill: #172033;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
 /* Crop tool (drawings viewer list-map mode) */
 .crop-draft-svg {
   display: block;

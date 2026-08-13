@@ -1919,16 +1919,48 @@
 
   function _mvStartPin() {
     var args = _mv.modeArgs || {};
-    var hasCrop = args.cropMode === 'polygon' && Array.isArray(args.vertices) && args.vertices.length >= 3;
-    if (hasCrop) {
-      _mvApplyListClip(args.vertices);
-      _mvZoomToCrop(args.vertices);
+    var isCropImage = !!(args.cropRenderStatus === 'ready' && args.cropImage && args.cropRenderMeta);
+    if (isCropImage) {
+      // Rendered crop document (white bg + header): no clip, no zoom-to-crop —
+      // the image already IS the cropped document.
+      _mv.cropDocMeta = args.cropRenderMeta;
+      _mvApplyWhiteBackground();
+    } else {
+      var hasCrop = args.cropMode === 'polygon' && Array.isArray(args.vertices) && args.vertices.length >= 3;
+      if (hasCrop) {
+        _mvApplyListClip(args.vertices);
+        _mvZoomToCrop(args.vertices);
+      }
+    }
+    // Set the pin-overlay coordinate mapper (full-sheet normalized -> document px).
+    if (window.PinOverlay) {
+      window.PinOverlay.coordMapper = _mv.cropDocMeta
+        ? function (nx, ny) { return _mvSheetToDocPx(nx, ny); }
+        : null;
     }
     _mvInitPinOverlay();
     var markupToggle = document.getElementById('dr-mv-markup-toggle');
     if (markupToggle) markupToggle.style.display = 'none';
     var backBtn = document.getElementById('dr-mv-back');
     if (backBtn) backBtn.textContent = '← Cancel';
+  }
+
+  // Convert a full-sheet normalized point to crop-document pixel coords.
+  function _mvSheetToDocPx(nx, ny) {
+    var m = _mv && _mv.cropDocMeta;
+    if (!m) {
+      var c = document.getElementById('dr-mv-canvas');
+      return { x: nx * (c ? c.width : 1), y: ny * (c ? c.height : 1) };
+    }
+    var sheetX = nx * m.sheetWidth, sheetY = ny * m.sheetHeight;
+    return { x: m.document.drawingLeft + (sheetX - m.bbox.x), y: m.document.drawingTop + (sheetY - m.bbox.y) };
+  }
+
+  function _mvApplyWhiteBackground() {
+    ['dr-mv-overlay-host', 'dr-mv-viewport', 'dr-mv-stage'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.style.background = '#ffffff';
+    });
   }
 
   function _mvApplyListClip(vertices) {
@@ -2021,6 +2053,15 @@
   function _mvPlacePin(clientX, clientY) {
     var args = _mv.modeArgs || {};
     var p = _mvScreenToNormalized(clientX, clientY);
+    // When showing the rendered crop document, convert document-normalized
+    // back to full-sheet normalized (the storage/API coordinate space).
+    if (_mv.cropDocMeta) {
+      var m = _mv.cropDocMeta;
+      var docX = p.x * m.document.width, docY = p.y * m.document.height;
+      var sheetX = m.bbox.x + (docX - m.document.drawingLeft);
+      var sheetY = m.bbox.y + (docY - m.document.drawingTop);
+      p = { x: sheetX / m.sheetWidth, y: sheetY / m.sheetHeight };
+    }
     if (args.cropMode === 'polygon' && args.vertices && args.vertices.length >= 3) {
       if (!_pointInPolygon(p.x, p.y, args.vertices)) {
         _mvFlashBoundary('Place the pin inside the mapped area.');
@@ -3629,11 +3670,21 @@
       itemId: opts.itemId,
       cropMode: opts.cropMode,
       vertices: opts.vertices,
+      cropRenderStatus: opts.cropRenderStatus,
+      cropImage: opts.cropImage,
+      cropRenderMeta: opts.cropRenderMeta,
       onPlaced: opts.onPlaced,
       onCancel: opts.onCancel
     };
-    return _loadDrawingForViewer(opts.projectId, opts.drawingId).then(function (file) {
+    // When a rendered crop document exists, show it directly (no full-drawing flash).
+    var hasRenderedCrop = opts.cropRenderStatus === 'ready' && opts.cropImage && opts.cropImage.fileId;
+    var loadId = hasRenderedCrop ? opts.cropImage.fileId : opts.drawingId;
+    return _loadDrawingForViewer(opts.projectId, loadId).then(function (file) {
       if (!file) throw new Error('Drawing not found');
+      if (hasRenderedCrop) {
+        file.meta.mimeType = 'image/png';
+        file.meta._isCropImage = true;
+      }
       _viewDrawing(file);
     });
   }

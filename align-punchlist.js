@@ -333,6 +333,9 @@
       itemId: itemId,
       cropMode: crop.cropMode,
       vertices: crop.vertices,
+      cropRenderStatus: crop.cropRenderStatus,
+      cropImage: crop.cropImage,
+      cropRenderMeta: crop.cropRenderMeta,
       onPlaced: function () { _loadListItems(); },
       onCancel: function () {}
     }).catch(notifyError);

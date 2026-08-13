@@ -17,6 +17,7 @@ const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const sharp = require('sharp');
 const rateLimit = require('express-rate-limit');
+const { renderPunchlistCrop } = require('./punchlist-crop-renderer');
 const cookieParser = require('cookie-parser');
 const Database = require('better-sqlite3');
 const nodemailer = require('nodemailer');
@@ -1772,6 +1773,69 @@ app.delete('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAu
 
 // ── Punchlist per-list crop (pin-location map) ───────────────────────────────
 
+// Render a polygon crop into a standalone PNG "document" (white bg + list-name
+// header) and store it as a generated file. Returns { fileId, meta, error }.
+async function renderAndStoreCropImage(pid, drawingId, sheetNumber, vertices, listName) {
+  const drawing = dbGet('SELECT id, mime_type, stored_path FROM files WHERE id = ? AND trashed = 0', drawingId);
+  if (!drawing || !drawing.stored_path || !fs.existsSync(drawing.stored_path)) {
+    return { fileId: null, meta: null, error: 'Drawing file not found' };
+  }
+
+  const genDir = path.join(UPLOADS_DIR, 'generated', 'punchlist-crops');
+  fs.mkdirSync(genDir, { recursive: true });
+  const fileId = uid();
+  const finalPath = path.join(genDir, fileId + '.png');
+
+  let meta;
+  try {
+    meta = await renderPunchlistCrop({
+      drawingFilePath: drawing.stored_path,
+      drawingMimeType: drawing.mime_type,
+      sheetNumber: sheetNumber,
+      vertices: vertices,
+      listName: listName || '',
+      outputPath: finalPath
+    });
+  } catch (err) {
+    console.error('[PUNCHLIST] Crop render failed:', err.message);
+    try { fs.rmSync(finalPath, { force: true }); } catch (e) {}
+    return { fileId: null, meta: null, error: err.message };
+  }
+
+  const size = fs.statSync(finalPath).size;
+  const ts = nowISO();
+  dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    fileId, pid, null, 'punchlist-crop', fileId + '.png', (listName || 'Location Map') + ' - location map.png', 'image/png', size, finalPath, ts, 'system', JSON.stringify({ kind: 'punchlist-crop', listName: listName || '' }));
+
+  return { fileId: fileId, meta: meta, error: null };
+}
+
+// Build the client-facing crop resource (includes rendered image + geometry).
+function cropResource(crop, listId) {
+  var meta = null;
+  try { meta = crop.crop_render_meta ? JSON.parse(crop.crop_render_meta) : null; } catch (e) { meta = null; }
+  var out = {
+    listId: listId,
+    configured: true,
+    drawingId: crop.drawing_id,
+    sheetNumber: crop.sheet_number,
+    cropMode: crop.crop_mode,
+    vertices: crop.crop_mode === 'polygon' ? parseCropVertices(crop.crop_vertices) : null,
+    updatedAt: crop.updated_at,
+    cropRenderStatus: crop.crop_render_status || 'missing'
+  };
+  if (crop.crop_image_file_id && crop.crop_render_status === 'ready') {
+    out.cropImage = {
+      fileId: crop.crop_image_file_id,
+      url: '/api/files/' + crop.crop_image_file_id,
+      width: meta && meta.document ? meta.document.width : null,
+      height: meta && meta.document ? meta.document.height : null
+    };
+  }
+  if (meta) out.cropRenderMeta = meta;
+  return out;
+}
+
 // GET /api/projects/:pid/punchlist-lists/:listId/crop
 app.get('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'r'), (req, res) => {
   var pid = req.params.pid;
@@ -1783,19 +1847,11 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.req
   if (!crop) {
     return res.json({ listId: listId, configured: false });
   }
-  res.json({
-    listId: listId,
-    configured: true,
-    drawingId: crop.drawing_id,
-    sheetNumber: crop.sheet_number,
-    cropMode: crop.crop_mode,
-    vertices: crop.crop_mode === 'polygon' ? parseCropVertices(crop.crop_vertices) : null,
-    updatedAt: crop.updated_at
-  });
+  res.json(cropResource(crop, listId));
 });
 
 // PUT /api/projects/:pid/punchlist-lists/:listId/crop  (create or replace)
-app.put('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
+app.put('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), async (req, res) => {
   var pid = req.params.pid;
   var listId = req.params.listId;
   var body = req.body || {};
@@ -1840,27 +1896,33 @@ app.put('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.req
   var now = new Date().toISOString();
   try {
     dbRun(`
-      INSERT INTO punchlist_list_crops (list_id, drawing_id, sheet_number, crop_mode, crop_vertices, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO punchlist_list_crops (list_id, drawing_id, sheet_number, crop_mode, crop_vertices, created_at, updated_at, crop_render_status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(list_id) DO UPDATE SET
         drawing_id = excluded.drawing_id,
         sheet_number = excluded.sheet_number,
         crop_mode = excluded.crop_mode,
         crop_vertices = excluded.crop_vertices,
-        updated_at = excluded.updated_at
-    `, listId, drawingId, sheetNumber, cropMode, cropMode === 'polygon' ? JSON.stringify(vertices) : null, now, now);
+        updated_at = excluded.updated_at,
+        crop_render_status = excluded.crop_render_status
+    `, listId, drawingId, sheetNumber, cropMode, cropMode === 'polygon' ? JSON.stringify(vertices) : null, now, now, 'rendering');
 
-    res.json({
-      ok: true,
-      crop: {
-        listId: listId,
-        drawingId: drawingId,
-        sheetNumber: sheetNumber,
-        cropMode: cropMode,
-        vertices: vertices,
-        updatedAt: now
+    // Render the polygon crop into a standalone PNG document (white bg + header).
+    if (cropMode === 'polygon') {
+      var listRow = dbGet('SELECT name FROM punchlist_lists WHERE id = ?', listId);
+      var listName = listRow ? (listRow.name || '') : '';
+      var render = await renderAndStoreCropImage(pid, drawingId, sheetNumber, vertices, listName);
+      if (render.fileId) {
+        dbRun("UPDATE punchlist_list_crops SET crop_image_file_id = ?, crop_render_meta = ?, crop_render_status = 'ready' WHERE list_id = ?",
+          render.fileId, JSON.stringify(render.meta), listId);
+      } else {
+        dbRun("UPDATE punchlist_list_crops SET crop_image_file_id = NULL, crop_render_meta = NULL, crop_render_status = 'failed' WHERE list_id = ?", listId);
       }
-    });
+    } else {
+      dbRun("UPDATE punchlist_list_crops SET crop_image_file_id = NULL, crop_render_meta = NULL, crop_render_status = 'missing' WHERE list_id = ?", listId);
+    }
+
+    res.json({ ok: true, crop: cropResource(getListCrop(listId), listId) });
   } catch (err) {
     console.error('[PUNCHLIST] Save crop error:', err.message);
     res.status(500).json({ error: 'Failed to save crop' });

@@ -19,6 +19,7 @@
     overlay: null, // SVG container for pins
     viewTransform: { panX: 0, panY: 0, zoom: 1 },
     selectedPinId: null, // Track which pin is selected
+    coordMapper: null,   // optional fn(nx, ny) -> {x, y} document px (crop image)
 
     /**
      * Init: Create overlay layer and fetch initial pins
@@ -131,50 +132,56 @@
         g.setAttribute('data-pin-id', pin.id);
         g.setAttribute('data-item-id', pin.punch_item_id);
 
-        // Convert normalized coords (0-1) to canvas pixel coords
-        const cx = pin.x * this.canvas.width;
-        const cy = pin.y * this.canvas.height;
+        // Convert normalized coords (0-1) to canvas pixel coords, via the
+        // coord mapper when a crop document is active.
+        let cx, cy;
+        if (this.coordMapper) {
+          const doc = this.coordMapper(pin.x, pin.y);
+          cx = doc.x; cy = doc.y;
+        } else {
+          cx = pin.x * this.canvas.width;
+          cy = pin.y * this.canvas.height;
+        }
 
-        // Draw circle (pin)
-        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        circle.setAttribute('cx', cx);
-        circle.setAttribute('cy', cy);
-        circle.setAttribute('r', '20'); // 20px radius
-        circle.setAttribute('fill', '#ef4444'); // Red
-        circle.setAttribute('opacity', '0.85');
-        circle.setAttribute('stroke', '#fff');
-        circle.setAttribute('stroke-width', '2');
-        circle.style.cursor = 'pointer';
+        // Teardrop map-pin marker (number in the face, tip = exact coordinate).
+        const pinSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        pinSvg.setAttribute('class', 'drawing-pin__svg');
+        pinSvg.setAttribute('viewBox', '0 0 36 46');
+        pinSvg.setAttribute('width', '36');
+        pinSvg.setAttribute('height', '46');
+        pinSvg.setAttribute('x', cx - 18);
+        pinSvg.setAttribute('y', cy - 46);
+        pinSvg.setAttribute('overflow', 'visible');
+        pinSvg.setAttribute('aria-hidden', 'true');
 
-        // Draw number inside circle
+        const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        shape.setAttribute('class', 'drawing-pin__shape');
+        shape.setAttribute('d', 'M18 1 C8.6 1 2 7.8 2 17 C2 28.2 12.2 37.4 18 45 C23.8 37.4 34 28.2 34 17 C34 7.8 27.4 1 18 1 Z');
+
+        const face = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        face.setAttribute('class', 'drawing-pin__face');
+        face.setAttribute('cx', '18');
+        face.setAttribute('cy', '17');
+        face.setAttribute('r', '10.5');
+
         const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        text.setAttribute('x', cx);
-        text.setAttribute('y', cy);
+        text.setAttribute('class', 'drawing-pin__number');
+        text.setAttribute('x', '18');
+        text.setAttribute('y', '17');
         text.setAttribute('text-anchor', 'middle');
         text.setAttribute('dominant-baseline', 'central');
-        text.setAttribute('font-size', '14');
-        text.setAttribute('font-weight', '700');
-        text.setAttribute('fill', '#fff');
         text.setAttribute('pointer-events', 'none');
         text.textContent = (idx + 1).toString();
 
-        g.appendChild(circle);
-        g.appendChild(text);
+        pinSvg.appendChild(shape);
+        pinSvg.appendChild(face);
+        pinSvg.appendChild(text);
+        g.appendChild(pinSvg);
 
         // Click handler
         g.addEventListener('click', (e) => {
           e.stopPropagation();
           this._onPinClick(pin);
-        });
-
-        // Hover
-        g.addEventListener('mouseenter', () => {
-          circle.setAttribute('r', '24');
-          circle.setAttribute('opacity', '1');
-        });
-        g.addEventListener('mouseleave', () => {
-          circle.setAttribute('r', '20');
-          circle.setAttribute('opacity', '0.85');
         });
 
         this.overlay.appendChild(g);

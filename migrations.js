@@ -567,6 +567,16 @@ const MIGRATIONS = [
           ON punchlist_list_crops(drawing_id, sheet_number)
       `);
     }
+  },
+  {
+    version: 28,
+    name: 'punchlist_crop_render',
+    up(db) {
+      const safeAdd = (sql) => { try { db.exec(sql); } catch (e) { /* already exists */ } };
+      safeAdd("ALTER TABLE punchlist_list_crops ADD COLUMN crop_image_file_id TEXT");
+      safeAdd("ALTER TABLE punchlist_list_crops ADD COLUMN crop_render_meta TEXT");
+      safeAdd("ALTER TABLE punchlist_list_crops ADD COLUMN crop_render_status TEXT NOT NULL DEFAULT 'missing'");
+    }
   }
 ];
 
