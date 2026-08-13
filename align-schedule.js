@@ -13,6 +13,7 @@
 
   var state = {
     container: null,
+    chrome: null,
     projectId: null,
     filter: 'all',           // 'all' | 'upcoming' | 'in_progress' | 'completed' | 'delayed'
     categoryFilter: 'all',    // 'all' | 'milestone' | 'inspection' | 'delivery' | 'meeting'
@@ -56,9 +57,10 @@
   /* ── Inject CSS ─────────────────────────────────────────────────────── */
   
   /* ── Render ─────────────────────────────────────────────────────────── */
-  function render(container) {
+  function render(container, chrome) {
     if (!container) return;
     state.container = container;
+    state.chrome = chrome || null;
     state.projectId = null;
     state.filter = 'all';
     state.categoryFilter = 'all';
@@ -79,6 +81,7 @@
     var c = state.container;
     if (!c) return;
     _resolveProjectId();
+    _renderHeader();
     if (!state.projectId) {
       c.innerHTML = '<div class="sc-empty"><strong>No active project</strong><p>Select a project from the header.</p></div>';
       return;
@@ -92,6 +95,39 @@
 
     c.innerHTML = _listHtml();
     _bindList();
+  }
+
+  function _renderHeader() {
+    if (!state.chrome || !state.chrome.setHeader) return;
+    if (state.viewMode === 'form' && state.editingItem) {
+      state.chrome.setHeader({
+        title: state.editingItem.id ? 'Edit Milestone' : 'New Milestone',
+        backLabel: 'Back to Schedule',
+        actions: [{ id: 'sc-save', label: 'Save', variant: 'primary', type: 'submit', form: 'sc-form' }]
+      });
+    } else {
+      state.chrome.setHeader({
+        title: 'Schedule',
+        backLabel: 'Back',
+        actions: [{ id: 'sc-new', label: '+ New Milestone', variant: 'primary', onClick: _newScheduleItem }]
+      });
+    }
+  }
+
+  function _newScheduleItem() {
+    state.editingItem = {
+      id: '', title: '', description: '',
+      milestoneDate: new Date().toISOString().slice(0,10),
+      status: 'upcoming', category: 'milestone', dependencies: '',
+      createdAt: '', updatedAt: ''
+    };
+    state.viewMode = 'form';
+    _paint();
+  }
+
+  function handleBack() {
+    if (state.viewMode === 'form') { state.viewMode = 'list'; state.editingItem = null; _paint(); return true; }
+    return false;
   }
 
   /* ── List View ──────────────────────────────────────────────────────── */
@@ -120,18 +156,14 @@
     });
     h.push('</div>');
 
-    // Header
+    // Category filter
     h.push('<div class="sc-header">');
-    h.push('<div class="sc-header-left">');
-    h.push('<h3 class="sc-title">📅 Schedule</h3>');
     h.push('<select class="sc-category-filter" id="sc-category-filter">');
     h.push('<option value="all"'+(state.categoryFilter==='all'?' selected':'')+'>All Types</option>');
     CATEGORIES.forEach(function(cat){
       h.push('<option value="'+cat+'"'+(state.categoryFilter===cat?' selected':'')+'>'+catLabel(cat)+'</option>');
     });
     h.push('</select>');
-    h.push('</div>');
-    h.push('<button class="pm-btn primary" id="sc-new-btn">+ New Milestone</button>');
     h.push('</div>');
 
     // Filter
@@ -232,24 +264,6 @@
     var cf = document.getElementById('sc-category-filter');
     if (cf) cf.addEventListener('change',function(){ state.categoryFilter = this.value; _paint(); });
 
-    // New button
-    var nb = document.getElementById('sc-new-btn');
-    if (nb) nb.addEventListener('click',function(){
-      state.editingItem = {
-        id: '',
-        title: '',
-        description: '',
-        milestoneDate: new Date().toISOString().slice(0,10),
-        status: 'upcoming',
-        category: 'milestone',
-        dependencies: '',
-        createdAt: '',
-        updatedAt: ''
-      };
-      state.viewMode = 'form';
-      _paint();
-    });
-
     // Delegated actions
     var wrap = document.querySelector('.sc-wrap');
     if (wrap) wrap.addEventListener('click',function(e){
@@ -286,12 +300,7 @@
   /* ── Form View ──────────────────────────────────────────────────────── */
   function _formHtml(item) {
     var h = [];
-    h.push('<div class="sc-form-wrap">');
-    h.push('<div class="sc-form-header">');
-    h.push('<button class="pm-btn" id="sc-form-back">← Back</button>');
-    h.push('<h3 class="sc-form-title">'+(item.id?'Edit Milestone':'New Milestone')+'</h3>');
-    h.push('<button class="pm-btn primary" id="sc-form-save">💾 Save</button>');
-    h.push('</div>');
+    h.push('<form id="sc-form" class="sc-form-wrap">');
 
     // Row: Status + Category
     h.push('<div class="sc-form-row">');
@@ -335,15 +344,14 @@
 
     h.push('<p class="sc-deps-note">💡 Use dependencies to note prerequisites before this milestone can start.</p>');
 
-    h.push('</div>');
+    h.push('</form>');
     return h.join('');
   }
 
   function _bindForm() {
-    document.getElementById('sc-form-back').addEventListener('click',function(){
-      state.viewMode = 'list'; state.editingItem = null; _paint();
-    });
-    document.getElementById('sc-form-save').addEventListener('click',function(){
+    var form = document.getElementById('sc-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
       var item = state.editingItem;
       item.title       = (document.getElementById('sc-title')?.value||'').trim();
       item.description = (document.getElementById('sc-desc')?.value||'').trim();
@@ -362,6 +370,7 @@
   /* ── Public API ─────────────────────────────────────────────────────── */
   global.AlignSchedule = Object.freeze({
     render: render,
+    handleBack: handleBack,
     CATEGORY: CATEGORY
   });
 

@@ -3,7 +3,7 @@
 var A=function(){return g.AlignAuth;};
 var S=function(){return g.AlignStorage;};
 
-var state={container:null,projectId:null,search:'',viewMode:'list',editingContact:null,
+var state={container:null,chrome:null,projectId:null,search:'',viewMode:'list',editingContact:null,
            companies:[],users:[],loaded:false,newCompanyName:''};
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -31,7 +31,7 @@ function _loadData(){
 }
 
 /* ── Public render ─────────────────────────────────────────────────── */
-function render(c){if(!c)return;state.container=c;state.projectId=null;state.search='';state.viewMode='list';state.editingContact=null;state.companies=[];state.users=[];state.loaded=false;state.newCompanyName='';_resolvePid();
+function render(c, chrome){if(!c)return;state.container=c;state.chrome=chrome||null;state.projectId=null;state.search='';state.viewMode='list';state.editingContact=null;state.companies=[];state.users=[];state.loaded=false;state.newCompanyName='';_resolvePid();
   if(!state.projectId){
     // Project not ready yet — retry after a short delay
     c.innerHTML='<div class="ct-empty">Loading directory…</div>';
@@ -44,10 +44,46 @@ function render(c){if(!c)return;state.container=c;state.projectId=null;state.sea
 function _paint(){
   var c=state.container;if(!c)return;
   _resolvePid();
+  _renderHeader();
   if(!state.projectId){c.innerHTML='<div class="ct-empty"><strong>No project</strong><p>Select a project.</p></div>';return;}
   if(!state.loaded){c.innerHTML='<div class="ct-empty">Loading directory…</div>';return;}
   if(state.viewMode==='form'&&state.editingContact){c.innerHTML=_formHtml();_bindForm();return;}
   c.innerHTML=_listHtml();_bindList();
+}
+
+function _renderHeader(){
+  if(!state.chrome||!state.chrome.setHeader)return;
+  if(state.viewMode==='form'&&state.editingContact){
+    var ct=state.editingContact,isCompany=ct.mode==='company';
+    state.chrome.setHeader({
+      title:(ct.id?'Edit ':'New ')+(isCompany?'Company':'User'),
+      backLabel:'Back to Directory',
+      actions:[{id:'ct-save',label:'Save',variant:'primary',type:'submit',form:'ct-form'}]
+    });
+  }else{
+    var actions=[];
+    if(isAdmin()){
+      actions.push({id:'ct-new-company',label:'+ Add Company',variant:'secondary',onClick:_newCompany});
+      actions.push({id:'ct-new-user',label:'+ Add User',variant:'primary',onClick:_newUser});
+    }
+    state.chrome.setHeader({title:'Directory',backLabel:'Back',actions:actions});
+  }
+}
+
+function _newCompany(){state.editingContact={mode:'company',name:'',trade:''};state.viewMode='form';_paint();}
+function _newUser(){
+  if(!state.companies.length&&isAdmin()){
+    alert('Create a company first before adding users.');
+    state.editingContact={mode:'company',name:'',trade:''};
+    state.viewMode='form';_paint();
+    return;
+  }
+  state.editingContact={mode:'user',name:'',role:'',company_id:'',phone:'',email:'',newCompany:false};
+  state.viewMode='form';_paint();
+}
+function handleBack(){
+  if(state.viewMode==='form'){state.viewMode='list';state.editingContact=null;_paint();return true;}
+  return false;
 }
 
 /* ── List view ──────────────────────────────────────────────────────── */
@@ -66,14 +102,8 @@ function _listHtml(){
 
   var h=[];
   h.push('<div class="ct-wrap"><div class="ct-header">');
-  h.push('<h3 class="ct-title">Directory</h3>');
-  h.push('<div class="ct-header-actions">');
   h.push('<input type="search" class="ct-search" id="ct-search" placeholder="Search name, company, role..." value="'+esc(state.search)+'">');
-  if(isAdmin()){
-    h.push('<button class="pm-btn" id="ct-new-company-btn">+ Add Company</button>');
-    h.push('<button class="pm-btn primary" id="ct-new-user-btn">+ Add User</button>');
-  }
-  h.push('</div></div>');
+  h.push('</div>');
 
   var total=users.length;
   h.push('<div class="ct-count">'+total+' contact'+(total!==1?'s':'')+'</div>');
@@ -165,24 +195,6 @@ function _bindList(){
   var s=document.getElementById('ct-search');
   if(s)s.addEventListener('input',function(){state.search=this.value;_paint();});
 
-  var cb=document.getElementById('ct-new-company-btn');
-  if(cb)cb.addEventListener('click',function(){
-    state.editingContact={mode:'company',name:'',trade:''};
-    state.viewMode='form';_paint();
-  });
-
-  var ub=document.getElementById('ct-new-user-btn');
-  if(ub)ub.addEventListener('click',function(){
-    if(!state.companies.length&&isAdmin()){
-      alert('Create a company first before adding users.');
-      state.editingContact={mode:'company',name:'',trade:''};
-      state.viewMode='form';_paint();
-      return;
-    }
-    state.editingContact={mode:'user',name:'',role:'',company_id:'',phone:'',email:'',newCompany:false};
-    state.viewMode='form';_paint();
-  });
-
   var pb=document.getElementById('ct-permissions-btn');
   if(pb)pb.addEventListener('click',function(){ _showPermissionsPanel(); });
 
@@ -252,12 +264,7 @@ function _formHtml(){
   var ct=state.editingContact||{};
   var isCompany=ct.mode==='company';
   var h=[];
-  h.push('<div class="ct-form-wrap">');
-  h.push('<div class="ct-form-header">');
-  h.push('<button class="pm-btn" id="ct-form-back">← Back</button>');
-  h.push('<h3 class="ct-form-title">'+(ct.id?'Edit ':'New ')+(isCompany?'Company':'User')+'</h3>');
-  h.push('<button class="pm-btn primary" id="ct-form-save">Save</button>');
-  h.push('</div>');
+  h.push('<form id="ct-form" class="ct-form-wrap">');
 
   if(isCompany){
     h.push('<div class="ct-form-section"><label class="ct-field-label">Company Name</label><input type="text" class="ct-input" id="ct-co-name" value="'+esc(ct.name||'')+'" placeholder="Company name" autocomplete="off"></div>');
@@ -286,12 +293,12 @@ function _formHtml(){
     });
     h.push('</div></div>');
   }
-  h.push('</div>');
+  h.push('</form>');
   return h.join('');
 }
 
 function _bindForm(){
-  document.getElementById('ct-form-back').addEventListener('click',function(){state.viewMode='list';state.editingContact=null;_paint();});
+  var form=document.getElementById('ct-form');
 
   // Populate company dropdown for user form
   var coSel=document.getElementById('ct-company-sel');
@@ -327,7 +334,8 @@ function _bindForm(){
     });
   }
 
-  document.getElementById('ct-form-save').addEventListener('click',function(){
+  form.addEventListener('submit', function(event){
+    event.preventDefault();
     var ct=state.editingContact||{};
     var isCompany=ct.mode==='company';
 
@@ -723,6 +731,6 @@ function _savePerm(uid, perms, btn, idx) {
   });
 }
 
-g.AlignContacts=Object.freeze({render:render, refresh:function(){_resolvePid();_loadData();}});
+g.AlignContacts=Object.freeze({render:render, handleBack:handleBack, refresh:function(){_resolvePid();_loadData();}});
   if (window.TileRegistry) window.TileRegistry.register({ id: 'contacts', title: 'Directory', icon: '[]', route: 'contacts', roles: ['user','admin'], order: 7 });
 })(window);

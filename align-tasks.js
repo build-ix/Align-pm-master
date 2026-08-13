@@ -17,6 +17,7 @@
   /* ── State ──────────────────────────────────────────────────────────── */
   var st = {
     container: null,
+    chrome: null,
     projectId: null,
     filter: 'all',            // 'all' | 'pending' | 'in_progress' | 'done'
     searchQuery: '',
@@ -150,9 +151,10 @@
   }
 
   /* ── Entry Point ────────────────────────────────────────────────────── */
-  function render(container) {
+  function render(container, chrome) {
     if (!container) return;
     st.container = container;
+    st.chrome = chrome || null;
     st.projectId = null;
     st.filter = 'all';
     st.searchQuery = '';
@@ -179,6 +181,7 @@
     var c = st.container;
     if (!c) return;
     _resolveProjectId();
+    _renderHeader();
 
     if (!st.projectId) {
       c.innerHTML = '<div class="tk-empty"><strong>No active project</strong><p>Select a project.</p></div>';
@@ -193,6 +196,37 @@
 
     c.innerHTML = _renderList();
     _bindList();
+  }
+
+  function _renderHeader() {
+    if (!st.chrome || !st.chrome.setHeader) return;
+    if (st.mode === 'form' && st.editing) {
+      st.chrome.setHeader({
+        title: st.editing.id ? 'Edit Task' : 'New Task',
+        backLabel: 'Back to Tasks',
+        actions: [{ id: 'tk-save', label: 'Save', variant: 'primary', type: 'submit', form: 'tk-form' }]
+      });
+    } else {
+      st.chrome.setHeader({
+        title: 'Tasks',
+        backLabel: 'Back',
+        actions: [{ id: 'tk-new', label: '+ New Task', variant: 'primary', onClick: _newTask }]
+      });
+    }
+  }
+
+  function _newTask() {
+    st.editing = {
+      id: '', title: '', description: '', assignedTo: '', priority: 'medium',
+      status: 'pending', dueDate: '', createdBy: getUser(), activity: []
+    };
+    st.mode = 'form';
+    _paint();
+  }
+
+  function handleBack() {
+    if (st.mode === 'form') { st.mode = 'list'; st.editing = null; _fetchPage(); return true; }
+    return false;
   }
 
   /* ── List View ──────────────────────────────────────────────────────── */
@@ -210,8 +244,6 @@
       h.push('</button>');
     });
     h.push('</div>');
-
-    h.push('<div class="tk-header"><h3 class="tk-title">Tasks</h3><button class="pm-btn primary" id="tk-new-btn">+ New Task</button></div>');
 
     // Search + Sort toolbar
     h.push('<div class="tk-toolbar"><div class="tk-search-wrap">');
@@ -276,19 +308,6 @@
         _fetchPage();
       });
     });
-
-    // New task button
-    var newBtn = document.getElementById('tk-new-btn');
-    if (newBtn) {
-      newBtn.addEventListener('click', function () {
-        st.editing = {
-          id: '', title: '', description: '', assignedTo: '', priority: 'medium',
-          status: 'pending', dueDate: '', createdBy: getUser(), activity: []
-        };
-        st.mode = 'form';
-        _paint();
-      });
-    }
 
     // Search (debounced 300ms)
     var searchInput = document.getElementById('tk-search');
@@ -381,12 +400,7 @@
     var t = st.editing || {};
     var h = [];
 
-    h.push('<div class="tk-form-wrap">');
-    h.push('<div class="tk-form-header">');
-    h.push('<button class="pm-btn" id="tk-form-back">← Back</button>');
-    h.push('<h3 class="tk-form-title">' + (t.id ? 'Edit Task' : 'New Task') + '</h3>');
-    h.push('<button class="pm-btn primary" id="tk-form-save">💾 Save</button>');
-    h.push('</div>');
+    h.push('<form id="tk-form" class="tk-form-wrap">');
 
     h.push('<div class="tk-form-s"><label class="tk-fl">Title</label><input class="tk-inp" id="tk-title" value="' + esc(t.title || '') + '" placeholder="What needs to be done?"></div>');
     h.push('<div class="tk-form-s"><label class="tk-fl">Description</label><textarea class="tk-txa" id="tk-desc" rows="3" placeholder="Details…">' + esc(t.description || '') + '</textarea></div>');
@@ -414,16 +428,12 @@
       h.push('<div class="tk-form-s"><p style="font-size:0.75rem;color:var(--muted)">Created by ' + esc(t.createdBy) + ' on ' + fmtDate(t.createdAt) + '</p></div>');
     }
 
-    h.push('</div>');
+    h.push('</form>');
     return h.join('');
   }
 
   function _bindForm() {
-    document.getElementById('tk-form-back').addEventListener('click', function () {
-      st.mode = 'list';
-      st.editing = null;
-      _fetchPage();
-    });
+    var form = document.getElementById('tk-form');
 
     // Populate assigned-to dropdown with project members
     var assignSel = document.getElementById('tk-assign');
@@ -443,7 +453,10 @@
         .catch(function() {});
     }
 
-    document.getElementById('tk-form-save').addEventListener('click', function () {
+    var submitting = false;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (submitting) return;
       var t = st.editing;
       var oldStatus = t.status;
 
@@ -478,6 +491,9 @@
       if (!t.id) t.id = uid();
       if (!t.createdBy) t.createdBy = getUser();
 
+      submitting = true;
+      var saveBtn = document.getElementById('tk-save');
+      if (saveBtn) saveBtn.disabled = true;
       S().saveRecord(st.projectId, CAT, t);
       st.mode = 'list';
       st.editing = null;
@@ -486,6 +502,6 @@
   }
 
   /* ── Public API ─────────────────────────────────────────────────────── */
-  global.AlignTasks = Object.freeze({ render: render, CATEGORY: CAT });
+  global.AlignTasks = Object.freeze({ render: render, handleBack: handleBack, CATEGORY: CAT });
   if (window.TileRegistry) window.TileRegistry.register({ id: 'tasks', title: 'Tasks', icon: '[]', route: 'tasks', roles: ['user','admin'], order: 6 });
 })(window);

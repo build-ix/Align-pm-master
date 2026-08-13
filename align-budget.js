@@ -13,6 +13,7 @@
 
   var state = {
     container: null,
+    chrome: null,
     projectId: null,
     filter: 'all',           // 'all' | 'approved' | 'pending' | 'paid'
     categoryFilter: 'all',   // 'all' | 'labor' | 'materials' | 'equipment' | 'subcontractor' | 'other'
@@ -67,9 +68,10 @@
   }
 
   /* ── Render ─────────────────────────────────────────────────────────── */
-  function render(container) {
+  function render(container, chrome) {
     if (!container) return;
     state.container = container;
+    state.chrome = chrome || null;
     state.projectId = null;
     state.filter = 'all';
     state.categoryFilter = 'all';
@@ -90,6 +92,7 @@
     var c=state.container;
     if (!c) return;
     _resolveProjectId();
+    _renderHeader();
     if (!state.projectId) {
       c.innerHTML='<div class="bg-empty"><strong>No active project</strong><p>Select a project from the header.</p></div>';
       return;
@@ -103,6 +106,34 @@
 
     c.innerHTML=_listHtml();
     _bindList();
+  }
+
+  function _renderHeader() {
+    if (!state.chrome || !state.chrome.setHeader) return;
+    if (state.viewMode==='form' && state.editingItem) {
+      state.chrome.setHeader({
+        title: state.editingItem.id ? 'Edit Budget Item' : 'New Budget Item',
+        backLabel: 'Back to Budget',
+        actions: [{ id: 'bg-save', label: 'Save', variant: 'primary', type: 'submit', form: 'bg-form' }]
+      });
+    } else {
+      state.chrome.setHeader({
+        title: 'Budget',
+        backLabel: 'Back',
+        actions: [{ id: 'bg-new', label: '+ New Item', variant: 'primary', onClick: _newBudgetItem }]
+      });
+    }
+  }
+
+  function _newBudgetItem() {
+    state.editingItem={id:'',title:'',amount:'',category:'other',status:'pending',vendor:'',invoiceRef:'',notes:'',date:''};
+    state.viewMode='form';
+    _paint();
+  }
+
+  function handleBack() {
+    if (state.viewMode==='form') { state.viewMode='list'; state.editingItem=null; _paint(); return true; }
+    return false;
   }
 
   /* ── List View ──────────────────────────────────────────────────────── */
@@ -131,18 +162,14 @@
     h.push('<div class="bg-total-display"><span class="bg-total-label">Total</span><span class="bg-total-value">'+fmtCurrency(grandTotal)+'</span></div>');
     h.push('</div>');
 
-    // Header + filters
+    // Category filter
     h.push('<div class="bg-header">');
-    h.push('<div class="bg-header-left">');
-    h.push('<h3 class="bg-title">Budget</h3>');
     h.push('<select class="bg-cat-filter" id="bg-cat-filter">');
     h.push('<option value="all"'+(state.categoryFilter==='all'?' selected':'')+'>All Categories</option>');
     CATEGORIES.forEach(function(c){
       h.push('<option value="'+c+'"'+(state.categoryFilter===c?' selected':'')+'>'+catLabel(c)+'</option>');
     });
     h.push('</select>');
-    h.push('</div>');
-    h.push('<button class="pm-btn primary" id="bg-new-btn">+ New Item</button>');
     h.push('</div>');
 
     // Filter
@@ -204,14 +231,6 @@
     var cf=document.getElementById('bg-cat-filter');
     if (cf) cf.addEventListener('change',function(){ state.categoryFilter=this.value; _paint(); });
 
-    // New button
-    var nb=document.getElementById('bg-new-btn');
-    if (nb) nb.addEventListener('click',function(){
-      state.editingItem={id:'',title:'',amount:'',category:'other',status:'pending',vendor:'',invoiceRef:'',notes:'',date:''};
-      state.viewMode='form';
-      _paint();
-    });
-
     // Delegated actions
     var wrap=document.querySelector('.bg-wrap');
     if (wrap) wrap.addEventListener('click',function(e){
@@ -236,12 +255,7 @@
   /* ── Form View ──────────────────────────────────────────────────────── */
   function _formHtml(item) {
     var h=[];
-    h.push('<div class="bg-form-wrap">');
-    h.push('<div class="bg-form-header">');
-    h.push('<button class="pm-btn" id="bg-form-back">← Back</button>');
-    h.push('<h3 class="bg-form-title">'+(item.id?'Edit Budget Item':'New Budget Item')+'</h3>');
-    h.push('<button class="pm-btn primary" id="bg-form-save">💾 Save</button>');
-    h.push('</div>');
+    h.push('<form id="bg-form" class="bg-form-wrap">');
 
     // Title
     h.push('<div class="bg-form-section">');
@@ -277,15 +291,14 @@
     h.push('<textarea class="bg-textarea" id="bg-notes" rows="3" placeholder="Additional details…">'+esc(item.notes||'')+'</textarea>');
     h.push('</div>');
 
-    h.push('</div>');
+    h.push('</form>');
     return h.join('');
   }
 
   function _bindForm() {
-    document.getElementById('bg-form-back').addEventListener('click',function(){
-      state.viewMode='list'; state.editingItem=null; _paint();
-    });
-    document.getElementById('bg-form-save').addEventListener('click',function(){
+    var form = document.getElementById('bg-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
       var item=state.editingItem;
       item.title=(document.getElementById('bg-title')?.value||'').trim();
       item.amount=parseFloat(document.getElementById('bg-amount')?.value)||0;
@@ -308,6 +321,7 @@
   /* ── Public API ─────────────────────────────────────────────────────── */
   global.AlignBudget = Object.freeze({
     render: render,
+    handleBack: handleBack,
     CATEGORY: CATEGORY
   });
   if (window.TileRegistry) window.TileRegistry.register({ id: 'budget', title: 'Budget', icon: '[]', route: 'budget', roles: ['user','admin'], order: 9 });

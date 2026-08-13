@@ -13,6 +13,7 @@
 
   var state = {
     container: null,
+    chrome: null,
     projectId: null,
     filter: 'all',           // 'all' | 'ordered' | 'in_transit' | 'received' | 'delayed'
     editingItem: null,
@@ -62,9 +63,10 @@
   }
 
   /* ── Render ─────────────────────────────────────────────────────────── */
-  function render(container) {
+  function render(container, chrome) {
     if (!container) return;
     state.container = container;
+    state.chrome = chrome || null;
     state.projectId = null;
     state.filter = 'all';
     state.viewMode = 'list';
@@ -84,6 +86,7 @@
     var c=state.container;
     if (!c) return;
     _resolveProjectId();
+    _renderHeader();
     if (!state.projectId) {
       c.innerHTML='<div class="pr-empty"><strong>No active project</strong><p>Select a project from the header.</p></div>';
       return;
@@ -97,6 +100,34 @@
 
     c.innerHTML=_listHtml();
     _bindList();
+  }
+
+  function _renderHeader() {
+    if (!state.chrome || !state.chrome.setHeader) return;
+    if (state.viewMode==='form' && state.editingItem) {
+      state.chrome.setHeader({
+        title: state.editingItem.id ? 'Edit Purchase Order' : 'New Purchase Order',
+        backLabel: 'Back to Procurement',
+        actions: [{ id: 'pr-save', label: 'Save', variant: 'primary', type: 'submit', form: 'pr-form' }]
+      });
+    } else {
+      state.chrome.setHeader({
+        title: 'Procurement',
+        backLabel: 'Back',
+        actions: [{ id: 'pr-new', label: '+ New Order', variant: 'primary', onClick: _newOrder }]
+      });
+    }
+  }
+
+  function _newOrder() {
+    state.editingItem={id:'',title:'',item:'',quantity:'',unit:'',vendor:'',orderDate:'',deliveryDate:'',status:'ordered',poNumber:'',notes:''};
+    state.viewMode='form';
+    _paint();
+  }
+
+  function handleBack() {
+    if (state.viewMode==='form') { state.viewMode='list'; state.editingItem=null; _paint(); return true; }
+    return false;
   }
 
   /* ── List View ──────────────────────────────────────────────────────── */
@@ -126,12 +157,6 @@
     if (overdue>0) {
       h.push('<div class="pr-overdue-alert"><span>⚠️ '+overdue+' overdue</span></div>');
     }
-    h.push('</div>');
-
-    // Header
-    h.push('<div class="pr-header">');
-    h.push('<h3 class="pr-title">Procurement</h3>');
-    h.push('<button class="pm-btn primary" id="pr-new-btn">+ New Order</button>');
     h.push('</div>');
 
     // Filter
@@ -199,14 +224,6 @@
       });
     });
 
-    // New button
-    var nb=document.getElementById('pr-new-btn');
-    if (nb) nb.addEventListener('click',function(){
-      state.editingItem={id:'',title:'',item:'',quantity:'',unit:'',vendor:'',orderDate:'',deliveryDate:'',status:'ordered',poNumber:'',notes:''};
-      state.viewMode='form';
-      _paint();
-    });
-
     // Delegated actions
     var wrap=document.querySelector('.pr-wrap');
     if (wrap) wrap.addEventListener('click',function(e){
@@ -242,12 +259,7 @@
   /* ── Form View ──────────────────────────────────────────────────────── */
   function _formHtml(item) {
     var h=[];
-    h.push('<div class="pr-form-wrap">');
-    h.push('<div class="pr-form-header">');
-    h.push('<button class="pm-btn" id="pr-form-back">← Back</button>');
-    h.push('<h3 class="pr-form-title">'+(item.id?'Edit Purchase Order':'New Purchase Order')+'</h3>');
-    h.push('<button class="pm-btn primary" id="pr-form-save">💾 Save</button>');
-    h.push('</div>');
+    h.push('<form id="pr-form" class="pr-form-wrap">');
 
     // Title
     h.push('<div class="pr-form-section">');
@@ -283,15 +295,14 @@
     h.push('<textarea class="pr-textarea" id="pr-notes" rows="3" placeholder="Special instructions, lead time notes, contact info…">'+esc(item.notes||'')+'</textarea>');
     h.push('</div>');
 
-    h.push('</div>');
+    h.push('</form>');
     return h.join('');
   }
 
   function _bindForm() {
-    document.getElementById('pr-form-back').addEventListener('click',function(){
-      state.viewMode='list'; state.editingItem=null; _paint();
-    });
-    document.getElementById('pr-form-save').addEventListener('click',function(){
+    var form = document.getElementById('pr-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
       var item=state.editingItem;
       item.title=(document.getElementById('pr-title')?.value||'').trim();
       item.item=(document.getElementById('pr-item')?.value||'').trim();
@@ -316,6 +327,7 @@
   /* ── Public API ─────────────────────────────────────────────────────── */
   global.AlignProcurement = Object.freeze({
     render: render,
+    handleBack: handleBack,
     CATEGORY: CATEGORY
   });
   if (window.TileRegistry) window.TileRegistry.register({ id: 'procurement', title: 'Procurement', icon: '[]', route: 'procurement', roles: ['user','admin'], order: 11 });

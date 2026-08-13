@@ -13,6 +13,7 @@
 
   var state = {
     container: null,
+    chrome: null,
     projectId: null,
     filter: 'all',           // 'all' | 'current' | 'superseded'
     sectionFilter: 'all',
@@ -54,9 +55,10 @@
   }
 
   /* ── Render ─────────────────────────────────────────────────────────── */
-  function render(container) {
+  function render(container, chrome) {
     if (!container) return;
     state.container = container;
+    state.chrome = chrome || null;
     state.projectId = null;
     state.filter = 'all';
     state.sectionFilter = 'all';
@@ -77,6 +79,7 @@
     var c=state.container;
     if (!c) return;
     _resolveProjectId();
+    _renderHeader();
     if (!state.projectId) {
       c.innerHTML='<div class="sp-empty"><strong>No active project</strong><p>Select a project from the header.</p></div>';
       return;
@@ -90,6 +93,34 @@
 
     c.innerHTML=_listHtml();
     _bindList();
+  }
+
+  function _renderHeader() {
+    if (!state.chrome || !state.chrome.setHeader) return;
+    if (state.viewMode==='form' && state.editingItem) {
+      state.chrome.setHeader({
+        title: state.editingItem.id ? 'Edit Specification' : 'New Specification',
+        backLabel: 'Back to Specs',
+        actions: [{ id: 'sp-save', label: 'Save', variant: 'primary', type: 'submit', form: 'sp-form' }]
+      });
+    } else {
+      state.chrome.setHeader({
+        title: 'Specs',
+        backLabel: 'Back',
+        actions: [{ id: 'sp-new', label: '+ New Spec', variant: 'primary', onClick: _newSpec }]
+      });
+    }
+  }
+
+  function _newSpec() {
+    state.editingItem={id:'',title:'',section:'',description:'',version:'',status:'current',fileRef:'',notes:''};
+    state.viewMode='form';
+    _paint();
+  }
+
+  function handleBack() {
+    if (state.viewMode==='form') { state.viewMode='list'; state.editingItem=null; _paint(); return true; }
+    return false;
   }
 
   /* ── List View ──────────────────────────────────────────────────────── */
@@ -114,19 +145,15 @@
     });
     h.push('</div>');
 
-    // Header + filters
+    // Section filter
     var sections=getSections(items);
     h.push('<div class="sp-header">');
-    h.push('<div class="sp-header-left">');
-    h.push('<h3 class="sp-title">Specifications</h3>');
     h.push('<select class="sp-section-filter" id="sp-section-filter">');
     h.push('<option value="all"'+(state.sectionFilter==='all'?' selected':'')+'>All Sections</option>');
     sections.forEach(function(sec){
       h.push('<option value="'+esc(sec)+'"'+(state.sectionFilter===sec?' selected':'')+'>'+esc(sec)+'</option>');
     });
     h.push('</select>');
-    h.push('</div>');
-    h.push('<button class="pm-btn primary" id="sp-new-btn">+ New Spec</button>');
     h.push('</div>');
 
     // Filter
@@ -189,14 +216,6 @@
     var sf=document.getElementById('sp-section-filter');
     if (sf) sf.addEventListener('change',function(){ state.sectionFilter=this.value; _paint(); });
 
-    // New button
-    var nb=document.getElementById('sp-new-btn');
-    if (nb) nb.addEventListener('click',function(){
-      state.editingItem={id:'',title:'',section:'',description:'',version:'',status:'current',fileRef:'',notes:''};
-      state.viewMode='form';
-      _paint();
-    });
-
     // Delegated actions
     var wrap=document.querySelector('.sp-wrap');
     if (wrap) wrap.addEventListener('click',function(e){
@@ -231,12 +250,7 @@
   /* ── Form View ──────────────────────────────────────────────────────── */
   function _formHtml(item) {
     var h=[];
-    h.push('<div class="sp-form-wrap">');
-    h.push('<div class="sp-form-header">');
-    h.push('<button class="pm-btn" id="sp-form-back">← Back</button>');
-    h.push('<h3 class="sp-form-title">'+(item.id?'Edit Specification':'New Specification')+'</h3>');
-    h.push('<button class="pm-btn primary" id="sp-form-save">💾 Save</button>');
-    h.push('</div>');
+    h.push('<form id="sp-form" class="sp-form-wrap">');
 
     // Title
     h.push('<div class="sp-form-section">');
@@ -271,15 +285,14 @@
     h.push('<textarea class="sp-textarea" id="sp-notes" rows="2" placeholder="Additional notes or change history…">'+esc(item.notes||'')+'</textarea>');
     h.push('</div>');
 
-    h.push('</div>');
+    h.push('</form>');
     return h.join('');
   }
 
   function _bindForm() {
-    document.getElementById('sp-form-back').addEventListener('click',function(){
-      state.viewMode='list'; state.editingItem=null; _paint();
-    });
-    document.getElementById('sp-form-save').addEventListener('click',function(){
+    var form = document.getElementById('sp-form');
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
       var item=state.editingItem;
       item.title=(document.getElementById('sp-title')?.value||'').trim();
       item.section=(document.getElementById('sp-section')?.value||'').trim();
@@ -301,6 +314,7 @@
   /* ── Public API ─────────────────────────────────────────────────────── */
   global.AlignSpecs = Object.freeze({
     render: render,
+    handleBack: handleBack,
     CATEGORY: CATEGORY
   });
   if (window.TileRegistry) window.TileRegistry.register({ id: 'specs', title: 'Specifications', icon: '[]', route: 'specs', roles: ['user','admin'], order: 10 });
