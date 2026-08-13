@@ -5,7 +5,7 @@ const sections = {
   "daily-logs":  { title: "Daily Logs",  content: `<p>Record and review daily site activity logs here.</p>`, render: function(el) { if (window.AlignDailyLogs) window.AlignDailyLogs.render(el); } },
   "specs":       { title: "Specs",       content: `<p>Access all project specifications and technical documents here.</p>`, render: function(el) { if (window.AlignSpecs) window.AlignSpecs.render(el); } },
   "rfis":        { title: "RFIs",        content: `<p>Submit and track Requests for Information (RFIs) here.</p>`, render: function(el) { if (window.AlignRfis) window.AlignRfis.render(el); } },
-  "punchlist":   { title: "Punchlist",   content: `<p>Manage and close out punchlist items here.</p>`, render: function(el) { if (window.AlignPunchlist) window.AlignPunchlist.render(el); } },
+  "punchlist":   { title: "Punchlist",   content: `<p>Manage and close out punchlist items here.</p>`, render: function(el, chrome) { if (window.AlignPunchlist) window.AlignPunchlist.render(el, chrome); } },
   "schedule":    { title: "Schedule",    content: `<p>View the project timeline and milestone schedule here.</p>`, render: function(el) { if (window.AlignSchedule) window.AlignSchedule.render(el); } },
   "budget":      { title: "Budget",      content: `<p>Track project costs, change orders, and budget status here.</p>`, render: function(el) { if (window.AlignBudget) window.AlignBudget.render(el); } },
   "contacts":    { title: "Directory",   content: ``, render: function(el) { if (window.AlignContacts) window.AlignContacts.render(el); } },
@@ -43,6 +43,7 @@ const sectionPage      = document.getElementById("section-page");
 const sectionTitle     = document.getElementById("section-title");
 const sectionBody      = document.getElementById("section-body");
 const sectionBack      = document.getElementById("section-back");
+const sectionHeaderActions = document.getElementById("section-header-actions");
 
 const projectPicker    = document.getElementById("project-picker");
 const projectName      = document.getElementById("project-name");
@@ -90,8 +91,43 @@ function _closeSection() {
   sectionPage.style.display = 'none';
   sectionBody.innerHTML = '';
   sectionTitle.textContent = '';
+  if (sectionHeaderActions) sectionHeaderActions.replaceChildren();
   _navStack = [];
   _currentSection = null;
+}
+
+// ─── SECTION HEADER CHROME (script-owned; modules drive it via chrome.setHeader) ───
+function setSectionHeader(config) {
+  config = config || {};
+  if (sectionTitle) sectionTitle.textContent = config.title || '';
+  if (sectionBack) {
+    sectionBack.textContent = config.backLabel || 'Back';
+    sectionBack.setAttribute('aria-label', config.backLabel || 'Back');
+    sectionBack.hidden = false;
+  }
+  if (sectionHeaderActions) {
+    sectionHeaderActions.replaceChildren();
+    (config.actions || []).forEach(function (action) {
+      var button = document.createElement('button');
+      button.id = action.id || '';
+      button.type = action.type || 'button';
+      button.textContent = action.label || '';
+      button.className = 'section-header-action section-header-action--' + (action.variant || 'secondary');
+      if (action.form) button.setAttribute('form', action.form);
+      if (action.disabled) button.disabled = true;
+      if (action.ariaLabel) button.setAttribute('aria-label', action.ariaLabel);
+      if (typeof action.onClick === 'function') button.addEventListener('click', action.onClick);
+      sectionHeaderActions.appendChild(button);
+    });
+  }
+}
+function _makeSectionChrome(sectionKey) {
+  return {
+    setHeader: function (config) {
+      if (_currentSection !== sectionKey) return;
+      setSectionHeader(config);
+    }
+  };
 }
 
 // ─── INIT: RESTORE ACTIVE PROJECT NAME IN HEADER ───
@@ -187,23 +223,7 @@ function _handleRoute() {
   _currentSection = sectionKey;
   document.body.classList.toggle('ps-open', sectionKey === 'project-select');
   _navStack = [];
-  sectionTitle.textContent = section.title;
-  
-  // Add action button for punchlist (Create List)
-  var headerAction = document.getElementById('section-header-action');
-  if (headerAction) headerAction.remove();
-  if (sectionKey === 'punchlist') {
-    var btn = document.createElement('button');
-    btn.id = 'section-header-action';
-    btn.className = 'pm-btn primary small';
-    btn.textContent = '+ Create List';
-    btn.addEventListener('click', function () {
-      if (window.AlignPunchlist && window.AlignPunchlist.createNewList) {
-        window.AlignPunchlist.createNewList();
-      }
-    });
-    sectionTitle.parentNode.insertBefore(btn, sectionTitle.nextSibling);
-  }
+  setSectionHeader({ title: section.title, backLabel: 'Back', actions: [] });
 
   // Tile cache — skip data re-fetch if rendered recently
   // These sections manage their own state/live data; never cache them
@@ -218,7 +238,7 @@ function _handleRoute() {
   sectionBody.innerHTML = '';
 
   if (typeof section.render === 'function') {
-    try { section.render(sectionBody); } catch(e) {
+    try { section.render(sectionBody, _makeSectionChrome(sectionKey)); } catch(e) {
       sectionBody.innerHTML = '<div class="pm-empty"><strong>Error</strong><p>'+e.message+'</p></div>';
     }
   } else {
@@ -267,6 +287,11 @@ window._pushSettingsSubview = function(title, renderFn) {
 document.addEventListener('click', function(e) {
   if (!e.target.closest('#section-back')) return;
   e.preventDefault();
+
+  // Punchlist internal back navigation (list/detail/form → parent view)
+  if (_currentSection === 'punchlist' && window.AlignPunchlist && typeof window.AlignPunchlist.handleBack === 'function' && window.AlignPunchlist.handleBack()) {
+    return;
+  }
 
   // Essentials config — close cleanly without hash cycle
   if (_currentSection === 'essentials-config') {

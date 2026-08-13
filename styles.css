@@ -651,6 +651,34 @@ html[data-theme="dark"] .logo-dark { display: block; }
 .pm-empty { padding: 32px 16px; text-align: center; color: var(--muted); }
 .pm-empty strong { display: block; margin-bottom: 4px; color: var(--ink); }
 
+/* ── SECTION HEADER ACTIONS (module-driven chrome) ─────────────────────── */
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.section-header-action {
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.85rem;
+  touch-action: manipulation;
+  white-space: nowrap;
+}
+.section-header-action--primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.section-header-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ── CONTACTS / DIRECTORY ──────────────────────────────────────────────── */
 .ct-wrap { }
 .ct-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }

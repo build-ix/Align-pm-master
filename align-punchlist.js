@@ -7,11 +7,11 @@
   var STATUSES = ['open', 'in_progress', 'resolved', 'verified'];
   var PRIORITIES = ['low', 'medium', 'high', 'critical'];
   var state = {
-    container: null, projectId: null,
+    container: null, chrome: null, projectId: null,
     apartments: [],
     lists: [], activeList: null,
     editingList: null, editingItem: null,
-    activeApt: null, detailItem: null,
+    activeApt: null, detailItem: null, formReturnView: null,
     viewMode: 'lists', // lists | list-form | list | item-form | detail | profile-edit
     items: [], allItems: [], listItems: {}
   };
@@ -55,10 +55,11 @@
   }
   function notifyError(error) { alert(error && error.message ? error.message : 'Something went wrong.'); }
 
-  function render(container) {
+  function render(container, chrome) {
     state.container = container;
+    state.chrome = chrome || null;
     state.viewMode = 'lists'; state.activeList = null; state.editingList = null; state.editingItem = null;
-    state.lists = []; state.items = []; state.allItems = []; state.listItems = {}; state.detailItem = null; // Reset all data on re-render
+    state.lists = []; state.items = []; state.allItems = []; state.listItems = {}; state.detailItem = null; state.formReturnView = null; // Reset all data on re-render
     resolveProject();
     _bindContainer();
     _paint();
@@ -67,6 +68,7 @@
   function _paint() {
     resolveProject();
     if (!state.container) return;
+    _renderHeader();
     if (!state.projectId) {
       state.container.innerHTML = '<div class="pl-empty"><strong>No active project</strong><p>Select a project from the header.</p></div>';
       return;
@@ -78,7 +80,48 @@
     _loadLists();
   }
 
+  function createNewList() { state.editingList = {}; state.viewMode = 'list-form'; _paint(); }
+
+  function _renderHeader() {
+    if (!state.chrome || !state.chrome.setHeader) return;
+    var view = state.viewMode;
+    if (view === 'lists') {
+      state.chrome.setHeader({ title: 'Punchlist', backLabel: 'Back', actions: [{ id: 'pl-create-list', label: '+ Create List', variant: 'primary', onClick: createNewList }] });
+    } else if (view === 'list' && state.activeList) {
+      state.chrome.setHeader({
+        title: state.activeList.name || 'List', backLabel: 'All Lists',
+        actions: [
+          { id: 'pl-edit-list', label: 'Edit List', variant: 'secondary', onClick: function () { state.editingList = JSON.parse(JSON.stringify(state.activeList)); state.viewMode = 'list-form'; _paint(); } },
+          { id: 'pl-add-item', label: '+ Add Item', variant: 'primary', onClick: function () { state.editingItem = {}; state.viewMode = 'item-form'; _paint(); } }
+        ]
+      });
+    } else if (view === 'detail' && state.detailItem) {
+      state.chrome.setHeader({
+        title: state.detailItem.title || 'Item', backLabel: 'Back to List',
+        actions: [{ id: 'pl-edit-item', label: 'Edit', variant: 'primary', onClick: function () { state.editingItem = JSON.parse(JSON.stringify(state.detailItem)); state.viewMode = 'item-form'; _paint(); } }]
+      });
+    } else if (view === 'list-form') {
+      var editingList = Boolean(state.editingList && state.editingList.id);
+      state.chrome.setHeader({ title: editingList ? 'Edit List' : 'Create List', backLabel: state.activeList ? 'Back to List' : 'All Lists', actions: [{ id: 'pl-save-list', label: 'Save', variant: 'primary', type: 'submit', form: 'pl-list-form' }] });
+    } else if (view === 'item-form') {
+      var editingItem = Boolean(state.editingItem && state.editingItem.id);
+      state.chrome.setHeader({ title: editingItem ? 'Edit Item' : 'Create Item', backLabel: 'Back to List', actions: [{ id: 'pl-save-item', label: 'Save', variant: 'primary', type: 'submit', form: 'pl-item-form' }] });
+    }
+  }
+
+  function handleBack() {
+    switch (state.viewMode) {
+      case 'lists': return false;
+      case 'list': state.activeList = null; state.viewMode = 'lists'; _loadLists(); return true;
+      case 'detail': state.detailItem = null; state.viewMode = 'list'; _loadListItems(); return true;
+      case 'list-form': state.editingList = null; if (state.activeList) { state.viewMode = 'list'; _loadListItems(); } else { state.viewMode = 'lists'; _loadLists(); } return true;
+      case 'item-form': state.editingItem = null; state.viewMode = 'list'; _loadListItems(); return true;
+      default: return false;
+    }
+  }
+
   function _loadLists() {
+    _renderHeader();
     state.container.innerHTML = '<div class="pl-empty">Loading punchlist lists…</div>';
     api(projectPath()).then(function (data) {
       state.lists = data.lists || [];
@@ -135,6 +178,7 @@
   }
 
   function _loadListItems() {
+    _renderHeader();
     state.container.innerHTML = '<div class="pl-empty">Loading list…</div>';
     api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items')).then(function (data) {
       state.items = data.items || [];
@@ -143,10 +187,10 @@
   }
   function _listHtml() {
     var list = state.activeList, h = [];
-    h.push('<div class="pl-wrap"><div class="pl-apt-nav"><button class="pm-btn small" id="pl-lists-back">← All Lists</button><div class="pl-apt-nav-center"><h3 class="pl-apt-nav-title">' + esc(list.name) + '</h3><span class="pl-apt-nav-count">' + state.items.length + ' item' + (state.items.length === 1 ? '' : 's') + '</span></div><button class="pm-btn small" id="pl-edit-list">Edit List</button><button class="pm-btn primary" id="pl-new-item">+ Add Item</button></div>');
+    h.push('<div class="pl-wrap">');
     if (list.apartment_label) h.push('<div class="pl-detail-section">Apartment: <strong>' + esc(list.apartment_label) + '</strong></div>');
     if (list.description) h.push('<div class="pl-detail-section pl-detail-desc">' + esc(list.description) + '</div>');
-    if (!state.items.length) h.push('<div class="pl-empty">No items yet — tap + Add Item above.</div>');
+    if (!state.items.length) h.push('<div class="pl-empty">No items yet.</div>');
     else {
       h.push('<div class="pl-items">');
       state.items.forEach(function (item, index) {
@@ -157,9 +201,6 @@
     h.push('</div>'); return h.join('');
   }
   function _handleListClick(event) {
-    if (event.target.closest('#pl-lists-back')) { state.activeList = null; state.viewMode = 'lists'; _loadLists(); return; }
-    if (event.target.closest('#pl-edit-list')) { state.editingList = JSON.parse(JSON.stringify(state.activeList)); state.viewMode = 'list-form'; _paint(); return; }
-    if (event.target.closest('#pl-new-item')) { state.editingItem = {}; state.viewMode = 'item-form'; _paint(); return; }
     var action = event.target.closest('[data-pl-act]');
     if (action) {
       var id = action.getAttribute('data-pl-id');
@@ -204,12 +245,13 @@
     var list = state.editingList || {};
     var privacy = list.privacy === 'public' ? 'public' : 'private';
     var deleteBtn = list.id ? '<button class="pm-btn danger" id="pl-list-form-delete" type="button">Delete List</button>' : '';
-    return '<div class="pl-form-wrap pl-list-form" data-form="list-form"><div class="pl-form-header"><button class="pm-btn" id="pl-list-form-back">← Cancel</button><h3 class="pl-form-title">' + (list.id ? 'Edit List' : 'Create List') + '</h3><div class="pl-form-actions"><button class="pm-btn primary" id="pl-list-form-save" type="button">Save</button>' + deleteBtn + '</div></div><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div></div>';
+    return '<form id="pl-list-form" class="pl-form-wrap pl-list-form"><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div>' + (deleteBtn ? '<div class="pl-form-footer">' + deleteBtn + '</div>' : '') + '</form>';
   }
   function _bindListForm() {
-    document.getElementById('pl-list-form-back').addEventListener('click', function () { state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); });
-    var saveButton = document.getElementById('pl-list-form-save'), submitting = false;
-    saveButton.addEventListener('click', function () {
+    var form = document.getElementById('pl-list-form');
+    var submitting = false;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
       if (submitting) return;
       var name = document.getElementById('pl-list-name').value.trim();
       var privacyInput = document.querySelector('input[name="pl-list-privacy"]:checked');
@@ -219,11 +261,10 @@
       if (privacy !== 'private' && privacy !== 'public') { alert('Privacy must be private or public.'); return; }
       var payload = {name:name, privacy:privacy, scope_type:'project', status:'open'};
       submitting = true;
-      saveButton.disabled = true;
-      saveButton.setAttribute('aria-disabled', 'true');
-      saveButton.setAttribute('aria-busy', 'true');
+      var saveButton = document.getElementById('pl-save-list');
+      if (saveButton) { saveButton.disabled = true; saveButton.setAttribute('aria-busy', 'true'); }
       var request = state.editingList.id ? api(projectPath('/' + encodeURIComponent(state.editingList.id)), {method:'PATCH', body:JSON.stringify(payload)}) : api(projectPath(), {method:'POST', body:JSON.stringify(payload)});
-      request.then(function (data) { state.activeList = data.list || state.activeList; state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); }).catch(function (error) { submitting = false; saveButton.disabled = false; saveButton.removeAttribute('aria-disabled'); saveButton.removeAttribute('aria-busy'); notifyError(error); });
+      request.then(function (data) { state.activeList = data.list || state.activeList; state.editingList = null; state.viewMode = state.activeList ? 'list' : 'lists'; if (state.activeList) _loadListItems(); else _loadLists(); }).catch(function (error) { submitting = false; if (saveButton) { saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); } notifyError(error); });
     });
     var deleteButton = document.getElementById('pl-list-form-delete');
     if (deleteButton) {
@@ -237,23 +278,23 @@
   /* Dedicated item form: no name, description, apartment, scope, or list controls. */
   function _itemFormHtml() {
     var item = state.editingItem || {};
-    return '<div class="pl-form-wrap pl-item-form" data-form="item-form"><div class="pl-form-header"><button class="pm-btn" id="pl-item-form-back">← Back</button><h3 class="pl-form-title">' + (item.id ? 'Edit Item' : 'Create Item') + '</h3><button class="pm-btn primary" id="pl-item-form-save">Save</button></div><div class="pl-form-section pl-attachments-section"><label class="pl-field-label">Attachments</label><div class="pl-image-upload"><button type="button" class="pl-upload-btn" id="pl-upload-attachments">Attachments</button></div><div id="pl-images-preview" class="pl-images-preview"></div><input type="file" id="pl-file-input" accept="image/*,video/*,.pdf" style="display:none" multiple></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-title">Title</label><input class="pl-input" id="pl-item-title" value="' + esc(item.title) + '" required></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-description">Description</label><textarea class="pl-textarea" id="pl-item-description" rows="3" placeholder="Describe the issue…">' + esc(item.description) + '</textarea></div><div class="pl-form-section"><label class="pl-field-label">Location</label><button type="button" class="pm-btn" id="pl-item-pin-location">Pin Location</button></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-priority">Priority</label><select class="pl-input" id="pl-item-priority">' + PRIORITIES.map(function (p) { return '<option value="' + p + '"' + (item.priority === p || (!item.priority && p === 'medium') ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>'; }).join('') + '</select></div></div>';
+    return '<form id="pl-item-form" class="pl-form-wrap pl-item-form"><div class="pl-form-section pl-attachments-section"><label class="pl-field-label">Attachments</label><div class="pl-image-upload"><button type="button" class="pl-upload-btn" id="pl-upload-attachments">Attachments</button></div><div id="pl-images-preview" class="pl-images-preview"></div><input type="file" id="pl-file-input" accept="image/*,video/*,.pdf" style="display:none" multiple></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-title">Title</label><input class="pl-input" id="pl-item-title" value="' + esc(item.title) + '" required></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-description">Description</label><textarea class="pl-textarea" id="pl-item-description" rows="3" placeholder="Describe the issue…">' + esc(item.description) + '</textarea></div><div class="pl-form-section"><label class="pl-field-label">Location</label><button type="button" class="pm-btn" id="pl-item-pin-location">Pin Location</button></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-priority">Priority</label><select class="pl-input" id="pl-item-priority">' + PRIORITIES.map(function (p) { return '<option value="' + p + '"' + (item.priority === p || (!item.priority && p === 'medium') ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>'; }).join('') + '</select></div></form>';
   }
   function _bindItemForm() {
-    document.getElementById('pl-item-form-back').addEventListener('click', function () { state.editingItem = null; state.viewMode = 'list'; _loadListItems(); });
+    var form = document.getElementById('pl-item-form');
     var input = document.getElementById('pl-file-input');
     document.getElementById('pl-upload-attachments').addEventListener('click', function () { input.click(); });
     input.addEventListener('change', function () { Array.prototype.forEach.call(input.files || [], _addImage); input.value = ''; });
-    var saveButton = document.getElementById('pl-item-form-save');
     var submitting = false;
-    saveButton.addEventListener('click', function () {
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
       if (submitting) return;
       var title = document.getElementById('pl-item-title').value.trim();
       if (!title) { alert('Title is required.'); return; }
       submitting = true;
-      saveButton.disabled = true;
-      saveButton.setAttribute('aria-busy', 'true');
-      _saveItem().catch(function (error) { submitting = false; saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); notifyError(error); });
+      var saveButton = document.getElementById('pl-save-item');
+      if (saveButton) { saveButton.disabled = true; saveButton.setAttribute('aria-busy', 'true'); }
+      _saveItem().catch(function (error) { submitting = false; if (saveButton) { saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); } notifyError(error); });
     });
     (state.editingItem.images || []).forEach(function (image) { _showImage(image); });
   }
@@ -330,7 +371,7 @@
 
   function _detailHtml(item) {
     var h = [
-      '<div class="pl-detail-wrap"><div class="pl-detail-header"><button class="pm-btn" id="pl-detail-back">← Back</button><h3 class="pl-detail-title">' + esc(item.title || 'Untitled') + '</h3><button class="pm-btn primary" id="pl-detail-edit">Edit</button></div>',
+      '<div class="pl-detail-wrap">',
       '<div class="pl-detail-section"><span class="pl-detail-status-badge" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span> <span class="pl-priority-badge">' + esc(item.priority || '') + '</span></div>'
     ];
     if (item.description) h.push('<div class="pl-detail-section"><span class="pl-detail-label">Description</span><div class="pl-detail-value">' + esc(item.description) + '</div></div>');
@@ -352,8 +393,7 @@
     return h.join('');
   }
   function _bindDetail() {
-    document.getElementById('pl-detail-back').addEventListener('click', function () { state.detailItem = null; state.viewMode = 'list'; _loadListItems(); });
-    document.getElementById('pl-detail-edit').addEventListener('click', function () { state.editingItem = JSON.parse(JSON.stringify(state.detailItem)); state.viewMode = 'item-form'; _paint(); });
+    // Back / Edit now live in the section header (chrome). No in-content header to bind.
   }
 
   /* ── In-page image viewer (lightbox) ─────────────────────────────────── */
@@ -787,7 +827,8 @@
 
   global.AlignPunchlist = Object.freeze({
     render: render,
-    createNewList: function () { state.editingList = {}; state.viewMode = 'list-form'; _paint(); },
+    createNewList: createNewList,
+    handleBack: handleBack,
     CATEGORY: CATEGORY
   });
   if (window.TileRegistry) window.TileRegistry.register({id:'punchlist', title:'Punchlist', icon:'/', route:'punchlist', roles:['user','admin'], order:2});
