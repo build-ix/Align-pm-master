@@ -53,6 +53,7 @@
     state.viewMode = 'lists'; state.activeList = null; state.editingList = null; state.editingItem = null;
     state.lists = []; state.items = []; state.allItems = []; state.listItems = {}; state.detailItem = null; // Reset all data on re-render
     resolveProject();
+    _bindContainer();
     _paint();
   }
 
@@ -66,7 +67,7 @@
     if (state.viewMode === 'list-form') { state.container.innerHTML = _listFormHtml(); _bindListForm(); return; }
     if (state.viewMode === 'item-form') { state.container.innerHTML = _itemFormHtml(); _bindItemForm(); return; }
     if (state.viewMode === 'detail' && state.detailItem) { state.container.innerHTML = _detailHtml(state.detailItem); _bindDetail(); return; }
-    if (state.viewMode === 'list' && state.activeList) { state.container.innerHTML = _listHtml(); _bindList(); return; }
+    if (state.viewMode === 'list' && state.activeList) { state.container.innerHTML = _listHtml(); return; }
     _loadLists();
   }
 
@@ -83,7 +84,7 @@
       state.allItems = state.lists.reduce(function (items, list) {
         return items.concat(state.listItems[list.id] || []);
       }, []);
-      if (state.viewMode === 'lists') { state.container.innerHTML = _listsHtml(); _bindLists(); }
+      if (state.viewMode === 'lists') { state.container.innerHTML = _listsHtml(); }
     }).catch(notifyError);
   }
 
@@ -118,21 +119,19 @@
     h.push('</div></div>');
     return h.join('');
   }
-  function _bindLists() {
-    state.container.addEventListener('click', function (event) {
-      if (event.target.closest('#pl-new-list')) { state.editingList = {}; state.viewMode = 'list-form'; _paint(); return; }
-      var tile = event.target.closest('[data-pl-list]');
-      if (!tile) return;
-      state.activeList = state.lists.find(function (l) { return l.id === tile.getAttribute('data-pl-list'); }) || null;
-      if (state.activeList) { state.viewMode = 'list'; _loadListItems(); }
-    });
+  function _handleListsClick(event) {
+    if (event.target.closest('#pl-new-list')) { state.editingList = {}; state.viewMode = 'list-form'; _paint(); return; }
+    var tile = event.target.closest('[data-pl-list]');
+    if (!tile) return;
+    state.activeList = state.lists.find(function (l) { return l.id === tile.getAttribute('data-pl-list'); }) || null;
+    if (state.activeList) { state.viewMode = 'list'; _loadListItems(); }
   }
 
   function _loadListItems() {
     state.container.innerHTML = '<div class="pl-empty">Loading list…</div>';
     api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items')).then(function (data) {
       state.items = data.items || [];
-      if (state.viewMode === 'list') { state.container.innerHTML = _listHtml(); _bindList(); }
+      if (state.viewMode === 'list') { state.container.innerHTML = _listHtml(); }
     }).catch(notifyError);
   }
   function _listHtml() {
@@ -150,21 +149,30 @@
     }
     h.push('</div>'); return h.join('');
   }
-  function _bindList() {
-    state.container.addEventListener('click', function (event) {
-      if (event.target.closest('#pl-lists-back')) { state.activeList = null; state.viewMode = 'lists'; _loadLists(); return; }
-      if (event.target.closest('#pl-edit-list')) { state.editingList = JSON.parse(JSON.stringify(state.activeList)); state.viewMode = 'list-form'; _paint(); return; }
-      if (event.target.closest('#pl-new-item')) { state.editingItem = {}; state.viewMode = 'item-form'; _paint(); return; }
-      var action = event.target.closest('[data-pl-act]');
-      if (action) {
-        var id = action.getAttribute('data-pl-id');
-        if (action.getAttribute('data-pl-act') === 'edit-item') { state.editingItem = JSON.parse(JSON.stringify(state.items.find(function (i) { return i.id === id; }) || {})); state.viewMode = 'item-form'; _paint(); }
-        if (action.getAttribute('data-pl-act') === 'delete-item' && confirm('Delete this item?')) api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(id)), {method:'DELETE'}).then(_loadListItems).catch(notifyError);
-        return;
-      }
-      var row = event.target.closest('[data-pl-item]');
-      if (row) { state.detailItem = state.items.find(function (i) { return i.id === row.getAttribute('data-pl-item'); }) || null; if (state.detailItem) { state.viewMode = 'detail'; _paint(); } }
-    });
+  function _handleListClick(event) {
+    if (event.target.closest('#pl-lists-back')) { state.activeList = null; state.viewMode = 'lists'; _loadLists(); return; }
+    if (event.target.closest('#pl-edit-list')) { state.editingList = JSON.parse(JSON.stringify(state.activeList)); state.viewMode = 'list-form'; _paint(); return; }
+    if (event.target.closest('#pl-new-item')) { state.editingItem = {}; state.viewMode = 'item-form'; _paint(); return; }
+    var action = event.target.closest('[data-pl-act]');
+    if (action) {
+      var id = action.getAttribute('data-pl-id');
+      if (action.getAttribute('data-pl-act') === 'edit-item') { state.editingItem = JSON.parse(JSON.stringify(state.items.find(function (i) { return i.id === id; }) || {})); state.viewMode = 'item-form'; _paint(); }
+      if (action.getAttribute('data-pl-act') === 'delete-item' && confirm('Delete this item?')) api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(id)), {method:'DELETE'}).then(_loadListItems).catch(notifyError);
+      return;
+    }
+    var row = event.target.closest('[data-pl-item]');
+    if (row) { state.detailItem = state.items.find(function (i) { return i.id === row.getAttribute('data-pl-item'); }) || null; if (state.detailItem) { state.viewMode = 'detail'; _paint(); } }
+  }
+
+  function _onContainerClick(event) {
+    if (state.viewMode === 'lists') { _handleListsClick(event); return; }
+    if (state.viewMode === 'list') { _handleListClick(event); return; }
+  }
+
+  function _bindContainer() {
+    if (state._boundEl === state.container) return;
+    state._boundEl = state.container;
+    state.container.addEventListener('click', _onContainerClick);
   }
 
   /* Dedicated list form: no priority, images, location, or trade controls. */
