@@ -1299,13 +1299,10 @@
     var canvas = document.getElementById('dr-mv-canvas');
     if (!canvas) return { x: 0, y: 0 };
     var rect = canvas.getBoundingClientRect();
-    var z = (_mv && _mv.zoom) || 1;
-    var cx = (clientX - rect.left) / z;
-    var cy = (clientY - rect.top) / z;
-    var w = canvas.width || 1, h = canvas.height || 1;
+    if (!(rect.width > 0) || !(rect.height > 0)) return { x: 0, y: 0 };
     return {
-      x: Math.max(0, Math.min(1, cx / w)),
-      y: Math.max(0, Math.min(1, cy / h))
+      x: Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
+      y: Math.max(0, Math.min(1, (clientY - rect.top) / rect.height))
     };
   }
 

@@ -56,9 +56,22 @@
       return typeof adapter.getCanvas === 'function' ? adapter.getCanvas() : adapter.canvas;
     }
 
+    // Untransformed CSS size of the canvas (the coordinate space the SVG must
+    // match). Prefer the explicit inline style the viewer sets, then computed
+    // style, then clientWidth/Height, then backing as a final fallback.
+    function _getCanvasCssDimension(c, dimension) {
+      var v = c ? parseFloat(c.style[dimension]) : NaN;
+      if (!(v > 0)) {
+        try { v = parseFloat(getComputedStyle(c)[dimension]); } catch (e) { v = NaN; }
+      }
+      if (!(v > 0)) v = dimension === 'width' ? c.clientWidth : c.clientHeight;
+      if (!(v > 0)) v = dimension === 'width' ? c.width : c.height;
+      return v || 1;
+    }
+
     var canvas = _getCanvas();
-    var W = (canvas && canvas.width) || 1;
-    var H = (canvas && canvas.height) || 1;
+    var W = _getCanvasCssDimension(canvas, 'width');
+    var H = _getCanvasCssDimension(canvas, 'height');
 
     // ── Draft SVG overlay (inside the scaled stage) ──────────────────────────
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -263,8 +276,8 @@
       if (state.destroyed) return;
       var c = _getCanvas();
       if (c) {
-        W = c.width || W;
-        H = c.height || H;
+        W = _getCanvasCssDimension(c, 'width');
+        H = _getCanvasCssDimension(c, 'height');
       }
       svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
       svg.style.width = W + 'px';
