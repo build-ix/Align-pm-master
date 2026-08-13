@@ -2,45 +2,51 @@
  * align-drawing-crop-tool.js
  * Polygon crop tool for punchlist per-list pin-location maps.
  *
- * Self-contained state machine. The drawings viewer owns pointer routing
- * (it delegates single-finger/mouse events to this tool in crop mode) and
- * supplies a screen→normalized adapter. Vertices are stored NORMALIZED 0-1
- * relative to the full drawing sheet — the same space as punch pins.
+ * Gesture model (tap / pan / move-point):
+ *   - TAP (release within 10px of pointer-down) = add a point at the exact
+ *     release location.
+ *   - DRAG on empty area = pan the drawing (single finger).
+ *   - DRAG starting on an existing point = move that point.
+ * Two-finger pinch/pan is owned by the viewer (intercepted before delegation).
  *
- * The draft SVG lives INSIDE the scaled viewer stage so lines + fill follow
- * the drawing. Point markers/labels are inverse-scaled each render so they
- * stay a fixed ~12px on screen at any zoom. A rAF-coalesced refresh() is
- * subscribed to the viewer's transform changes (onTransformChanged) so
- * markers re-size correctly while the user pinch-zooms and pans.
+ * Markers are sized in DRAWING units (proportional to the drawing), so they
+ * scale with the drawing like the text inside it — not a fixed screen size.
+ *
+ * Points are stored NORMALIZED 0-1 relative to the full sheet. The draft SVG
+ * lives inside the scaled viewer stage so lines + fill follow the drawing.
+ * A rAF-coalesced refresh() re-renders on viewer transform changes.
  *
  * Exposes: window.DrawingCropTool = { create }
  */
 (function (global) {
   'use strict';
 
-  var MIN_POINTS = 4;      // minimum vertices before a polygon can close
-  var HANDLE_RADIUS_PX = 12;   // fixed screen radius of point handles
-  var LABEL_SIZE_PX = 13;      // fixed screen font size of number labels
+  var MIN_POINTS = 4;
+  var DRAG_THRESHOLD_PX = 10;   // tap vs drag
+  var HIT_RADIUS_PX = 24;       // minimum touch hit radius (client px)
 
   function create(adapter) {
-    if (!adapter || !adapter.overlayHost || !adapter.screenToNormalized) {
+    if (!adapter || !adapter.overlayHost || typeof adapter.clientToNormalized !== 'function' ||
+        typeof adapter.normalizedToClient !== 'function' || typeof adapter.requestPan !== 'function') {
       console.warn('[CropTool] Missing adapter');
-      return null;
-    }
-    if (typeof adapter.getCanvas !== 'function' && !adapter.canvas) {
-      console.warn('[CropTool] Missing canvas (getCanvas or canvas required)');
       return null;
     }
 
     var state = {
-      phase: 'first',       // 'first' | 'second' | 'extend' | 'saving'
-      committed: [],        // [{x,y}] normalized, in order
-      candidate: null,      // {x,y} normalized (not yet committed)
-      pointerId: null,
-      lastClient: null,
+      points: [],              // committed [{x,y}] normalized, in order
+      cropState: 'collecting', // 'collecting' | 'saving'
       svg: null,
       controls: null,
       destroyed: false
+    };
+    var gesture = {
+      state: 'idle',           // idle | pending-empty | pending-handle | panning | dragging-handle
+      pointerId: null,
+      downClientX: 0, downClientY: 0,
+      lastClientX: 0, lastClientY: 0,
+      downNormalized: null,
+      handleIndex: -1,
+      handleStartNormalized: null
     };
 
     var refreshRaf = 0;
@@ -77,8 +83,7 @@
       '<button type="button" class="crop-btn crop-cancel" data-act="cancel">Cancel</button>' +
       '<span class="crop-hint" data-hint></span>' +
       '<button type="button" class="crop-btn crop-undo" data-act="undo" disabled>Undo</button>' +
-      '<button type="button" class="crop-btn crop-primary" data-act="primary" disabled>Start</button>' +
-      '<button type="button" class="crop-btn crop-add" data-act="add" style="display:none" disabled>Add point</button>';
+      '<button type="button" class="crop-btn crop-primary" data-act="primary" disabled>Complete</button>';
     var host = adapter.controlsHost || document.body;
     host.appendChild(controls);
     state.controls = controls;
@@ -89,68 +94,120 @@
       var act = btn.getAttribute('data-act');
       if (act === 'cancel') return cancel();
       if (act === 'undo') return undo();
-      if (act === 'primary') return primaryAction();
-      if (act === 'add') return addPoint();
+      if (act === 'primary') return complete();
     });
 
-    // ── Public pointer API (called by the viewer) ────────────────────────────
-    function pointerDown(clientX, clientY) {
-      if (state.destroyed || state.phase === 'saving') return;
-      state.lastClient = { x: clientX, y: clientY };
-      state.candidate = _normalize(clientX, clientY);
-      _render();
-    }
+    // ── Pointer API (driven by the viewer) ───────────────────────────────────
+    function pointerDown(clientX, clientY, meta) {
+      if (state.destroyed || state.cropState === 'saving' || gesture.state !== 'idle') return;
+      meta = meta || {};
+      var normalized = adapter.clientToNormalized(clientX, clientY);
+      var handleIndex = _hitTestHandle(clientX, clientY);
 
-    function pointerMove(clientX, clientY) {
-      if (state.destroyed || state.phase === 'saving') return;
-      state.lastClient = { x: clientX, y: clientY };
-      state.candidate = _normalize(clientX, clientY);
-      _render();
-    }
+      gesture.pointerId = (meta.pointerId !== undefined && meta.pointerId !== null) ? meta.pointerId : null;
+      gesture.downClientX = clientX;
+      gesture.downClientY = clientY;
+      gesture.lastClientX = clientX;
+      gesture.lastClientY = clientY;
+      gesture.downNormalized = normalized;
+      gesture.handleIndex = handleIndex;
 
-    function pointerUp(clientX, clientY) {
-      if (state.destroyed || state.phase === 'saving') return;
-      // Touch end arrives with no coords — fall back to the last known position.
-      if (clientX === undefined || clientY === undefined) {
-        if (state.lastClient) { clientX = state.lastClient.x; clientY = state.lastClient.y; }
-        else return;
-      }
-      state.candidate = _normalize(clientX, clientY);
-      // In 'second' phase a placed point auto-commits (no "Add point" button yet).
-      if (state.phase === 'second') {
-        _commitCandidate();
-        state.phase = 'extend';
-      }
-      _render();
-    }
-
-    // ── Button actions ───────────────────────────────────────────────────────
-    function primaryAction() {
-      if (state.phase === 'first') {
-        if (!state.candidate) return;
-        state.committed = [state.candidate];
-        state.candidate = null;
-        state.phase = 'second';
-        _render();
+      if (handleIndex >= 0) {
+        var p = state.points[handleIndex];
+        gesture.state = 'pending-handle';
+        gesture.handleStartNormalized = { x: p.x, y: p.y };
       } else {
-        complete();
+        gesture.state = 'pending-empty';
+        gesture.handleStartNormalized = null;
       }
     }
 
-    function addPoint() {
-      if (state.phase === 'extend' && state.candidate) {
-        _commitCandidate();
+    function pointerMove(clientX, clientY, meta) {
+      if (gesture.state === 'idle') return;
+      var dxFromDown = clientX - gesture.downClientX;
+      var dyFromDown = clientY - gesture.downClientY;
+      var distance = Math.sqrt(dxFromDown * dxFromDown + dyFromDown * dyFromDown);
+
+      if (gesture.state === 'pending-empty') {
+        if (distance < DRAG_THRESHOLD_PX) return;
+        gesture.state = 'panning';
+        if (adapter.beginPan) adapter.beginPan(gesture.downClientX, gesture.downClientY);
+        adapter.requestPan(dxFromDown, dyFromDown);
+        gesture.lastClientX = clientX;
+        gesture.lastClientY = clientY;
+        return;
+      }
+
+      if (gesture.state === 'pending-handle') {
+        if (distance < DRAG_THRESHOLD_PX) return;
+        gesture.state = 'dragging-handle';
+        _updateDraggedHandle(clientX, clientY);
+        gesture.lastClientX = clientX;
+        gesture.lastClientY = clientY;
+        return;
+      }
+
+      if (gesture.state === 'panning') {
+        var dx = clientX - gesture.lastClientX;
+        var dy = clientY - gesture.lastClientY;
+        adapter.requestPan(dx, dy);
+        gesture.lastClientX = clientX;
+        gesture.lastClientY = clientY;
+        return;
+      }
+
+      if (gesture.state === 'dragging-handle') {
+        _updateDraggedHandle(clientX, clientY);
+        gesture.lastClientX = clientX;
+        gesture.lastClientY = clientY;
+      }
+    }
+
+    function pointerUp(clientX, clientY, meta) {
+      if (gesture.state === 'idle') return;
+      switch (gesture.state) {
+        case 'pending-empty': {
+          // A tap — add a point at the exact release location.
+          var p = adapter.clientToNormalized(clientX, clientY);
+          if (p && state.cropState === 'collecting') {
+            state.points.push({ x: _clamp01(p.x), y: _clamp01(p.y) });
+            _render();
+          }
+          break;
+        }
+        case 'pending-handle':
+          // Tap on an existing handle — no-op (do not add a duplicate point).
+          break;
+        case 'panning':
+          if (adapter.endPan) adapter.endPan();
+          break;
+        case 'dragging-handle':
+          _updateDraggedHandle(clientX, clientY);
+          break;
+      }
+      _resetGesture();
+    }
+
+    function pointerCancel() {
+      if (gesture.state === 'dragging-handle' && gesture.handleIndex >= 0 && gesture.handleStartNormalized) {
+        state.points[gesture.handleIndex] = { x: gesture.handleStartNormalized.x, y: gesture.handleStartNormalized.y };
         _render();
       }
+      if (gesture.state === 'panning' && adapter.endPan) adapter.endPan();
+      _resetGesture();
+    }
+
+    // ── Buttons ──────────────────────────────────────────────────────────────
+    function complete() {
+      if (state.points.length < MIN_POINTS) return;
+      state.cropState = 'saving';
+      _render();
+      if (adapter.onComplete) adapter.onComplete(state.points.slice());
     }
 
     function undo() {
-      if (state.committed.length > 0) {
-        state.committed.pop();
-        if (state.committed.length < 2) {
-          state.phase = state.committed.length === 1 ? 'second' : 'first';
-        }
-        state.candidate = null;
+      if (state.points.length) {
+        state.points.pop();
         _render();
       }
     }
@@ -162,45 +219,48 @@
       if (adapter.onCancel) adapter.onCancel();
     }
 
-    function complete() {
-      if (state.committed.length < MIN_POINTS) return;
-      state.phase = 'saving';
-      _render();
-      if (adapter.onComplete) adapter.onComplete(state.committed.slice());
-    }
-
     // ── Internals ────────────────────────────────────────────────────────────
-    function _normalize(clientX, clientY) {
-      var p = adapter.screenToNormalized(clientX, clientY);
-      return {
-        x: Math.max(0, Math.min(1, p.x)),
-        y: Math.max(0, Math.min(1, p.y))
+    function _clamp01(v) { return Math.max(0, Math.min(1, v)); }
+
+    function _resetGesture() {
+      gesture.state = 'idle';
+      gesture.pointerId = null;
+      gesture.handleIndex = -1;
+      gesture.handleStartNormalized = null;
+      gesture.downNormalized = null;
+    }
+
+    // Hit-test existing handles in CLIENT space (so touch target is stable
+    // regardless of zoom), with a minimum 24px radius.
+    function _hitTestHandle(clientX, clientY) {
+      var best = -1;
+      var bestDist = Infinity;
+      for (var i = 0; i < state.points.length; i++) {
+        var s = adapter.normalizedToClient(state.points[i].x, state.points[i].y);
+        var d = Math.sqrt((clientX - s.x) * (clientX - s.x) + (clientY - s.y) * (clientY - s.y));
+        if (d <= HIT_RADIUS_PX && d < bestDist) {
+          bestDist = d;
+          best = i;
+        }
+      }
+      return best;
+    }
+
+    function _updateDraggedHandle(clientX, clientY) {
+      if (gesture.handleIndex < 0 || gesture.handleIndex >= state.points.length) return;
+      var current = adapter.clientToNormalized(clientX, clientY);
+      if (!current || !gesture.downNormalized) return;
+      var dx = current.x - gesture.downNormalized.x;
+      var dy = current.y - gesture.downNormalized.y;
+      state.points[gesture.handleIndex] = {
+        x: _clamp01(gesture.handleStartNormalized.x + dx),
+        y: _clamp01(gesture.handleStartNormalized.y + dy)
       };
-    }
-
-    function _commitCandidate() {
-      if (!state.candidate) return;
-      state.committed.push(state.candidate);
-      state.candidate = null;
-    }
-
-    // CSS screen pixels per SVG user-space unit. Uses the rendered rect vs the
-    // viewBox so it works for both image (stage-scale) and PDF (CSS-size) modes,
-    // and for Retina backing stores. Returns null when not yet laid out.
-    function _getRenderedScale() {
-      var c = _getCanvas();
-      if (!c || !c.isConnected) return null;
-      var rect = c.getBoundingClientRect();
-      if (!rect || rect.width <= 0 || rect.height <= 0) return null;
-      var vbW = W || c.width || 1;
-      var vbH = H || c.height || 1;
-      if (vbW <= 0 || vbH <= 0) return null;
-      return { x: rect.width / vbW, y: rect.height / vbH };
+      _render();
     }
 
     function _render() {
       if (state.destroyed) return;
-      // Re-read canvas + viewBox (may change after zoom re-render / PDF page).
       var c = _getCanvas();
       if (c) {
         W = c.width || W;
@@ -210,96 +270,66 @@
       svg.style.width = W + 'px';
       svg.style.height = H + 'px';
 
-      var scale = _getRenderedScale();
-      if (!scale) {
-        // Not laid out yet — leave as-is; the next refresh() will retry.
-        return;
-      }
-      var s = (scale.x + scale.y) / 2;
-      if (s <= 0) return;
-      var handleR = HANDLE_RADIUS_PX / s;
-      var labelSize = LABEL_SIZE_PX / s;
+      // Drawing-unit marker sizing (scales with the drawing like the text).
+      var D = Math.min(W, H);
+      if (!D || D <= 0) D = 1;
+      var markerR = 0.004 * D;
+      var markerStroke = 0.0008 * D;
+      var lineStroke = 0.0010 * D;
+      var labelSize = 0.009 * D;
+      var labelOff = 0.009 * D;
 
       var parts = [];
-      var pts = state.committed.slice();
-      var lastCommitted = pts.length > 0 ? pts[pts.length - 1] : null;
+      var pts = state.points;
 
-      // Live polygon fill: committed points + candidate (auto-closes visually).
-      var fillPts = pts.slice();
-      if (state.candidate) fillPts.push(state.candidate);
-      if (fillPts.length >= 3) {
-        var fillStr = fillPts.map(function (p) { return (p.x * W) + ',' + (p.y * H); }).join(' ');
+      // Filled polygon (light blue) once there are >= 3 points.
+      if (pts.length >= 3) {
+        var fillStr = pts.map(function (p) { return (p.x * W) + ',' + (p.y * H); }).join(' ');
         parts.push('<polygon class="crop-fill" points="' + fillStr + '" />');
       }
 
-      // Committed segments
+      // Connecting lines (including the closing segment once complete/saving).
       if (pts.length >= 2) {
-        var ptsStr = pts.map(function (p) { return (p.x * W) + ',' + (p.y * H); }).join(' ');
-        parts.push('<polyline class="crop-line" points="' + ptsStr + '" />');
+        var linePts = pts.map(function (p) { return (p.x * W) + ',' + (p.y * H); }).join(' ');
+        parts.push('<polyline class="crop-line" stroke-width="' + lineStroke + '" points="' + linePts + '" />');
       }
-
-      // Candidate preview (dashed) from last committed to candidate
-      if (state.candidate && lastCommitted) {
-        parts.push('<line class="crop-line crop-line-draft" x1="' + (lastCommitted.x * W) + '" y1="' + (lastCommitted.y * H) +
-          '" x2="' + (state.candidate.x * W) + '" y2="' + (state.candidate.y * H) + '" />');
-      }
-
-      // Closing preview (dashed) last → first
       if (pts.length >= 3) {
         var first = pts[0], last = pts[pts.length - 1];
-        parts.push('<line class="crop-line crop-line-close" x1="' + (first.x * W) + '" y1="' + (first.y * H) +
-          '" x2="' + (last.x * W) + '" y2="' + (last.y * H) + '" />');
+        parts.push('<line class="crop-line crop-line-close" stroke-width="' + lineStroke + '" x1="' + (first.x * W) + '" y1="' + (first.y * H) + '" x2="' + (last.x * W) + '" y2="' + (last.y * H) + '" />');
       }
 
-      // Point handles (fixed screen size)
+      // Point handles + number labels.
       pts.forEach(function (p, i) {
-        parts.push('<circle class="crop-handle" cx="' + (p.x * W) + '" cy="' + (p.y * H) + '" r="' + handleR + '"></circle>');
-        parts.push('<text class="crop-handle-label" x="' + (p.x * W) + '" y="' + (p.y * H) + '" font-size="' + labelSize + '">' + (i + 1) + '</text>');
+        parts.push('<circle class="crop-handle" cx="' + (p.x * W) + '" cy="' + (p.y * H) + '" r="' + markerR + '" stroke-width="' + markerStroke + '"></circle>');
+        parts.push('<text class="crop-handle-label" x="' + (p.x * W + labelOff) + '" y="' + (p.y * H - labelOff) + '" font-size="' + labelSize + '" stroke-width="' + (labelSize * 0.35) + '">' + (i + 1) + '</text>');
       });
-      if (state.candidate) {
-        parts.push('<circle class="crop-handle crop-handle-candidate" cx="' + (state.candidate.x * W) + '" cy="' + (state.candidate.y * H) + '" r="' + handleR + '"></circle>');
-      }
 
       svg.innerHTML = parts.join('');
-
       _renderControls();
     }
 
     function _renderControls() {
       var primary = controls.querySelector('[data-act="primary"]');
-      var addBtn = controls.querySelector('[data-act="add"]');
       var undoBtn = controls.querySelector('[data-act="undo"]');
       var hint = controls.querySelector('[data-hint]');
+      var n = state.points.length;
 
-      undoBtn.disabled = state.committed.length === 0;
+      undoBtn.disabled = n === 0;
+      primary.disabled = n < MIN_POINTS;
 
-      if (state.phase === 'first') {
-        primary.textContent = 'Start';
-        primary.disabled = !state.candidate;
-        addBtn.style.display = 'none';
-        hint.textContent = 'Tap or drag to position the first point';
-      } else if (state.phase === 'second') {
-        primary.textContent = 'Complete';
-        primary.disabled = true; // needs >=4 points
-        addBtn.style.display = 'none';
-        hint.textContent = 'Tap to place the second point';
-      } else if (state.phase === 'extend') {
-        primary.textContent = 'Complete';
-        primary.disabled = state.committed.length < MIN_POINTS;
-        addBtn.style.display = '';
-        addBtn.disabled = !state.candidate;
-        hint.textContent = state.committed.length < MIN_POINTS
-          ? ('Add points (' + (MIN_POINTS - state.committed.length) + ' more needed)')
-          : 'Add points or press Complete';
-      } else if (state.phase === 'saving') {
+      if (state.cropState === 'saving') {
         primary.textContent = 'Saving…';
-        primary.disabled = true;
-        addBtn.style.display = 'none';
         hint.textContent = 'Saving crop…';
+      } else if (n === 0) {
+        hint.textContent = 'Tap to add the first point';
+      } else if (n < MIN_POINTS) {
+        hint.textContent = 'Tap to add points (' + (MIN_POINTS - n) + ' more needed) — drag to pan';
+      } else {
+        hint.textContent = 'Tap to add points, drag to pan, or press Complete';
       }
     }
 
-    // rAF-coalesced refresh so a pinch storm produces at most one render/frame.
+    // rAF-coalesced refresh for transform changes.
     function refresh() {
       if (state.destroyed || refreshRaf) return;
       refreshRaf = requestAnimationFrame(function () {
@@ -322,20 +352,20 @@
       _cleanup();
     }
 
-    // Subscribe to the viewer's transform changes.
     if (typeof adapter.onTransformChanged === 'function') {
       unsubscribeTransform = adapter.onTransformChanged(refresh);
     }
 
-    refresh(); // initial render at the already-active transform
+    refresh();
 
     return {
       pointerDown: pointerDown,
       pointerMove: pointerMove,
       pointerUp: pointerUp,
+      pointerCancel: pointerCancel,
       refresh: refresh,
       destroy: destroy,
-      getVertices: function () { return state.committed.slice(); },
+      getVertices: function () { return state.points.slice(); },
       isActive: function () { return !state.destroyed; }
     };
   }

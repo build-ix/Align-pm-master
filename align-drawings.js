@@ -1309,6 +1309,20 @@
     };
   }
 
+  function _mvNormalizedToClient(nx, ny) {
+    var canvas = document.getElementById('dr-mv-canvas');
+    if (!canvas) return { x: 0, y: 0 };
+    var rect = canvas.getBoundingClientRect();
+    return { x: rect.left + nx * rect.width, y: rect.top + ny * rect.height };
+  }
+
+  function _mvPanByClientDelta(dx, dy) {
+    if (!_mv) return;
+    _mv.panX += dx;
+    _mv.panY += dy;
+    _mvApplyTransform();
+  }
+
   function _pointInPolygon(x, y, vertices) {
     var inside = false;
     for (var i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
@@ -1873,7 +1887,9 @@
       overlayHost: stage,
       getCanvas: function () { return document.getElementById('dr-mv-canvas'); },
       controlsHost: document.body,
-      screenToNormalized: _mvScreenToNormalized,
+      clientToNormalized: _mvScreenToNormalized,
+      normalizedToClient: _mvNormalizedToClient,
+      requestPan: _mvPanByClientDelta,
       onTransformChanged: _mvOnTransformChanged,
       onComplete: _mvSaveCrop,
       onCancel: _mvEndMode
@@ -2531,6 +2547,8 @@
   function _mvTouchStart(e) {
     e.stopPropagation();
     if (e.touches.length === 2) {
+      // A second finger landed — cancel any in-flight crop gesture.
+      if (_mv.mode === 'list-crop' && _cropTool) { try { _cropTool.pointerCancel(); } catch (err) {} }
       // Two-finger: record center + initial distance for pan/pinch detection
       var dx = e.touches[0].clientX - e.touches[1].clientX;
       var dy = e.touches[0].clientY - e.touches[1].clientY;
@@ -2608,6 +2626,7 @@
 
   function _mvTouchEnd(e) {
     e.stopPropagation();
+    e.preventDefault(); // suppress synthetic mouse events after touch (prevents duplicate crop points)
     if (_mv._twoFinger) {
       _mv._twoFinger = false;
       _mv._pinching = false;
@@ -2616,7 +2635,8 @@
       _mvRerenderPdf();
       return;
     }
-    _mvMouseUp({});
+    var t = e.changedTouches && e.changedTouches[0];
+    _mvMouseUp(t ? { clientX: t.clientX, clientY: t.clientY } : {});
   }
 
   /* ── Page index strip ──────────────────────────────────────────────────── */
