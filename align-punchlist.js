@@ -575,8 +575,30 @@
     if (viewer.gesture.mode === 'swipe') {
       if (touches.length >= 2) { _beginPinch(touches[0], touches[1]); event.preventDefault(); return; }
       if (touches.length !== 1) return;
+      if (viewer.scale > VIEWER_MIN_SCALE) {
+        // Zoomed in: one finger pans the image instead of navigating.
+        var dx = touches[0].clientX - viewer.gesture.lastX;
+        var dy = touches[0].clientY - viewer.gesture.lastY;
+        viewer.gesture.lastX = touches[0].clientX;
+        viewer.gesture.lastY = touches[0].clientY;
+        viewer.gesture.mode = 'pan';
+        _setTransform(viewer.scale, viewer.tx + dx, viewer.ty + dy, false);
+        event.preventDefault();
+        return;
+      }
       viewer.gesture.lastX = touches[0].clientX;
       viewer.gesture.lastY = touches[0].clientY;
+      event.preventDefault();
+      return;
+    }
+    if (viewer.gesture.mode === 'pan') {
+      if (touches.length >= 2) { _beginPinch(touches[0], touches[1]); event.preventDefault(); return; }
+      if (touches.length !== 1) return;
+      var pdx = touches[0].clientX - viewer.gesture.lastX;
+      var pdy = touches[0].clientY - viewer.gesture.lastY;
+      viewer.gesture.lastX = touches[0].clientX;
+      viewer.gesture.lastY = touches[0].clientY;
+      _setTransform(viewer.scale, viewer.tx + pdx, viewer.ty + pdy, false);
       event.preventDefault();
       return;
     }
@@ -609,6 +631,13 @@
     }
     if (viewer.gesture.mode === 'pinch-wait') {
       if (remaining === 0) { viewer.gesture = null; viewer.suppressClickUntil = Date.now() + 400; _setTransform(viewer.scale, viewer.tx, viewer.ty, true); }
+      event.preventDefault();
+      return;
+    }
+    if (viewer.gesture.mode === 'pan') {
+      viewer.gesture = null;
+      viewer.suppressClickUntil = Date.now() + 400;
+      _setTransform(viewer.scale, viewer.tx, viewer.ty, false);
       event.preventDefault();
       return;
     }
