@@ -2569,7 +2569,7 @@
       return;
     }
     if (e.touches.length === 1) {
-      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0 };
+      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0, preventDefault: function () {}, stopPropagation: function () {} };
       _mvMouseDown(fake);
       e.preventDefault();
     }
@@ -2618,7 +2618,7 @@
       return;
     }
     if (e.touches.length === 1 && !_mv._twoFinger) {
-      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, preventDefault: function () {}, stopPropagation: function () {} };
       _mvMouseMove(fake);
       e.preventDefault();
     }
