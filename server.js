@@ -1506,10 +1506,11 @@ app.post('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.r
   }
   
   // Strictly reject list-only fields so the two-step boundary cannot be bypassed.
-  if (body.hasOwnProperty('name') || body.hasOwnProperty('description') ||
+  // NOTE: 'description' is a valid ITEM field too — do not reject it here.
+  if (body.hasOwnProperty('name') ||
       body.hasOwnProperty('apartment_label') || body.hasOwnProperty('scope_type') ||
       body.hasOwnProperty('listId')) {
-    return res.status(400).json({ error: 'Cannot create item with list fields (name, description, apartment_label, scope_type, listId)' });
+    return res.status(400).json({ error: 'Cannot create item with list fields (name, apartment_label, scope_type, listId)' });
   }
   
   // Extract item fields
