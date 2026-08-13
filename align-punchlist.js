@@ -144,7 +144,7 @@
     else {
       h.push('<div class="pl-items">');
       state.items.forEach(function (item, index) {
-        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '"><div class="pl-item-info"><div class="pl-item-title">' + esc(item.title || 'Untitled') + '</div><div class="pl-item-meta">' + esc(item.location || '') + (item.trade ? ' • ' + esc(item.trade) : '') + ' • Item #' + String(index + 1).padStart(3, '0') + '</div></div><div class="pl-item-right"><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span><button class="pm-btn small" data-pl-act="edit-item" data-pl-id="' + esc(item.id) + '">Edit</button><button class="pm-btn small danger" data-pl-act="delete-item" data-pl-id="' + esc(item.id) + '">✕</button></div></div>');
+        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '"><div class="pl-item-info"><div class="pl-item-title">' + esc(item.title || 'Untitled') + '</div><div class="pl-item-meta">' + esc(item.location || '') + (item.trade ? ' • ' + esc(item.trade) : '') + ' • Item #' + String(index + 1).padStart(3, '0') + '</div></div><div class="pl-item-right"><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span><div class="pl-item-actions"><button type="button" class="pm-btn small" data-pl-act="edit-item" data-pl-id="' + esc(item.id) + '">Edit</button><button type="button" class="pm-btn small danger" data-pl-act="delete-item" data-pl-id="' + esc(item.id) + '">✕</button></div></div></div>');
       });
       h.push('</div>');
     }
