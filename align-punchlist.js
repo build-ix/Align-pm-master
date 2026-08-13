@@ -15,6 +15,12 @@
     viewMode: 'lists', // lists | list-form | list | item-form | detail | profile-edit
     items: [], allItems: [], listItems: {}
   };
+  var viewer = {
+    el: null, image: null, stage: null, counter: null, filename: null, status: null,
+    closeButton: null, prevButton: null, nextButton: null,
+    images: [], index: 0, open: false, returnFocus: null, backgroundState: [],
+    touchStartX: 0, touchStartY: 0, touchX: 0, touchY: 0, touchActive: false, suppressClickUntil: 0
+  };
 
   function esc(value) {
     return String(value == null ? '' : value)
@@ -167,6 +173,23 @@
   function _onContainerClick(event) {
     if (state.viewMode === 'lists') { _handleListsClick(event); return; }
     if (state.viewMode === 'list') { _handleListClick(event); return; }
+    if (state.viewMode === 'detail') { _handleDetailClick(event); return; }
+  }
+
+  function _handleDetailClick(event) {
+    var link = event.target.closest('.pl-image-link[data-image-index]');
+    if (!link) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    var grid = link.closest('.pl-detail-images');
+    if (!grid) return;
+    var links = Array.prototype.slice.call(grid.querySelectorAll('a[data-image-index]'));
+    var images = links.map(function (l, i) {
+      return { url: l.getAttribute('data-full-url') || l.href, filename: l.getAttribute('data-filename') || ('Attachment ' + (i + 1)) };
+    });
+    var startIndex = links.indexOf(link);
+    if (startIndex < 0) startIndex = 0;
+    _openImageViewer(images, startIndex, link);
   }
 
   function _bindContainer() {
@@ -213,7 +236,7 @@
   /* Dedicated item form: no name, description, apartment, scope, or list controls. */
   function _itemFormHtml() {
     var item = state.editingItem || {};
-    return '<div class="pl-form-wrap pl-item-form" data-form="item-form"><div class="pl-form-header"><button class="pm-btn" id="pl-item-form-back">← Back</button><h3 class="pl-form-title">' + (item.id ? 'Edit Item' : 'Create Item') + '</h3><button class="pm-btn primary" id="pl-item-form-save">Save</button></div><div class="pl-form-section pl-attachments-section"><label class="pl-field-label">Attachments</label><div class="pl-image-upload"><button type="button" class="pl-upload-btn" id="pl-upload-attachments">Attachments</button></div><div id="pl-images-preview" class="pl-images-preview"></div><input type="file" id="pl-file-input" accept="image/*,video/*,.pdf" style="display:none" multiple></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-title">Title</label><input class="pl-input" id="pl-item-title" value="' + esc(item.title) + '" required></div><div class="pl-form-section"><label class="pl-field-label">Location</label><button type="button" class="pm-btn" id="pl-item-pin-location">Pin Location</button></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-priority">Priority</label><select class="pl-input" id="pl-item-priority">' + PRIORITIES.map(function (p) { return '<option value="' + p + '"' + (item.priority === p || (!item.priority && p === 'medium') ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>'; }).join('') + '</select></div></div>';
+    return '<div class="pl-form-wrap pl-item-form" data-form="item-form"><div class="pl-form-header"><button class="pm-btn" id="pl-item-form-back">← Back</button><h3 class="pl-form-title">' + (item.id ? 'Edit Item' : 'Create Item') + '</h3><button class="pm-btn primary" id="pl-item-form-save">Save</button></div><div class="pl-form-section pl-attachments-section"><label class="pl-field-label">Attachments</label><div class="pl-image-upload"><button type="button" class="pl-upload-btn" id="pl-upload-attachments">Attachments</button></div><div id="pl-images-preview" class="pl-images-preview"></div><input type="file" id="pl-file-input" accept="image/*,video/*,.pdf" style="display:none" multiple></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-title">Title</label><input class="pl-input" id="pl-item-title" value="' + esc(item.title) + '" required></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-description">Description</label><textarea class="pl-textarea" id="pl-item-description" rows="3" placeholder="Describe the issue…">' + esc(item.description) + '</textarea></div><div class="pl-form-section"><label class="pl-field-label">Location</label><button type="button" class="pm-btn" id="pl-item-pin-location">Pin Location</button></div><div class="pl-form-section"><label class="pl-field-label" for="pl-item-priority">Priority</label><select class="pl-input" id="pl-item-priority">' + PRIORITIES.map(function (p) { return '<option value="' + p + '"' + (item.priority === p || (!item.priority && p === 'medium') ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>'; }).join('') + '</select></div></div>';
   }
   function _bindItemForm() {
     document.getElementById('pl-item-form-back').addEventListener('click', function () { state.editingItem = null; state.viewMode = 'list'; _loadListItems(); });
@@ -297,7 +320,7 @@
         return i; // preserve legacy base64 object
       });
       var title = document.getElementById('pl-item-title').value.trim();
-      var payload = { title: title, location: state.editingItem.location || '', priority: document.getElementById('pl-item-priority').value, images: images };
+      var payload = { title: title, description: document.getElementById('pl-item-description').value.trim(), location: state.editingItem.location || '', priority: document.getElementById('pl-item-priority').value, images: images };
       var base = projectPath('/' + encodeURIComponent(state.activeList.id) + '/items');
       var request = state.editingItem.id ? api(base + '/' + encodeURIComponent(state.editingItem.id), { method: 'PATCH', body: JSON.stringify(payload) }) : api(base, { method: 'POST', body: JSON.stringify(payload) });
       return request.then(function () { state.editingItem = null; state.viewMode = 'list'; _loadListItems(); });
@@ -309,13 +332,16 @@
       '<div class="pl-detail-wrap"><div class="pl-detail-header"><button class="pm-btn" id="pl-detail-back">← Back</button><h3 class="pl-detail-title">' + esc(item.title || 'Untitled') + '</h3><button class="pm-btn primary" id="pl-detail-edit">Edit</button></div>',
       '<div class="pl-detail-section"><span class="pl-detail-status-badge" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span> <span class="pl-priority-badge">' + esc(item.priority || '') + '</span></div>'
     ];
+    if (item.description) h.push('<div class="pl-detail-section"><span class="pl-detail-label">Description</span><div class="pl-detail-value">' + esc(item.description) + '</div></div>');
     var images = item.images || [];
     if (images.length) {
       h.push('<div class="pl-detail-section"><span class="pl-detail-label">Attachments</span><div class="pl-detail-images">');
-      images.forEach(function (image) {
+      images.forEach(function (image, index) {
         var thumb = _imageUrl(image);
         var full = _fullImageUrl(image);
-        if (thumb) h.push(full ? '<a href="' + full + '" target="_blank" rel="noopener"><div class="pl-image-thumb" style="background-image:url(\'' + thumb + '\')"></div></a>' : '<div class="pl-image-thumb" style="background-image:url(\'' + thumb + '\')"></div>');
+        if (!thumb) return;
+        var name = image.name || ('Attachment ' + (index + 1));
+        h.push('<a class="pl-image-link" href="' + full + '" data-image-index="' + index + '" data-full-url="' + full + '" data-filename="' + esc(name) + '" aria-label="Open ' + esc(name) + ', image ' + (index + 1) + ' of ' + images.length + '"><div class="pl-image-thumb" style="background-image:url(\'' + thumb + '\')" role="img" aria-label="' + esc(name) + '"></div></a>');
       });
       h.push('</div></div>');
     }
@@ -327,6 +353,220 @@
   function _bindDetail() {
     document.getElementById('pl-detail-back').addEventListener('click', function () { state.detailItem = null; state.viewMode = 'list'; _loadListItems(); });
     document.getElementById('pl-detail-edit').addEventListener('click', function () { state.editingItem = JSON.parse(JSON.stringify(state.detailItem)); state.viewMode = 'item-form'; _paint(); });
+  }
+
+  /* ── In-page image viewer (lightbox) ─────────────────────────────────── */
+  var VIEWER_SWIPE_THRESHOLD = 50;
+  var VIEWER_AXIS_RATIO = 1.2;
+
+  function _ensureImageViewer() {
+    if (viewer.el) return viewer.el;
+    var host = document.createElement('div');
+    host.innerHTML = [
+      '<div class="pl-image-viewer" role="dialog" aria-modal="true" aria-labelledby="pl-image-viewer-title" aria-describedby="pl-image-viewer-meta" aria-hidden="true" hidden>',
+      '<div class="pl-image-viewer__backdrop" data-viewer-action="close" aria-hidden="true"></div>',
+      '<div class="pl-image-viewer__shell">',
+      '<header class="pl-image-viewer__header"><h2 id="pl-image-viewer-title" class="pl-image-viewer__title">Attachment preview</h2>',
+      '<button type="button" class="pl-image-viewer__close" data-viewer-action="close" aria-label="Close image viewer"><span aria-hidden="true">&times;</span></button></header>',
+      '<main class="pl-image-viewer__stage">',
+      '<button type="button" class="pl-image-viewer__nav pl-image-viewer__nav--prev" data-viewer-action="prev" aria-label="Previous image"><span aria-hidden="true">&#8249;</span></button>',
+      '<div class="pl-image-viewer__canvas"><img class="pl-image-viewer__image" alt="" draggable="false"><div class="pl-image-viewer__status" role="status" aria-live="polite"></div></div>',
+      '<button type="button" class="pl-image-viewer__nav pl-image-viewer__nav--next" data-viewer-action="next" aria-label="Next image"><span aria-hidden="true">&#8250;</span></button>',
+      '</main>',
+      '<footer id="pl-image-viewer-meta" class="pl-image-viewer__footer"><span class="pl-image-viewer__counter" aria-live="polite" aria-atomic="true"></span><span class="pl-image-viewer__filename"></span></footer>',
+      '</div></div>'
+    ].join('');
+    viewer.el = host.firstElementChild;
+    document.body.appendChild(viewer.el);
+    viewer.image = viewer.el.querySelector('.pl-image-viewer__image');
+    viewer.stage = viewer.el.querySelector('.pl-image-viewer__stage');
+    viewer.counter = viewer.el.querySelector('.pl-image-viewer__counter');
+    viewer.filename = viewer.el.querySelector('.pl-image-viewer__filename');
+    viewer.status = viewer.el.querySelector('.pl-image-viewer__status');
+    viewer.closeButton = viewer.el.querySelector('.pl-image-viewer__close');
+    viewer.prevButton = viewer.el.querySelector('[data-viewer-action="prev"]');
+    viewer.nextButton = viewer.el.querySelector('[data-viewer-action="next"]');
+    _bindImageViewerEvents();
+    return viewer.el;
+  }
+
+  function _openImageViewer(images, startIndex, trigger) {
+    if (!Array.isArray(images) || !images.length) return;
+    _ensureImageViewer();
+    viewer.images = images.filter(function (image) { return image && image.url; });
+    if (!viewer.images.length) return;
+    viewer.index = Math.max(0, Math.min(Number(startIndex) || 0, viewer.images.length - 1));
+    viewer.returnFocus = (trigger instanceof HTMLElement) ? trigger : document.activeElement;
+    viewer.open = true;
+    viewer.el.hidden = false;
+    viewer.el.setAttribute('aria-hidden', 'false');
+    document.documentElement.classList.add('pl-viewer-open');
+    document.body.classList.add('pl-viewer-open');
+    _hideViewerBackground();
+    _renderViewerImage();
+    window.requestAnimationFrame(function () {
+      viewer.el.classList.add('is-open');
+      viewer.closeButton.focus();
+    });
+  }
+
+  function _renderViewerImage() {
+    var item = viewer.images[viewer.index];
+    var total = viewer.images.length;
+    var filename = item.filename || ('Attachment ' + (viewer.index + 1));
+    var hasMultiple = total > 1;
+    viewer.el.classList.add('is-loading');
+    viewer.status.textContent = 'Loading image';
+    viewer.image.removeAttribute('src');
+    viewer.image.alt = filename;
+    viewer.counter.textContent = String(viewer.index + 1) + ' / ' + String(total);
+    viewer.filename.textContent = filename;
+    viewer.prevButton.hidden = !hasMultiple;
+    viewer.nextButton.hidden = !hasMultiple;
+    viewer.image.src = item.url;
+    _preloadAdjacentImages();
+  }
+
+  function _showViewerIndex(index) {
+    var total = viewer.images.length;
+    if (!viewer.open || total === 0) return;
+    viewer.index = ((index % total) + total) % total;
+    _renderViewerImage();
+  }
+  function _showPreviousImage() { if (viewer.images.length > 1) _showViewerIndex(viewer.index - 1); }
+  function _showNextImage() { if (viewer.images.length > 1) _showViewerIndex(viewer.index + 1); }
+
+  function _closeImageViewer() {
+    if (!viewer.open) return;
+    viewer.open = false;
+    viewer.el.classList.remove('is-open', 'is-loading', 'has-error');
+    viewer.el.setAttribute('aria-hidden', 'true');
+    document.documentElement.classList.remove('pl-viewer-open');
+    document.body.classList.remove('pl-viewer-open');
+    _restoreViewerBackground();
+    _resetViewerTouch();
+    window.setTimeout(function () {
+      if (viewer.open) return;
+      viewer.el.hidden = true;
+      viewer.image.removeAttribute('src');
+      viewer.image.alt = '';
+      viewer.status.textContent = '';
+      viewer.counter.textContent = '';
+      viewer.filename.textContent = '';
+    }, 180);
+    var returnFocus = viewer.returnFocus;
+    viewer.returnFocus = null;
+    if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus();
+  }
+
+  function _bindImageViewerEvents() {
+    viewer.el.addEventListener('click', function (event) {
+      if (!viewer.open) return;
+      if (Date.now() < viewer.suppressClickUntil) { event.preventDefault(); return; }
+      var actionElement = event.target.closest('[data-viewer-action]');
+      if (actionElement) {
+        var action = actionElement.getAttribute('data-viewer-action');
+        if (action === 'close') _closeImageViewer();
+        else if (action === 'prev') _showPreviousImage();
+        else if (action === 'next') _showNextImage();
+        return;
+      }
+      if (event.target === viewer.stage || event.target.classList.contains('pl-image-viewer__canvas')) _closeImageViewer();
+    });
+    viewer.stage.addEventListener('touchstart', _onViewerTouchStart, { passive: true });
+    viewer.stage.addEventListener('touchmove', _onViewerTouchMove, { passive: false });
+    viewer.stage.addEventListener('touchend', _onViewerTouchEnd, { passive: false });
+    viewer.stage.addEventListener('touchcancel', _resetViewerTouch);
+    document.addEventListener('keydown', _onViewerKeyDown);
+    viewer.image.addEventListener('load', function () { viewer.el.classList.remove('is-loading', 'has-error'); viewer.status.textContent = ''; });
+    viewer.image.addEventListener('error', function () { viewer.el.classList.remove('is-loading'); viewer.el.classList.add('has-error'); viewer.status.textContent = 'Image could not be loaded'; });
+  }
+
+  function _onViewerKeyDown(event) {
+    if (!viewer.open) return;
+    if (event.key === 'Escape') { event.preventDefault(); _closeImageViewer(); return; }
+    if (event.key === 'ArrowLeft') { event.preventDefault(); _showPreviousImage(); return; }
+    if (event.key === 'ArrowRight') { event.preventDefault(); _showNextImage(); return; }
+    if (event.key === 'Tab') _trapViewerFocus(event);
+  }
+
+  function _onViewerTouchStart(event) {
+    if (!viewer.open || event.touches.length !== 1) { _resetViewerTouch(); return; }
+    if (event.target.closest('button')) { _resetViewerTouch(); return; }
+    var touch = event.touches[0];
+    viewer.touchStartX = touch.clientX; viewer.touchStartY = touch.clientY;
+    viewer.touchX = touch.clientX; viewer.touchY = touch.clientY;
+    viewer.touchActive = true;
+  }
+  function _onViewerTouchMove(event) {
+    if (!viewer.touchActive || event.touches.length !== 1) return;
+    var touch = event.touches[0];
+    var dx = touch.clientX - viewer.touchStartX;
+    var dy = touch.clientY - viewer.touchStartY;
+    viewer.touchX = touch.clientX; viewer.touchY = touch.clientY;
+    if (Math.abs(dx) > 8 || Math.abs(dy) > 8) event.preventDefault();
+  }
+  function _onViewerTouchEnd() {
+    if (!viewer.touchActive) return;
+    var dx = viewer.touchX - viewer.touchStartX;
+    var dy = viewer.touchY - viewer.touchStartY;
+    var absX = Math.abs(dx), absY = Math.abs(dy);
+    var handled = false;
+    if (absX >= VIEWER_SWIPE_THRESHOLD && absX >= absY * VIEWER_AXIS_RATIO) {
+      if (dx < 0) _showNextImage(); else _showPreviousImage();
+      handled = true;
+    } else if (absY >= VIEWER_SWIPE_THRESHOLD && absY >= absX * VIEWER_AXIS_RATIO) {
+      _closeImageViewer();
+      handled = true;
+    }
+    if (handled) viewer.suppressClickUntil = Date.now() + 400;
+    _resetViewerTouch();
+  }
+  function _resetViewerTouch() {
+    viewer.touchActive = false;
+    viewer.touchStartX = 0; viewer.touchStartY = 0; viewer.touchX = 0; viewer.touchY = 0;
+  }
+
+  function _trapViewerFocus(event) {
+    var focusable = Array.prototype.slice.call(viewer.el.querySelectorAll('button:not([hidden]):not([disabled]), [href]:not([hidden]), [tabindex]:not([tabindex="-1"]):not([hidden])')).filter(function (element) { return element.getClientRects().length > 0; });
+    if (!focusable.length) { event.preventDefault(); viewer.closeButton.focus(); return; }
+    var first = focusable[0], last = focusable[focusable.length - 1], active = document.activeElement;
+    if (event.shiftKey && active === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && active === last) { event.preventDefault(); first.focus(); }
+    else if (!viewer.el.contains(active)) { event.preventDefault(); first.focus(); }
+  }
+
+  function _hideViewerBackground() {
+    viewer.backgroundState = [];
+    Array.prototype.forEach.call(document.body.children, function (element) {
+      if (element === viewer.el || element.tagName === 'SCRIPT') return;
+      viewer.backgroundState.push({ element: element, hadAriaHidden: element.hasAttribute('aria-hidden'), hadInert: element.hasAttribute('inert') });
+      element.setAttribute('aria-hidden', 'true');
+      element.setAttribute('inert', '');
+    });
+  }
+  function _restoreViewerBackground() {
+    viewer.backgroundState.forEach(function (state) {
+      if (!state.element.isConnected) return;
+      if (state.hadAriaHidden) state.element.setAttribute('aria-hidden', 'true'); else state.element.removeAttribute('aria-hidden');
+      if (state.hadInert) state.element.setAttribute('inert', ''); else state.element.removeAttribute('inert');
+    });
+    viewer.backgroundState = [];
+  }
+
+  function _preloadAdjacentImages() {
+    var total = viewer.images.length;
+    if (total < 2) return;
+    var indexes = [(viewer.index - 1 + total) % total, (viewer.index + 1) % total];
+    var seen = Object.create(null);
+    indexes.forEach(function (index) {
+      var url = viewer.images[index].url;
+      if (!url || seen[url]) return;
+      seen[url] = true;
+      var preload = new Image();
+      preload.decoding = 'async';
+      preload.src = url;
+    });
   }
 
   global.AlignPunchlist = Object.freeze({
