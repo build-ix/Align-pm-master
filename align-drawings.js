@@ -1282,6 +1282,19 @@
   var _mvModeArgs = null; // { mode, projectId, drawingId, sheet, listId, itemId, cropMode, vertices, onSaved, onPlaced, onCancel }
   var _cropTool = null;   // active DrawingCropTool instance (crop mode)
 
+  // Transform-change subscription (crop tool re-sizes markers on zoom/pan)
+  var _mvTransformListeners = new Set();
+  function _mvOnTransformChanged(callback) {
+    _mvTransformListeners.add(callback);
+    return function unsubscribe() { _mvTransformListeners.delete(callback); };
+  }
+  function _mvNotifyTransformChanged(reason) {
+    var ev = { reason: reason, zoom: (_mv && _mv.zoom) || 1, panX: (_mv && _mv.panX) || 0, panY: (_mv && _mv.panY) || 0 };
+    _mvTransformListeners.forEach(function (cb) {
+      try { cb(ev); } catch (err) { console.error('[AlignDrawings] transform listener failed:', err); }
+    });
+  }
+
   function _mvScreenToNormalized(clientX, clientY) {
     var canvas = document.getElementById('dr-mv-canvas');
     if (!canvas) return { x: 0, y: 0 };
@@ -1858,9 +1871,10 @@
 
     _cropTool = window.DrawingCropTool.create({
       overlayHost: stage,
-      canvas: canvas,
+      getCanvas: function () { return document.getElementById('dr-mv-canvas'); },
       controlsHost: document.body,
       screenToNormalized: _mvScreenToNormalized,
+      onTransformChanged: _mvOnTransformChanged,
       onComplete: _mvSaveCrop,
       onCancel: _mvEndMode
     });
@@ -2685,6 +2699,7 @@
       stage.style.transform = 'translate(' + _mv.panX + 'px,' + _mv.panY + 'px) scale(' + _mv.zoom + ')';
       stage.style.transformOrigin = '0 0';
     }
+    _mvNotifyTransformChanged('transform');
   }
 
   /* ── Update canvas CSS sizes based on current zoom (PDF only) ──────────── */
@@ -2747,6 +2762,9 @@
         annCanvas.style.width  = logW + 'px';
         annCanvas.style.height = logH + 'px';
       }
+
+      // Canvas backing dims changed — re-sync crop marker size/viewBox.
+      _mvNotifyTransformChanged('pdf-canvas-resize');
 
       if (seq !== _mvRenderSeq) return; // superseded during sizing
 

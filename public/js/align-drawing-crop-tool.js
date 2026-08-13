@@ -7,17 +7,28 @@
  * supplies a screen→normalized adapter. Vertices are stored NORMALIZED 0-1
  * relative to the full drawing sheet — the same space as punch pins.
  *
+ * The draft SVG lives INSIDE the scaled viewer stage so lines + fill follow
+ * the drawing. Point markers/labels are inverse-scaled each render so they
+ * stay a fixed ~12px on screen at any zoom. A rAF-coalesced refresh() is
+ * subscribed to the viewer's transform changes (onTransformChanged) so
+ * markers re-size correctly while the user pinch-zooms and pans.
+ *
  * Exposes: window.DrawingCropTool = { create }
  */
 (function (global) {
   'use strict';
 
   var MIN_POINTS = 4;      // minimum vertices before a polygon can close
-  var TAP_SLOP = 8;        // px movement threshold to distinguish tap vs drag
+  var HANDLE_RADIUS_PX = 12;   // fixed screen radius of point handles
+  var LABEL_SIZE_PX = 13;      // fixed screen font size of number labels
 
   function create(adapter) {
-    if (!adapter || !adapter.overlayHost || !adapter.canvas || !adapter.screenToNormalized) {
+    if (!adapter || !adapter.overlayHost || !adapter.screenToNormalized) {
       console.warn('[CropTool] Missing adapter');
+      return null;
+    }
+    if (typeof adapter.getCanvas !== 'function' && !adapter.canvas) {
+      console.warn('[CropTool] Missing canvas (getCanvas or canvas required)');
       return null;
     }
 
@@ -32,10 +43,18 @@
       destroyed: false
     };
 
-    var W = adapter.canvas.width || 1;
-    var H = adapter.canvas.height || 1;
+    var refreshRaf = 0;
+    var unsubscribeTransform = null;
 
-    // ── Draft SVG overlay ────────────────────────────────────────────────────
+    function _getCanvas() {
+      return typeof adapter.getCanvas === 'function' ? adapter.getCanvas() : adapter.canvas;
+    }
+
+    var canvas = _getCanvas();
+    var W = (canvas && canvas.width) || 1;
+    var H = (canvas && canvas.height) || 1;
+
+    // ── Draft SVG overlay (inside the scaled stage) ──────────────────────────
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('class', 'crop-draft-svg');
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
@@ -78,7 +97,6 @@
     function pointerDown(clientX, clientY) {
       if (state.destroyed || state.phase === 'saving') return;
       state.lastClient = { x: clientX, y: clientY };
-      // position candidate on pointer down (drag can refine it)
       state.candidate = _normalize(clientX, clientY);
       _render();
     }
@@ -109,14 +127,12 @@
     // ── Button actions ───────────────────────────────────────────────────────
     function primaryAction() {
       if (state.phase === 'first') {
-        // "Start" — lock candidate as point 1
         if (!state.candidate) return;
         state.committed = [state.candidate];
         state.candidate = null;
         state.phase = 'second';
         _render();
       } else {
-        // "Complete" — close polygon + save
         complete();
       }
     }
@@ -131,7 +147,6 @@
     function undo() {
       if (state.committed.length > 0) {
         state.committed.pop();
-        // After undoing below 2 committed points, return to 'second'
         if (state.committed.length < 2) {
           state.phase = state.committed.length === 1 ? 'second' : 'first';
         }
@@ -151,7 +166,6 @@
       if (state.committed.length < MIN_POINTS) return;
       state.phase = 'saving';
       _render();
-      // Ignore any uncommitted candidate (or require it committed first via Add point)
       if (adapter.onComplete) adapter.onComplete(state.committed.slice());
     }
 
@@ -170,22 +184,41 @@
       state.candidate = null;
     }
 
+    // CSS screen pixels per SVG user-space unit. Uses the rendered rect vs the
+    // viewBox so it works for both image (stage-scale) and PDF (CSS-size) modes,
+    // and for Retina backing stores. Returns null when not yet laid out.
+    function _getRenderedScale() {
+      var c = _getCanvas();
+      if (!c || !c.isConnected) return null;
+      var rect = c.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+      var vbW = W || c.width || 1;
+      var vbH = H || c.height || 1;
+      if (vbW <= 0 || vbH <= 0) return null;
+      return { x: rect.width / vbW, y: rect.height / vbH };
+    }
+
     function _render() {
       if (state.destroyed) return;
-      // Re-read canvas size (may change after zoom re-render)
-      W = adapter.canvas.width || W;
-      H = adapter.canvas.height || H;
+      // Re-read canvas + viewBox (may change after zoom re-render / PDF page).
+      var c = _getCanvas();
+      if (c) {
+        W = c.width || W;
+        H = c.height || H;
+      }
       svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      svg.style.width = W + 'px';
+      svg.style.height = H + 'px';
 
-      // Compute current zoom so markers/labels stay a fixed screen size.
-      var zoom = 1;
-      try {
-        var crect = adapter.canvas.getBoundingClientRect();
-        if (crect && crect.width > 0 && W > 0) zoom = crect.width / W;
-      } catch (e) {}
-      if (!zoom || zoom <= 0) zoom = 1;
-      var handleR = 12 / zoom;      // ~12px screen radius at any zoom
-      var labelSize = 13 / zoom;    // ~13px screen font at any zoom
+      var scale = _getRenderedScale();
+      if (!scale) {
+        // Not laid out yet — leave as-is; the next refresh() will retry.
+        return;
+      }
+      var s = (scale.x + scale.y) / 2;
+      if (s <= 0) return;
+      var handleR = HANDLE_RADIUS_PX / s;
+      var labelSize = LABEL_SIZE_PX / s;
 
       var parts = [];
       var pts = state.committed.slice();
@@ -218,7 +251,7 @@
           '" x2="' + (last.x * W) + '" y2="' + (last.y * H) + '" />');
       }
 
-      // Point handles
+      // Point handles (fixed screen size)
       pts.forEach(function (p, i) {
         parts.push('<circle class="crop-handle" cx="' + (p.x * W) + '" cy="' + (p.y * H) + '" r="' + handleR + '"></circle>');
         parts.push('<text class="crop-handle-label" x="' + (p.x * W) + '" y="' + (p.y * H) + '" font-size="' + labelSize + '">' + (i + 1) + '</text>');
@@ -266,6 +299,16 @@
       }
     }
 
+    // rAF-coalesced refresh so a pinch storm produces at most one render/frame.
+    function refresh() {
+      if (state.destroyed || refreshRaf) return;
+      refreshRaf = requestAnimationFrame(function () {
+        refreshRaf = 0;
+        if (state.destroyed || !svg.isConnected) return;
+        _render();
+      });
+    }
+
     function _cleanup() {
       if (svg && svg.parentNode) svg.parentNode.removeChild(svg);
       if (controls && controls.parentNode) controls.parentNode.removeChild(controls);
@@ -274,15 +317,23 @@
     function destroy() {
       if (state.destroyed) return;
       state.destroyed = true;
+      if (refreshRaf) { cancelAnimationFrame(refreshRaf); refreshRaf = 0; }
+      if (typeof unsubscribeTransform === 'function') { try { unsubscribeTransform(); } catch (e) {} unsubscribeTransform = null; }
       _cleanup();
     }
 
-    _render();
+    // Subscribe to the viewer's transform changes.
+    if (typeof adapter.onTransformChanged === 'function') {
+      unsubscribeTransform = adapter.onTransformChanged(refresh);
+    }
+
+    refresh(); // initial render at the already-active transform
 
     return {
       pointerDown: pointerDown,
       pointerMove: pointerMove,
       pointerUp: pointerUp,
+      refresh: refresh,
       destroy: destroy,
       getVertices: function () { return state.committed.slice(); },
       isActive: function () { return !state.destroyed; }
