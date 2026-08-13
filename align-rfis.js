@@ -19,6 +19,7 @@
 
   var state = {
     container: null,
+    chrome: null,
     projectId: null,
     filter: 'all',       // 'all' | 'draft' | 'submitted' | 'answered' | 'closed'
     editing: null,       // record being edited (or new record stub)
@@ -114,9 +115,10 @@
   }
 
   /* ── Render ─────────────────────────────────────────────────────────── */
-  function render(container) {
+  function render(container, chrome) {
     if (!container) return;
     state.container = container;
+    state.chrome = chrome || null;
     state.projectId = null;
     state.filter = 'all';
     state.viewMode = 'list';
@@ -136,6 +138,7 @@
     var c = state.container;
     if (!c) return;
     _resolveProjectId();
+    _renderHeader();
     if (!state.projectId) {
       c.innerHTML = '<div class="rf-empty"><strong>No active project</strong><p>Select a project from the header.</p></div>';
       return;
@@ -147,6 +150,38 @@
     }
     c.innerHTML = _listHtml();
     _bindList();
+  }
+
+  function _renderHeader() {
+    if (!state.chrome || !state.chrome.setHeader) return;
+    if (state.viewMode === 'form' && state.editing) {
+      state.chrome.setHeader({
+        title: state.editing.id ? ('Edit ' + rfiNo(state.editing)) : 'New RFI',
+        backLabel: 'Back to RFIs',
+        actions: [{ id: 'rf-save', label: 'Save', variant: 'primary', type: 'submit', form: 'rf-form' }]
+      });
+    } else {
+      state.chrome.setHeader({
+        title: 'RFIs',
+        backLabel: 'Back',
+        actions: [{ id: 'rf-new', label: '+ New RFI', variant: 'primary', onClick: function () { _newRfi(); } }]
+      });
+    }
+  }
+
+  function _newRfi() {
+    state.editing = {
+      id: '', number: getNextNumber(), subject: '', description: '',
+      status: 'draft', assignedTo: '', dueDate: '', answeredDate: '', answer: '',
+      createdBy: getUser(), createdAt: '', updatedAt: ''
+    };
+    state.viewMode = 'form';
+    _paint();
+  }
+
+  function handleBack() {
+    if (state.viewMode === 'form') { state.viewMode = 'list'; state.editing = null; _paint(); return true; }
+    return false;
   }
 
   /* ── List view ──────────────────────────────────────────────────────── */
@@ -168,14 +203,9 @@
     });
     h.push('</div>');
 
-    // Header
+    // Cards (filtered + sorted)
     var filtered = state.filter === 'all' ? items : items.filter(function (r) { return r.status === state.filter; });
     filtered.sort(function (a, b) { return (parseInt(b.number, 10) || 0) - (parseInt(a.number, 10) || 0); });
-
-    h.push('<div class="rf-header">');
-    h.push('<h3 class="rf-title">RFIs<span class="rf-count">' + filtered.length + (state.filter === 'all' ? '' : ' ' + statusLabel(state.filter).toLowerCase()) + '</span></h3>');
-    h.push('<button class="pm-btn primary" id="rf-new-btn">+ New RFI</button>');
-    h.push('</div>');
 
     // Card grid
     if (filtered.length === 0) {
@@ -224,26 +254,6 @@
     var wrap = c.querySelector('.rf-wrap');
     if (!wrap) return;
 
-    var newBtn = c.querySelector('#rf-new-btn');
-    if (newBtn) newBtn.addEventListener('click', function () {
-      state.editing = {
-        id: '',
-        number: getNextNumber(),
-        subject: '',
-        description: '',
-        status: 'draft',
-        assignedTo: '',
-        dueDate: '',
-        answeredDate: '',
-        answer: '',
-        createdBy: getUser(),
-        createdAt: '',
-        updatedAt: ''
-      };
-      state.viewMode = 'form';
-      _paint();
-    });
-
     wrap.addEventListener('click', function (e) {
       // Filter chips
       var chip = e.target.closest('[data-rf-filter]');
@@ -276,13 +286,7 @@
   /* ── Form view ──────────────────────────────────────────────────────── */
   function _formHtml(r) {
     var h = [];
-    h.push('<div class="rf-form-wrap">');
-
-    h.push('<div class="rf-form-header">');
-    h.push('<button class="pm-btn" id="rf-form-back">← Back</button>');
-    h.push('<h3 class="rf-form-title">' + (r.id ? 'Edit ' + rfiNo(r) : 'New RFI') + '</h3>');
-    h.push('<button class="pm-btn primary" id="rf-form-save">Save</button>');
-    h.push('</div>');
+    h.push('<form id="rf-form" class="rf-form-wrap">');
 
     if (r.id && r.createdAt) {
       h.push('<p class="rf-form-meta">Created ' + fmtDate(r.createdAt) + (r.createdBy ? ' by ' + esc(r.createdBy) : '') + '</p>');
@@ -325,15 +329,16 @@
 
     // Danger zone
     if (r.id) {
-      h.push('<div class="rf-form-danger"><button class="pm-btn danger" id="rf-form-delete">Delete RFI</button></div>');
+      h.push('<div class="rf-form-danger"><button type="button" class="pm-btn danger" id="rf-form-delete">Delete RFI</button></div>');
     }
 
-    h.push('</div>');
+    h.push('</form>');
     return h.join('');
   }
 
   function _bindForm() {
     var c = state.container;
+    var form = c.querySelector('#rf-form');
 
     // Populate assigned-to from the project Directory (people API)
     var assignSel = c.querySelector('#rf-assigned');
@@ -358,13 +363,6 @@
       });
     }
 
-    var back = c.querySelector('#rf-form-back');
-    if (back) back.addEventListener('click', function () {
-      state.viewMode = 'list';
-      state.editing = null;
-      _paint();
-    });
-
     // Auto-fill answered date when status flips to answered
     var statusSel = c.querySelector('#rf-status');
     if (statusSel) statusSel.addEventListener('change', function () {
@@ -374,8 +372,10 @@
       }
     });
 
-    var save = c.querySelector('#rf-form-save');
-    if (save) save.addEventListener('click', function () {
+    var submitting = false;
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (submitting) return;
       var r = state.editing;
       if (!r) return;
 
@@ -401,6 +401,9 @@
       if (!r.createdBy) r.createdBy = getUser();
       if (!r.id) { r.id = uid(); r.number = getNextNumber(); }
 
+      submitting = true;
+      var saveBtn = document.getElementById('rf-save');
+      if (saveBtn) saveBtn.disabled = true;
       S().saveRecord(state.projectId, CATEGORY, r);
       state.viewMode = 'list';
       state.editing = null;
@@ -422,6 +425,7 @@
   /* ── Public API ─────────────────────────────────────────────────────── */
   global.AlignRfis = Object.freeze({
     render: render,
+    handleBack: handleBack,
     CATEGORY: CATEGORY
   });
   if (window.TileRegistry) window.TileRegistry.register({ id: 'rfis', title: 'RFIs', icon: '[]', route: 'rfis', roles: ['user','admin'], order: 12 });

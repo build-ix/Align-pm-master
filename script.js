@@ -4,7 +4,7 @@ const sections = {
   "drawings":    { title: "Drawings",    content: `<p>View and manage all project drawings here.</p>`, render: function(el) { if (window.AlignDrawings) window.AlignDrawings.render(el); } },
   "daily-logs":  { title: "Daily Logs",  content: `<p>Record and review daily site activity logs here.</p>`, render: function(el) { if (window.AlignDailyLogs) window.AlignDailyLogs.render(el); } },
   "specs":       { title: "Specs",       content: `<p>Access all project specifications and technical documents here.</p>`, render: function(el) { if (window.AlignSpecs) window.AlignSpecs.render(el); } },
-  "rfis":        { title: "RFIs",        content: `<p>Submit and track Requests for Information (RFIs) here.</p>`, render: function(el) { if (window.AlignRfis) window.AlignRfis.render(el); } },
+  "rfis":        { title: "RFIs",        content: `<p>Submit and track Requests for Information (RFIs) here.</p>`, render: function(el, chrome) { if (window.AlignRfis) window.AlignRfis.render(el, chrome); } },
   "punchlist":   { title: "Punchlist",   content: `<p>Manage and close out punchlist items here.</p>`, render: function(el, chrome) { if (window.AlignPunchlist) window.AlignPunchlist.render(el, chrome); } },
   "schedule":    { title: "Schedule",    content: `<p>View the project timeline and milestone schedule here.</p>`, render: function(el) { if (window.AlignSchedule) window.AlignSchedule.render(el); } },
   "budget":      { title: "Budget",      content: `<p>Track project costs, change orders, and budget status here.</p>`, render: function(el) { if (window.AlignBudget) window.AlignBudget.render(el); } },
@@ -129,6 +129,17 @@ function _makeSectionChrome(sectionKey) {
     }
   };
 }
+// Tiles whose modules implement handleBack() to consume the back button internally
+const _sectionBackModules = {
+  punchlist: 'AlignPunchlist',
+  rfis: 'AlignRfis',
+  tasks: 'AlignTasks',
+  contacts: 'AlignContacts',
+  specs: 'AlignSpecs',
+  schedule: 'AlignSchedule',
+  budget: 'AlignBudget',
+  procurement: 'AlignProcurement'
+};
 
 // ─── INIT: RESTORE ACTIVE PROJECT NAME IN HEADER ───
 (function initHeader() {
@@ -288,8 +299,9 @@ document.addEventListener('click', function(e) {
   if (!e.target.closest('#section-back')) return;
   e.preventDefault();
 
-  // Punchlist internal back navigation (list/detail/form → parent view)
-  if (_currentSection === 'punchlist' && window.AlignPunchlist && typeof window.AlignPunchlist.handleBack === 'function' && window.AlignPunchlist.handleBack()) {
+  // Module-internal back navigation (drill-down tiles return true to consume the back)
+  var backModule = _sectionBackModules[_currentSection];
+  if (backModule && window[backModule] && typeof window[backModule].handleBack === 'function' && window[backModule].handleBack()) {
     return;
   }
 
