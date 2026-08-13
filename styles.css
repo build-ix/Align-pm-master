@@ -2185,7 +2185,7 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 1200;
+  z-index: 11000;
   display: flex;
   align-items: center;
   gap: 10px;

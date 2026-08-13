@@ -1785,6 +1785,7 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.req
   }
   res.json({
     listId: listId,
+    configured: true,
     drawingId: crop.drawing_id,
     sheetNumber: crop.sheet_number,
     cropMode: crop.crop_mode,
