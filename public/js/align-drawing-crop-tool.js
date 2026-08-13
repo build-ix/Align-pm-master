@@ -177,11 +177,29 @@
       H = adapter.canvas.height || H;
       svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
 
+      // Compute current zoom so markers/labels stay a fixed screen size.
+      var zoom = 1;
+      try {
+        var crect = adapter.canvas.getBoundingClientRect();
+        if (crect && crect.width > 0 && W > 0) zoom = crect.width / W;
+      } catch (e) {}
+      if (!zoom || zoom <= 0) zoom = 1;
+      var handleR = 12 / zoom;      // ~12px screen radius at any zoom
+      var labelSize = 13 / zoom;    // ~13px screen font at any zoom
+
       var parts = [];
       var pts = state.committed.slice();
       var lastCommitted = pts.length > 0 ? pts[pts.length - 1] : null;
 
-      // Solid committed segments
+      // Live polygon fill: committed points + candidate (auto-closes visually).
+      var fillPts = pts.slice();
+      if (state.candidate) fillPts.push(state.candidate);
+      if (fillPts.length >= 3) {
+        var fillStr = fillPts.map(function (p) { return (p.x * W) + ',' + (p.y * H); }).join(' ');
+        parts.push('<polygon class="crop-fill" points="' + fillStr + '" />');
+      }
+
+      // Committed segments
       if (pts.length >= 2) {
         var ptsStr = pts.map(function (p) { return (p.x * W) + ',' + (p.y * H); }).join(' ');
         parts.push('<polyline class="crop-line" points="' + ptsStr + '" />');
@@ -193,20 +211,20 @@
           '" x2="' + (state.candidate.x * W) + '" y2="' + (state.candidate.y * H) + '" />');
       }
 
-      // Point handles
-      pts.forEach(function (p, i) {
-        parts.push('<circle class="crop-handle" cx="' + (p.x * W) + '" cy="' + (p.y * H) + '" r="10" data-i="' + i + '"></circle>');
-        parts.push('<text class="crop-handle-label" x="' + (p.x * W) + '" y="' + (p.y * H) + '">' + (i + 1) + '</text>');
-      });
-      if (state.candidate) {
-        parts.push('<circle class="crop-handle crop-handle-candidate" cx="' + (state.candidate.x * W) + '" cy="' + (state.candidate.y * H) + '" r="10"></circle>');
-      }
-
-      // Closing preview when >=3 committed (show what Complete would do)
-      if (state.phase !== 'first' && pts.length >= 3) {
+      // Closing preview (dashed) last → first
+      if (pts.length >= 3) {
         var first = pts[0], last = pts[pts.length - 1];
         parts.push('<line class="crop-line crop-line-close" x1="' + (first.x * W) + '" y1="' + (first.y * H) +
           '" x2="' + (last.x * W) + '" y2="' + (last.y * H) + '" />');
+      }
+
+      // Point handles
+      pts.forEach(function (p, i) {
+        parts.push('<circle class="crop-handle" cx="' + (p.x * W) + '" cy="' + (p.y * H) + '" r="' + handleR + '"></circle>');
+        parts.push('<text class="crop-handle-label" x="' + (p.x * W) + '" y="' + (p.y * H) + '" font-size="' + labelSize + '">' + (i + 1) + '</text>');
+      });
+      if (state.candidate) {
+        parts.push('<circle class="crop-handle crop-handle-candidate" cx="' + (state.candidate.x * W) + '" cy="' + (state.candidate.y * H) + '" r="' + handleR + '"></circle>');
       }
 
       svg.innerHTML = parts.join('');

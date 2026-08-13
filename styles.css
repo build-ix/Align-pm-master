@@ -2226,43 +2226,48 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
 }
 .crop-cancel { color: var(--muted); }
 .crop-add { color: var(--brand); }
+.crop-fill {
+  fill: rgba(59, 130, 246, 0.18);
+  stroke: none;
+}
 .crop-line {
   fill: none;
-  stroke: var(--brand);
-  stroke-width: 3;
+  stroke: #3b82f6;
+  stroke-width: 4;
   stroke-linejoin: round;
   stroke-linecap: round;
   vector-effect: non-scaling-stroke;
 }
 .crop-line-draft {
-  stroke: var(--brand);
+  stroke: #3b82f6;
+  stroke-width: 4;
   stroke-dasharray: 8 6;
-  opacity: 0.7;
+  opacity: 0.8;
 }
 .crop-line-close {
-  stroke: var(--brand);
+  stroke: #3b82f6;
+  stroke-width: 4;
   stroke-dasharray: 4 4;
-  opacity: 0.5;
+  opacity: 0.55;
 }
 .crop-handle {
-  fill: var(--brand);
+  fill: #3b82f6;
   stroke: #fff;
-  stroke-width: 2;
+  stroke-width: 3;
   vector-effect: non-scaling-stroke;
 }
 .crop-handle-candidate {
   fill: #fff;
-  stroke: var(--brand);
-  stroke-width: 2;
+  stroke: #3b82f6;
+  stroke-width: 3;
 }
 .crop-handle-label {
   fill: #fff;
-  font-size: 12px;
   font-weight: 700;
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
   paint-order: stroke;
-  stroke: rgba(0,0,0,0.5);
-  stroke-width: 2px;
+  stroke: rgba(0,0,0,0.55);
+  stroke-width: 3px;
 }
