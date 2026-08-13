@@ -1998,6 +1998,15 @@
     _mv.panX = vw / 2 - cropCenterSheetX * zoom;
     _mv.panY = vh / 2 - cropCenterSheetY * zoom;
 
+    // Make the stage's border box match the drawing so clip-path percentages
+    // resolve against the drawing, not the viewport width. (Without this the
+    // stage collapses to viewport width and the crop clip is misaligned.)
+    var stage = document.getElementById('dr-mv-stage');
+    if (stage) {
+      stage.style.width = (isPdf ? sheetW * zoom : sheetW) + 'px';
+      stage.style.height = (isPdf ? sheetH * zoom : sheetH) + 'px';
+    }
+
     if (isPdf) {
       _mvUpdateCanvasSizes();
       _mvApplyTransform();
