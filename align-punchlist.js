@@ -220,18 +220,87 @@
     var input = document.getElementById('pl-file-input');
     document.getElementById('pl-upload-attachments').addEventListener('click', function () { input.click(); });
     input.addEventListener('change', function () { Array.prototype.forEach.call(input.files || [], _addImage); input.value = ''; });
-    document.getElementById('pl-item-form-save').addEventListener('click', function () {
+    var saveButton = document.getElementById('pl-item-form-save');
+    var submitting = false;
+    saveButton.addEventListener('click', function () {
+      if (submitting) return;
       var title = document.getElementById('pl-item-title').value.trim();
       if (!title) { alert('Title is required.'); return; }
-      var payload = {title:title, location:state.editingItem.location || '', priority:document.getElementById('pl-item-priority').value, images:state.editingItem.images || []};
-      var base = projectPath('/' + encodeURIComponent(state.activeList.id) + '/items');
-      var request = state.editingItem.id ? api(base + '/' + encodeURIComponent(state.editingItem.id), {method:'PATCH', body:JSON.stringify(payload)}) : api(base, {method:'POST', body:JSON.stringify(payload)});
-      request.then(function () { state.editingItem = null; state.viewMode = 'list'; _loadListItems(); }).catch(notifyError);
+      submitting = true;
+      saveButton.disabled = true;
+      saveButton.setAttribute('aria-busy', 'true');
+      _saveItem().catch(function (error) { submitting = false; saveButton.disabled = false; saveButton.removeAttribute('aria-busy'); notifyError(error); });
     });
     (state.editingItem.images || []).forEach(function (image) { _showImage(image); });
   }
-  function _addImage(file) { var reader = new FileReader(); reader.onload = function (event) { var image = {id:uid(), data:event.target.result, timestamp:nowISO()}; if (!state.editingItem.images) state.editingItem.images = []; state.editingItem.images.push(image); _showImage(image); }; reader.readAsDataURL(file); }
-  function _showImage(image) { var preview = document.getElementById('pl-images-preview'); if (!preview) return; var thumb = document.createElement('div'); thumb.className = 'pl-image-thumb'; thumb.style.backgroundImage = 'url(' + image.data + ')'; thumb.title = 'Click to remove'; thumb.onclick = function () { state.editingItem.images = (state.editingItem.images || []).filter(function (i) { return i.id !== image.id; }); thumb.remove(); }; preview.appendChild(thumb); }
+  function _imageUrl(image) {
+    if (image.previewUrl) return image.previewUrl;
+    if (image.fileId) return '/api/files/' + encodeURIComponent(image.fileId) + '?thumb=1';
+    if (image.data) return image.data; // legacy base64
+    return '';
+  }
+  function _addImage(file) {
+    var image = { id: uid(), file: file, name: file.name, mimeType: file.type, previewUrl: URL.createObjectURL(file), timestamp: nowISO() };
+    if (!state.editingItem.images) state.editingItem.images = [];
+    state.editingItem.images.push(image);
+    _showImage(image);
+  }
+  function _showImage(image) {
+    var preview = document.getElementById('pl-images-preview');
+    if (!preview) return;
+    var url = _imageUrl(image);
+    if (!url) return;
+    var key = image.id || image.fileId;
+    var thumb = document.createElement('div');
+    thumb.className = 'pl-image-thumb';
+    thumb.style.backgroundImage = 'url(' + url + ')';
+    thumb.title = 'Click to remove';
+    thumb.onclick = function () {
+      state.editingItem.images = (state.editingItem.images || []).filter(function (i) { return (i.id || i.fileId) !== key; });
+      if (image.previewUrl) URL.revokeObjectURL(image.previewUrl);
+      thumb.remove();
+    };
+    preview.appendChild(thumb);
+  }
+  function _uploadFile(file) {
+    var formData = new FormData();
+    formData.append('file', file, file.name);
+    formData.append('project_id', state.projectId);
+    formData.append('type', 'punchlist');
+    var headers = window.AlignAPI && window.AlignAPI.authHeaders ? window.AlignAPI.authHeaders() : {};
+    return fetch('/api/files/upload', { method: 'POST', credentials: 'include', headers: headers, body: formData }).then(function (response) {
+      return response.json().catch(function () { return {}; }).then(function (body) {
+        if (!response.ok) throw new Error(body.error || 'Upload failed');
+        return { fileId: body.file.id, name: body.file.original_name, mimeType: body.file.mime_type };
+      });
+    });
+  }
+  function _saveItem() {
+    var pending = (state.editingItem.images || []).filter(function (i) { return i.file && !i.fileId; });
+    var chain = Promise.resolve();
+    pending.forEach(function (image) {
+      chain = chain.then(function () {
+        return _uploadFile(image.file).then(function (uploaded) {
+          image.fileId = uploaded.fileId;
+          image.name = uploaded.name;
+          image.mimeType = uploaded.mimeType;
+          if (image.previewUrl) { URL.revokeObjectURL(image.previewUrl); delete image.previewUrl; }
+          delete image.file;
+        });
+      });
+    });
+    return chain.then(function () {
+      var images = (state.editingItem.images || []).map(function (i) {
+        if (i.fileId) return { fileId: i.fileId, name: i.name, mimeType: i.mimeType };
+        return i; // preserve legacy base64 object
+      });
+      var title = document.getElementById('pl-item-title').value.trim();
+      var payload = { title: title, location: state.editingItem.location || '', priority: document.getElementById('pl-item-priority').value, images: images };
+      var base = projectPath('/' + encodeURIComponent(state.activeList.id) + '/items');
+      var request = state.editingItem.id ? api(base + '/' + encodeURIComponent(state.editingItem.id), { method: 'PATCH', body: JSON.stringify(payload) }) : api(base, { method: 'POST', body: JSON.stringify(payload) });
+      return request.then(function () { state.editingItem = null; state.viewMode = 'list'; _loadListItems(); });
+    });
+  }
 
   function _detailHtml(item) { return '<div class="pl-detail-wrap"><div class="pl-detail-header"><button class="pm-btn" id="pl-detail-back">← Back</button><h3 class="pl-detail-title">' + esc(item.title || 'Untitled') + '</h3><button class="pm-btn primary" id="pl-detail-edit">Edit</button></div><div class="pl-detail-section"><span class="pl-detail-status-badge" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span> <span class="pl-priority-badge">' + esc(item.priority || '') + '</span></div><div class="pl-detail-section"><span class="pl-detail-label">Location</span><div class="pl-detail-value">' + esc(item.location || '—') + '</div></div><div class="pl-detail-section"><span class="pl-detail-label">Trade</span><div class="pl-detail-value">' + esc(item.trade || '—') + '</div></div></div>'; }
   function _bindDetail() {
