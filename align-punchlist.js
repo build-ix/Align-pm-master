@@ -185,7 +185,7 @@
       if (!name) { alert('Name is required.'); return; }
       if (name.length > 120) { alert('Name must be 120 characters or fewer.'); return; }
       if (privacy !== 'private' && privacy !== 'public') { alert('Privacy must be private or public.'); return; }
-      var payload = {name:name, privacy:privacy};
+      var payload = {name:name, privacy:privacy, scope_type:'project', status:'open'};
       submitting = true;
       saveButton.disabled = true;
       saveButton.setAttribute('aria-disabled', 'true');
