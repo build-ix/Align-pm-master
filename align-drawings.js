@@ -1919,8 +1919,10 @@
 
   function _mvStartPin() {
     var args = _mv.modeArgs || {};
-    if (args.cropMode === 'polygon' && args.vertices && args.vertices.length >= 3) {
+    var hasCrop = args.cropMode === 'polygon' && Array.isArray(args.vertices) && args.vertices.length >= 3;
+    if (hasCrop) {
       _mvApplyListClip(args.vertices);
+      _mvZoomToCrop(args.vertices);
     }
     _mvInitPinOverlay();
     var markupToggle = document.getElementById('dr-mv-markup-toggle');
@@ -1935,6 +1937,76 @@
     var css = vertices.map(function (p) { return (p.x * 100) + '% ' + (p.y * 100) + '%'; }).join(', ');
     stage.style.clipPath = 'polygon(' + css + ')';
     stage.style.webkitClipPath = 'polygon(' + css + ')';
+  }
+
+  // Normalized bounding box of a crop polygon (rejects invalid/degenerate).
+  function _mvCropBounds(vertices) {
+    if (!vertices || vertices.length < 3) return null;
+    var minX = 1, minY = 1, maxX = 0, maxY = 0, count = 0;
+    for (var i = 0; i < vertices.length; i++) {
+      var x = Number(vertices[i].x), y = Number(vertices[i].y);
+      if (!isFinite(x) || !isFinite(y)) continue;
+      x = Math.max(0, Math.min(1, x));
+      y = Math.max(0, Math.min(1, y));
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+      count++;
+    }
+    if (count < 3 || maxX <= minX || maxY <= minY) return null;
+    return {
+      minX: minX, minY: minY, maxX: maxX, maxY: maxY,
+      width: maxX - minX, height: maxY - minY,
+      centerX: (minX + maxX) / 2, centerY: (minY + maxY) / 2
+    };
+  }
+
+  // Zoom + center the view on the crop polygon's bounding box (high-quality).
+  function _mvZoomToCrop(vertices) {
+    var bounds = _mvCropBounds(vertices);
+    if (!bounds) return false;
+    var vp = document.getElementById('dr-mv-viewport');
+    if (!vp) return false;
+    var vw = vp.clientWidth, vh = vp.clientHeight;
+    if (!vw || !vh) return false;
+
+    var isPdf = !!_mv._pdfDoc;
+    var sheetW, sheetH;
+    if (isPdf) {
+      sheetW = _mv._pdfLogW; sheetH = _mv._pdfLogH;
+    } else {
+      var img = document.getElementById('dr-mv-image');
+      if (!img) return false;
+      sheetW = img.naturalWidth || img.clientWidth;
+      sheetH = img.naturalHeight || img.clientHeight;
+    }
+    if (!sheetW || !sheetH) return false;
+
+    var cropW = bounds.width * sheetW;
+    var cropH = bounds.height * sheetH;
+    if (cropW <= 0 || cropH <= 0) return false;
+
+    var pad = 0.05;
+    var usableW = vw * (1 - pad * 2);
+    var usableH = vh * (1 - pad * 2);
+    var wantedZoom = Math.min(usableW / cropW, usableH / cropH);
+    var zoom = Math.max(MV_ZOOM_MIN, Math.min(MV_ZOOM_MAX, wantedZoom));
+
+    var cropCenterSheetX = bounds.centerX * sheetW;
+    var cropCenterSheetY = bounds.centerY * sheetH;
+
+    _mv.zoom = zoom;
+    _mv.panX = vw / 2 - cropCenterSheetX * zoom;
+    _mv.panY = vh / 2 - cropCenterSheetY * zoom;
+
+    if (isPdf) {
+      _mvUpdateCanvasSizes();
+      _mvApplyTransform();
+      _mvRerenderPdf();
+    } else {
+      _mvApplyTransform();
+    }
+    _mvUpdateToolbarUI();
+    return true;
   }
 
   function _mvPlacePin(clientX, clientY) {

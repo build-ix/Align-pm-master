@@ -101,10 +101,7 @@
         ]
       });
     } else if (view === 'detail' && state.detailItem) {
-      state.chrome.setHeader({
-        title: state.detailItem.title || 'Item', backLabel: 'Back to List',
-        actions: [{ id: 'pl-edit-item', label: 'Edit', variant: 'primary', onClick: function () { state.editingItem = JSON.parse(JSON.stringify(state.detailItem)); state.viewMode = 'item-form'; _paint(); } }]
-      });
+      state.chrome.setHeader({ title: state.detailItem.title || 'Item', backLabel: 'Back to List' });
     } else if (view === 'list-form') {
       var editingList = Boolean(state.editingList && state.editingList.id);
       state.chrome.setHeader({ title: editingList ? 'Edit List' : 'Create List', backLabel: state.activeList ? 'Back to List' : 'All Lists', actions: [{ id: 'pl-save-list', label: 'Save', variant: 'primary', type: 'submit', form: 'pl-list-form' }] });
@@ -203,7 +200,7 @@
     else {
       h.push('<div class="pl-items">');
       state.items.forEach(function (item, index) {
-        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '"><div class="pl-item-info"><div class="pl-item-title">' + esc(item.title || 'Untitled') + '</div><div class="pl-item-meta">' + esc(item.location || '') + (item.trade ? ' • ' + esc(item.trade) : '') + ' • Item #' + String(index + 1).padStart(3, '0') + '</div></div><div class="pl-item-right"><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span><div class="pl-item-actions"><button type="button" class="pm-btn small" data-pl-act="pin-item" data-pl-id="' + esc(item.id) + '">📍 Pin</button><button type="button" class="pm-btn small" data-pl-act="edit-item" data-pl-id="' + esc(item.id) + '">Edit</button><button type="button" class="pm-btn small danger" data-pl-act="delete-item" data-pl-id="' + esc(item.id) + '">✕</button></div></div></div>');
+        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '"><div class="pl-item-info"><div class="pl-item-title">' + esc(item.title || 'Untitled') + '</div><div class="pl-item-meta">' + esc(item.location || '') + (item.trade ? ' • ' + esc(item.trade) : '') + ' • Item #' + String(index + 1).padStart(3, '0') + '</div></div><div class="pl-item-right"><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span></div></div>');
       });
       h.push('</div>');
     }
@@ -344,11 +341,7 @@
   function _handleListClick(event) {
     var action = event.target.closest('[data-pl-act]');
     if (action) {
-      var id = action.getAttribute('data-pl-id');
       var act = action.getAttribute('data-pl-act');
-      if (act === 'edit-item') { state.editingItem = JSON.parse(JSON.stringify(state.items.find(function (i) { return i.id === id; }) || {})); state.viewMode = 'item-form'; _paint(); }
-      if (act === 'delete-item' && confirm('Delete this item?')) api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(id)), {method:'DELETE'}).then(_loadListItems).catch(notifyError);
-      if (act === 'pin-item') { _placePin(id); }
       if (act === 'set-map' || act === 'edit-map') { _openMapPicker(); }
       return;
     }
@@ -363,6 +356,17 @@
   }
 
   function _handleDetailClick(event) {
+    var btn = event.target.closest('[data-pl-detail-act]');
+    if (btn) {
+      var act = btn.getAttribute('data-pl-detail-act');
+      var id = btn.getAttribute('data-pl-id');
+      if (act === 'edit-item') { state.editingItem = JSON.parse(JSON.stringify(state.detailItem || state.items.find(function (i) { return i.id === id; }) || {})); state.viewMode = 'item-form'; _paint(); return; }
+      if (act === 'pin-item') { _placePin(id); return; }
+      if (act === 'delete-item' && confirm('Delete this item?')) {
+        api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(id)), {method:'DELETE'}).then(function () { state.detailItem = null; state.viewMode = 'list'; _loadListItems(); }).catch(notifyError);
+      }
+      return;
+    }
     var link = event.target.closest('.pl-image-link[data-image-index]');
     if (!link) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -533,11 +537,16 @@
     }
     h.push('<div class="pl-detail-section"><span class="pl-detail-label">Location</span><div class="pl-detail-value">' + esc(item.location || '—') + '</div></div>');
     h.push('<div class="pl-detail-section"><span class="pl-detail-label">Trade</span><div class="pl-detail-value">' + esc(item.trade || '—') + '</div></div>');
+    h.push('<div class="pl-detail-actions">',
+      '<button type="button" class="pm-btn" data-pl-detail-act="edit-item" data-pl-id="' + esc(item.id) + '">Edit</button>',
+      '<button type="button" class="pm-btn" data-pl-detail-act="pin-item" data-pl-id="' + esc(item.id) + '">Pin Location</button>',
+      '<button type="button" class="pm-btn danger" data-pl-detail-act="delete-item" data-pl-id="' + esc(item.id) + '">Delete</button>',
+      '</div>');
     h.push('</div>');
     return h.join('');
   }
   function _bindDetail() {
-    // Back / Edit now live in the section header (chrome). No in-content header to bind.
+    // Detail actions are handled via the container's delegated click (see _handleDetailClick).
   }
 
   /* ── In-page image viewer (lightbox) ─────────────────────────────────── */

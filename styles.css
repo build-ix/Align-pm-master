@@ -2176,6 +2176,20 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   font-family: inherit;
 }
 
+/* Punchlist item detail actions (Edit / Pin Location / Delete) */
+.pl-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+.pl-detail-actions .pm-btn {
+  min-height: 44px;
+  flex: 1 1 auto;
+  min-width: 120px;
+}
+
 /* Crop tool (drawings viewer list-map mode) */
 .crop-draft-svg {
   display: block;
