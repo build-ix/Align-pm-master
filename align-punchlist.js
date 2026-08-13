@@ -239,6 +239,11 @@
     if (image.data) return image.data; // legacy base64
     return '';
   }
+  function _fullImageUrl(image) {
+    if (image.fileId) return '/api/files/' + encodeURIComponent(image.fileId);
+    if (image.data) return image.data;
+    return '';
+  }
   function _addImage(file) {
     var image = { id: uid(), file: file, name: file.name, mimeType: file.type, previewUrl: URL.createObjectURL(file), timestamp: nowISO() };
     if (!state.editingItem.images) state.editingItem.images = [];
@@ -277,19 +282,16 @@
   }
   function _saveItem() {
     var pending = (state.editingItem.images || []).filter(function (i) { return i.file && !i.fileId; });
-    var chain = Promise.resolve();
-    pending.forEach(function (image) {
-      chain = chain.then(function () {
-        return _uploadFile(image.file).then(function (uploaded) {
-          image.fileId = uploaded.fileId;
-          image.name = uploaded.name;
-          image.mimeType = uploaded.mimeType;
-          if (image.previewUrl) { URL.revokeObjectURL(image.previewUrl); delete image.previewUrl; }
-          delete image.file;
-        });
+    var uploads = pending.map(function (image) {
+      return _uploadFile(image.file).then(function (uploaded) {
+        image.fileId = uploaded.fileId;
+        image.name = uploaded.name;
+        image.mimeType = uploaded.mimeType;
+        if (image.previewUrl) { URL.revokeObjectURL(image.previewUrl); delete image.previewUrl; }
+        delete image.file;
       });
     });
-    return chain.then(function () {
+    return Promise.all(uploads).then(function () {
       var images = (state.editingItem.images || []).map(function (i) {
         if (i.fileId) return { fileId: i.fileId, name: i.name, mimeType: i.mimeType };
         return i; // preserve legacy base64 object
@@ -302,7 +304,26 @@
     });
   }
 
-  function _detailHtml(item) { return '<div class="pl-detail-wrap"><div class="pl-detail-header"><button class="pm-btn" id="pl-detail-back">← Back</button><h3 class="pl-detail-title">' + esc(item.title || 'Untitled') + '</h3><button class="pm-btn primary" id="pl-detail-edit">Edit</button></div><div class="pl-detail-section"><span class="pl-detail-status-badge" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span> <span class="pl-priority-badge">' + esc(item.priority || '') + '</span></div><div class="pl-detail-section"><span class="pl-detail-label">Location</span><div class="pl-detail-value">' + esc(item.location || '—') + '</div></div><div class="pl-detail-section"><span class="pl-detail-label">Trade</span><div class="pl-detail-value">' + esc(item.trade || '—') + '</div></div></div>'; }
+  function _detailHtml(item) {
+    var h = [
+      '<div class="pl-detail-wrap"><div class="pl-detail-header"><button class="pm-btn" id="pl-detail-back">← Back</button><h3 class="pl-detail-title">' + esc(item.title || 'Untitled') + '</h3><button class="pm-btn primary" id="pl-detail-edit">Edit</button></div>',
+      '<div class="pl-detail-section"><span class="pl-detail-status-badge" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span> <span class="pl-priority-badge">' + esc(item.priority || '') + '</span></div>'
+    ];
+    var images = item.images || [];
+    if (images.length) {
+      h.push('<div class="pl-detail-section"><span class="pl-detail-label">Attachments</span><div class="pl-detail-images">');
+      images.forEach(function (image) {
+        var thumb = _imageUrl(image);
+        var full = _fullImageUrl(image);
+        if (thumb) h.push(full ? '<a href="' + full + '" target="_blank" rel="noopener"><div class="pl-image-thumb" style="background-image:url(\'' + thumb + '\')"></div></a>' : '<div class="pl-image-thumb" style="background-image:url(\'' + thumb + '\')"></div>');
+      });
+      h.push('</div></div>');
+    }
+    h.push('<div class="pl-detail-section"><span class="pl-detail-label">Location</span><div class="pl-detail-value">' + esc(item.location || '—') + '</div></div>');
+    h.push('<div class="pl-detail-section"><span class="pl-detail-label">Trade</span><div class="pl-detail-value">' + esc(item.trade || '—') + '</div></div>');
+    h.push('</div>');
+    return h.join('');
+  }
   function _bindDetail() {
     document.getElementById('pl-detail-back').addEventListener('click', function () { state.detailItem = null; state.viewMode = 'list'; _loadListItems(); });
     document.getElementById('pl-detail-edit').addEventListener('click', function () { state.editingItem = JSON.parse(JSON.stringify(state.detailItem)); state.viewMode = 'item-form'; _paint(); });

@@ -1803,6 +1803,18 @@ html[data-theme="light"] #bottom-nav {
   opacity: 0.8;
 }
 
+.pl-detail-images {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+.pl-detail-images .pl-image-thumb {
+  cursor: zoom-in;
+  opacity: 1;
+  border-color: var(--line);
+}
+
 .pl-form-actions {
   display: flex;
   gap: 12px;
