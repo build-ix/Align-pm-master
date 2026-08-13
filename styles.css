@@ -1658,7 +1658,20 @@ html[data-theme="light"] #bottom-nav {
   position: relative;
 }
 .pl-apt-name { font-size: 28px; font-weight: 700; }
-.pl-item-status { background: #EF4444; min-width: 40px; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; color: #fff; font-weight: 700; }
+.pl-item-status { 
+  background: #EF4444; 
+  min-width: 28px; 
+  width: auto;
+  height: 24px; 
+  display: inline-flex; 
+  align-items: center; 
+  justify-content: center; 
+  border-radius: 12px;
+  padding: 0 6px;
+  color: #fff; 
+  font-weight: 700;
+  font-size: 0.7rem;
+}
 .pl-item-badge { 
   position: absolute;
   top: 8px;
@@ -1842,16 +1855,17 @@ html[data-theme="light"] #bottom-nav {
 
 .pl-item-status {
   background: var(--danger);
-  min-width: 40px;
-  width: 40px;
-  height: 40px;
+  min-width: 28px;
+  width: auto;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: 12px;
+  padding: 0 6px;
   color: white;
   font-weight: 700;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   flex-shrink: 0;
 }
 
