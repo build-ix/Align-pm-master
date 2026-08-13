@@ -1278,6 +1278,33 @@
 
   var _mv = null; // markup-viewer live state (null when viewer closed)
 
+  // ── List-map mode state (crop authoring + pin placement), driven from Punchlist ──
+  var _mvModeArgs = null; // { mode, projectId, drawingId, sheet, listId, itemId, cropMode, vertices, onSaved, onPlaced, onCancel }
+  var _cropTool = null;   // active DrawingCropTool instance (crop mode)
+
+  function _mvScreenToNormalized(clientX, clientY) {
+    var canvas = document.getElementById('dr-mv-canvas');
+    if (!canvas) return { x: 0, y: 0 };
+    var rect = canvas.getBoundingClientRect();
+    var z = (_mv && _mv.zoom) || 1;
+    var cx = (clientX - rect.left) / z;
+    var cy = (clientY - rect.top) / z;
+    var w = canvas.width || 1, h = canvas.height || 1;
+    return {
+      x: Math.max(0, Math.min(1, cx / w)),
+      y: Math.max(0, Math.min(1, cy / h))
+    };
+  }
+
+  function _pointInPolygon(x, y, vertices) {
+    var inside = false;
+    for (var i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+      var a = vertices[j], b = vertices[i];
+      if (((a.y > y) !== (b.y > y)) && (x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x)) inside = !inside;
+    }
+    return inside;
+  }
+
   /* ── Markup IndexedDB store ────────────────────────────────────────────── */
   var _markupDB = null;
   function _markupOpen() {
@@ -1324,6 +1351,10 @@
     var content = file.content || '';
     var pid = state.projectId;
     var did = file.meta.id;
+
+    // Capture any pending list-map mode (crop / pin) set by openListCrop/openListPin
+    var modeArgs = _mvModeArgs || null;
+    _mvModeArgs = null;
 
     // Close any previous viewer + remove old overlay if any
     _mvClose();
@@ -1427,6 +1458,10 @@
     // Back button
     var backBtn = document.getElementById('dr-mv-back');
     if (backBtn) backBtn.addEventListener('click', function () {
+      if (modeArgs && modeArgs.mode) {
+        _mvEndMode();
+        return;
+      }
       _mvClose();
       // Re-open the drawings section modal if it was closed
       if (sectionModalWasOpen && sectionModal) {
@@ -1438,6 +1473,10 @@
     // Escape key closes
     var escHandler = function (e) {
       if (e.key === 'Escape') {
+        if (modeArgs && modeArgs.mode) {
+          _mvEndMode();
+          return;
+        }
         _mvClose();
         if (sectionModalWasOpen && sectionModal) {
           sectionModal.classList.remove('hidden');
@@ -1449,7 +1488,7 @@
 
     if (isPdf) {
       // Render PDF first page into the canvas, then init viewer state
-      _mvRenderPdf(content, did, pid, div, hadSectionOpen, prevBody, sectionScrollY, escHandler);
+      _mvRenderPdf(content, did, pid, div, hadSectionOpen, prevBody, sectionScrollY, escHandler, modeArgs);
       return;
     }
 
@@ -1484,7 +1523,9 @@
       hadSectionOpen: hadSectionOpen,
       _prevBody: prevBody,
       _sectionScrollY: sectionScrollY,
-      _escHandler: escHandler
+      _escHandler: escHandler,
+      mode: modeArgs ? modeArgs.mode : null,
+      modeArgs: modeArgs
     };
 
     _mvLoadAndBind();
@@ -1571,7 +1612,7 @@
   }
 
   /* ── Render PDF into the viewer canvas, then init state ───────────────── */
-  function _mvRenderPdf(content, did, pid, div, hadSectionOpen, prevBody, sectionScrollY, escHandler) {
+  function _mvRenderPdf(content, did, pid, div, hadSectionOpen, prevBody, sectionScrollY, escHandler, modeArgs) {
     var lib = _ensurePdfJs();
     if (!lib) {
       console.warn('[AlignDrawings] pdf.js not loaded, cannot render PDF');
@@ -1704,7 +1745,9 @@
             _pdfLogW: logW,
             _pdfLogH: logH,
             _pdfContent: content,
-            _fitMode: 'width'  // 'width' or 'page'
+            _fitMode: 'width',  // 'width' or 'page'
+            mode: modeArgs ? modeArgs.mode : null,
+            modeArgs: modeArgs
           };
 
           _loadMarkups(pid, did).then(function (strokes) {
@@ -1717,6 +1760,7 @@
               _mvSyncCanvas();
               // Pre-render adjacent pages for instant page turning
               _mvPreRenderAdjacent();
+              _mvStartMode();
             });
           });
         });
@@ -1749,6 +1793,7 @@
         requestAnimationFrame(function () {
           _mvFitToViewport();
           _mvSyncCanvas();
+          _mvStartMode();
         });
       }
       if (img) {
@@ -1769,6 +1814,150 @@
         }
       }
     });
+  }
+
+  /* ── List-map mode: crop authoring + pin placement (driven from Punchlist) ── */
+  function _mvInitPinOverlay() {
+    var canvas = document.getElementById('dr-mv-canvas');
+    if (!canvas || !_mv || !window.PinOverlay) return;
+    try {
+      window.PinOverlay.init(canvas, _mv.drawingId);
+      if (_mv._pdfDoc) window.PinOverlay.updateSheet(Math.max(0, (_mv._pdfPageNum || 1) - 1));
+      _mvSyncPinOverlaySize();
+    } catch (e) {
+      console.warn('[AlignDrawings] Pin overlay init failed:', e);
+    }
+  }
+
+  function _mvSyncPinOverlaySize() {
+    if (!window.PinOverlay || !window.PinOverlay.overlay) return;
+    var canvas = document.getElementById('dr-mv-canvas');
+    if (!canvas) return;
+    window.PinOverlay.overlay.style.width = canvas.style.width || (canvas.width + 'px');
+    window.PinOverlay.overlay.style.height = canvas.style.height || (canvas.height + 'px');
+  }
+
+  function _mvStartMode() {
+    if (!_mv) return;
+    if (_mv.mode === 'list-crop') { _mvStartCrop(); return; }
+    if (_mv.mode === 'list-pin') { _mvStartPin(); return; }
+    // Normal viewing: show pins read-only
+    _mvInitPinOverlay();
+  }
+
+  function _mvStartCrop() {
+    var args = _mv.modeArgs || {};
+    var stage = document.getElementById('dr-mv-stage');
+    var canvas = document.getElementById('dr-mv-canvas');
+    if (!stage || !canvas || !window.DrawingCropTool) return;
+
+    var markupToggle = document.getElementById('dr-mv-markup-toggle');
+    if (markupToggle) markupToggle.style.display = 'none';
+    var backBtn = document.getElementById('dr-mv-back');
+    if (backBtn) backBtn.textContent = '← Cancel';
+
+    _cropTool = window.DrawingCropTool.create({
+      overlayHost: stage,
+      canvas: canvas,
+      controlsHost: document.body,
+      screenToNormalized: _mvScreenToNormalized,
+      onComplete: _mvSaveCrop,
+      onCancel: _mvEndMode
+    });
+  }
+
+  function _mvSaveCrop(vertices) {
+    var args = _mv.modeArgs || {};
+    var token = localStorage.getItem('align-token') || '';
+    var body = {
+      drawingId: args.drawingId,
+      sheetNumber: args.sheet || 0,
+      cropMode: 'polygon',
+      vertices: vertices
+    };
+    fetch('/api/projects/' + encodeURIComponent(args.projectId) + '/punchlist-lists/' + encodeURIComponent(args.listId) + '/crop', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+    }).then(function (res) {
+      if (!res.ok) throw new Error(res.data && res.data.error || 'Save failed');
+      _mvClose();
+      if (args.onSaved) args.onSaved(res.data.crop);
+    }).catch(function (err) {
+      _mvFlashBoundary('Failed to save crop: ' + (err && err.message || err));
+    });
+  }
+
+  function _mvStartPin() {
+    var args = _mv.modeArgs || {};
+    if (args.cropMode === 'polygon' && args.vertices && args.vertices.length >= 3) {
+      _mvApplyListClip(args.vertices);
+    }
+    _mvInitPinOverlay();
+    var markupToggle = document.getElementById('dr-mv-markup-toggle');
+    if (markupToggle) markupToggle.style.display = 'none';
+    var backBtn = document.getElementById('dr-mv-back');
+    if (backBtn) backBtn.textContent = '← Cancel';
+  }
+
+  function _mvApplyListClip(vertices) {
+    var stage = document.getElementById('dr-mv-stage');
+    if (!stage) return;
+    var css = vertices.map(function (p) { return (p.x * 100) + '% ' + (p.y * 100) + '%'; }).join(', ');
+    stage.style.clipPath = 'polygon(' + css + ')';
+    stage.style.webkitClipPath = 'polygon(' + css + ')';
+  }
+
+  function _mvPlacePin(clientX, clientY) {
+    var args = _mv.modeArgs || {};
+    var p = _mvScreenToNormalized(clientX, clientY);
+    if (args.cropMode === 'polygon' && args.vertices && args.vertices.length >= 3) {
+      if (!_pointInPolygon(p.x, p.y, args.vertices)) {
+        _mvFlashBoundary('Place the pin inside the mapped area.');
+        return;
+      }
+    }
+    var token = localStorage.getItem('align-token') || '';
+    var uid = 'system';
+    try {
+      if (window.AlignAuth && window.AlignAuth.getActiveUser) uid = window.AlignAuth.getActiveUser().id || 'system';
+    } catch (e) {}
+    var body = { sheet: args.sheet || 0, x: p.x, y: p.y, projectId: args.projectId, userId: uid };
+    fetch('/api/drawings/' + encodeURIComponent(args.drawingId) + '/punch-items/' + encodeURIComponent(args.itemId), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (d) { return { ok: r.ok, data: d }; });
+    }).then(function (res) {
+      if (!res.ok) throw new Error(res.data && res.data.error || 'Pin failed');
+      _mvClose();
+      if (args.onPlaced) args.onPlaced({ x: p.x, y: p.y });
+    }).catch(function (err) {
+      _mvFlashBoundary(err && err.message || 'Failed to place pin');
+    });
+  }
+
+  function _mvFlashBoundary(msg) {
+    var stage = document.getElementById('dr-mv-stage');
+    if (stage) {
+      stage.style.outline = '3px solid #ef4444';
+      setTimeout(function () { if (stage) stage.style.outline = ''; }, 600);
+    }
+    var ghost = document.createElement('div');
+    ghost.style.cssText = 'position:fixed;top:20%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.85);color:#fff;padding:10px 16px;border-radius:6px;font-size:13px;z-index:99999;pointer-events:none;';
+    ghost.textContent = msg;
+    document.body.appendChild(ghost);
+    setTimeout(function () { ghost.remove(); }, 1800);
+  }
+
+  function _mvEndMode() {
+    if (_cropTool) { try { _cropTool.destroy(); } catch (e) {} _cropTool = null; }
+    var args = _mv && _mv.modeArgs;
+    _mvClose();
+    if (args && args.onCancel) args.onCancel();
   }
 
   function _mvBindAll() {
@@ -2202,6 +2391,18 @@
     }
     if (e.button !== 0) return;
 
+    // ── List-map mode routing (crop authoring / pin placement) ──
+    if (_mv.mode === 'list-crop' && _cropTool) {
+      e.preventDefault();
+      _cropTool.pointerDown(e.clientX, e.clientY);
+      return;
+    }
+    if (_mv.mode === 'list-pin') {
+      e.preventDefault();
+      _mvPlacePin(e.clientX, e.clientY);
+      return;
+    }
+
     // ── Annotation tool handling (place pins, links, images) ──
     if (window.AlignDrawingAnnotations && window.AlignDrawingAnnotations.isAnnotationToolActive()) {
       e.preventDefault();
@@ -2263,6 +2464,10 @@
       _mvApplyTransform();
       return;
     }
+    if (_mv.mode === 'list-crop' && _cropTool) {
+      _cropTool.pointerMove(e.clientX, e.clientY);
+      return;
+    }
     if (!_mv.drawing || !_mv.markupMode) return;
 
     var pos = _mvGetPos(e);
@@ -2289,6 +2494,10 @@
   function _mvMouseUp(e) {
     if (_mv.panning) {
       _mv.panning = false;
+      return;
+    }
+    if (_mv.mode === 'list-crop' && _cropTool) {
+      _cropTool.pointerUp(e.clientX, e.clientY);
       return;
     }
     if (!_mv.drawing) return;
@@ -3274,8 +3483,55 @@
   }
 
   /* ── Public API ─────────────────────────────────────────────────────────── */
+  function openListCrop(opts) {
+    if (!opts || !opts.projectId || !opts.drawingId || !opts.listId) return Promise.reject(new Error('missing crop args'));
+    state.projectId = opts.projectId;
+    _mvModeArgs = {
+      mode: 'list-crop',
+      projectId: opts.projectId,
+      drawingId: opts.drawingId,
+      sheet: opts.sheet || 0,
+      listId: opts.listId,
+      onSaved: opts.onSaved,
+      onCancel: opts.onCancel
+    };
+    return _loadDrawingForViewer(opts.projectId, opts.drawingId).then(function (file) {
+      if (!file) throw new Error('Drawing not found');
+      _viewDrawing(file);
+    });
+  }
+
+  function openListPin(opts) {
+    if (!opts || !opts.projectId || !opts.drawingId || !opts.itemId) return Promise.reject(new Error('missing pin args'));
+    state.projectId = opts.projectId;
+    _mvModeArgs = {
+      mode: 'list-pin',
+      projectId: opts.projectId,
+      drawingId: opts.drawingId,
+      sheet: opts.sheet || 0,
+      listId: opts.listId,
+      itemId: opts.itemId,
+      cropMode: opts.cropMode,
+      vertices: opts.vertices,
+      onPlaced: opts.onPlaced,
+      onCancel: opts.onCancel
+    };
+    return _loadDrawingForViewer(opts.projectId, opts.drawingId).then(function (file) {
+      if (!file) throw new Error('Drawing not found');
+      _viewDrawing(file);
+    });
+  }
+
+  function listDrawingsForProject(projectId) {
+    if (projectId) state.projectId = projectId;
+    return getDrawingsList();
+  }
+
   global.AlignDrawings = {
-    render: render
+    render: render,
+    listDrawings: listDrawingsForProject,
+    openListCrop: openListCrop,
+    openListPin: openListPin
   };
 
   if (window.TileRegistry) window.TileRegistry.register({ id: 'drawings', title: 'Drawings', icon: '#', route: 'drawings', roles: ['user','admin'], order: 3 });

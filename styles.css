@@ -2047,3 +2047,222 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   min-width: max-content;
   white-space: nowrap;
 }
+
+/* ── Punchlist location map (per-list crop) ────────────────────────────────── */
+.pl-map-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+.pl-map-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pl-map-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.pl-map-mode {
+  font-size: 0.72rem;
+  color: var(--brand);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pl-map-mode-none {
+  color: var(--muted);
+}
+
+/* Map picker overlay (drawing + whole-plan/crop choice) */
+.pl-map-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.pl-map-picker-modal {
+  width: 100%;
+  max-width: 560px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.pl-map-picker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.pl-map-picker-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.pl-map-picker-close {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 6px;
+}
+.pl-map-picker-body {
+  padding: 12px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pl-map-picker-drawing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+.pl-map-picker-drawing:active { background: var(--brand-glow); }
+.pl-map-picker-icon { font-size: 1.3rem; }
+.pl-map-picker-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-map-picker-selected {
+  padding: 10px 14px;
+  background: var(--brand-glow);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.pl-map-picker-mode {
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-family: inherit;
+}
+.pl-map-picker-mode:active { border-color: var(--brand); }
+.pl-map-picker-back {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+/* Crop tool (drawings viewer list-map mode) */
+.crop-draft-svg {
+  display: block;
+}
+.crop-controls {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.25);
+}
+.crop-hint {
+  flex: 1;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.crop-btn {
+  flex: 0 0 auto;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  color: var(--ink);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+.crop-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.crop-primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.crop-cancel { color: var(--muted); }
+.crop-add { color: var(--brand); }
+.crop-line {
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+.crop-line-draft {
+  stroke: var(--brand);
+  stroke-dasharray: 8 6;
+  opacity: 0.7;
+}
+.crop-line-close {
+  stroke: var(--brand);
+  stroke-dasharray: 4 4;
+  opacity: 0.5;
+}
+.crop-handle {
+  fill: var(--brand);
+  stroke: #fff;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.crop-handle-candidate {
+  fill: #fff;
+  stroke: var(--brand);
+  stroke-width: 2;
+}
+.crop-handle-label {
+  fill: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: rgba(0,0,0,0.5);
+  stroke-width: 2px;
+}

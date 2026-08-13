@@ -13,7 +13,12 @@
     editingList: null, editingItem: null,
     activeApt: null, detailItem: null, formReturnView: null,
     viewMode: 'lists', // lists | list-form | list | item-form | detail | profile-edit
-    items: [], allItems: [], listItems: {}
+    items: [], allItems: [], listItems: {},
+    listCrop: null,          // {configured, drawingId, sheetNumber, cropMode, vertices}
+    mapDrawings: [],         // drawings list for the map picker
+    mapPickOpen: false,      // map picker overlay open
+    mapPickStep: 'pick',     // 'pick' | 'choose-mode'
+    mapPickDrawing: null     // drawing selected in picker
   };
   var viewer = {
     el: null, image: null, stage: null, canvasEl: null, counter: null, filename: null, status: null, title: null,
@@ -180,8 +185,11 @@
   function _loadListItems() {
     _renderHeader();
     state.container.innerHTML = '<div class="pl-empty">Loading list…</div>';
-    api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items')).then(function (data) {
-      state.items = data.items || [];
+    var itemsPromise = api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items'));
+    var cropPromise = api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/crop')).catch(function () { return { configured: false }; });
+    Promise.all([itemsPromise, cropPromise]).then(function (results) {
+      state.items = results[0].items || [];
+      state.listCrop = results[1] || { configured: false };
       if (state.viewMode === 'list') { state.container.innerHTML = _listHtml(); }
     }).catch(notifyError);
   }
@@ -190,22 +198,158 @@
     h.push('<div class="pl-wrap">');
     if (list.apartment_label) h.push('<div class="pl-detail-section">Apartment: <strong>' + esc(list.apartment_label) + '</strong></div>');
     if (list.description) h.push('<div class="pl-detail-section pl-detail-desc">' + esc(list.description) + '</div>');
+    h.push(_mapSectionHtml());
     if (!state.items.length) h.push('<div class="pl-empty">No items yet.</div>');
     else {
       h.push('<div class="pl-items">');
       state.items.forEach(function (item, index) {
-        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '"><div class="pl-item-info"><div class="pl-item-title">' + esc(item.title || 'Untitled') + '</div><div class="pl-item-meta">' + esc(item.location || '') + (item.trade ? ' • ' + esc(item.trade) : '') + ' • Item #' + String(index + 1).padStart(3, '0') + '</div></div><div class="pl-item-right"><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span><div class="pl-item-actions"><button type="button" class="pm-btn small" data-pl-act="edit-item" data-pl-id="' + esc(item.id) + '">Edit</button><button type="button" class="pm-btn small danger" data-pl-act="delete-item" data-pl-id="' + esc(item.id) + '">✕</button></div></div></div>');
+        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '"><div class="pl-item-info"><div class="pl-item-title">' + esc(item.title || 'Untitled') + '</div><div class="pl-item-meta">' + esc(item.location || '') + (item.trade ? ' • ' + esc(item.trade) : '') + ' • Item #' + String(index + 1).padStart(3, '0') + '</div></div><div class="pl-item-right"><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span><div class="pl-item-actions"><button type="button" class="pm-btn small" data-pl-act="pin-item" data-pl-id="' + esc(item.id) + '">📍 Pin</button><button type="button" class="pm-btn small" data-pl-act="edit-item" data-pl-id="' + esc(item.id) + '">Edit</button><button type="button" class="pm-btn small danger" data-pl-act="delete-item" data-pl-id="' + esc(item.id) + '">✕</button></div></div></div>');
       });
       h.push('</div>');
     }
     h.push('</div>'); return h.join('');
   }
+
+  function _mapSectionHtml() {
+    var crop = state.listCrop;
+    var h = ['<div class="pl-map-section">'];
+    if (crop && crop.configured) {
+      h.push('<div class="pl-map-info"><span class="pl-map-title">Location map</span><span class="pl-map-mode">' + (crop.cropMode === 'polygon' ? 'Cropped area' : 'Whole plan') + '</span></div>');
+      h.push('<button type="button" class="pm-btn small" data-pl-act="edit-map">Change map</button>');
+    } else {
+      h.push('<div class="pl-map-info"><span class="pl-map-title">Location map</span><span class="pl-map-mode pl-map-mode-none">Not set</span></div>');
+      h.push('<button type="button" class="pm-btn small" data-pl-act="set-map">Set map</button>');
+    }
+    h.push('</div>');
+    return h.join('');
+  }
+
+  /* ── Location map: drawing picker + crop/pin flows ─────────────────────── */
+  function _openMapPicker() {
+    var listDrawings = window.AlignDrawings && window.AlignDrawings.listDrawings;
+    if (!listDrawings) { alert('Drawings module is not available.'); return; }
+    state.mapPickOpen = true;
+    state.mapPickStep = 'pick';
+    state.mapPickDrawing = null;
+    _renderMapPicker();
+    listDrawings(state.projectId).then(function (drawings) {
+      state.mapDrawings = drawings || [];
+      if (state.mapPickOpen) _renderMapPicker();
+    }).catch(function () {
+      state.mapDrawings = [];
+      if (state.mapPickOpen) _renderMapPicker();
+    });
+  }
+
+  function _renderMapPicker() {
+    var existing = document.getElementById('pl-map-picker');
+    if (existing) existing.remove();
+    if (!state.mapPickOpen) return;
+
+    var h = ['<div class="pl-map-picker-overlay" id="pl-map-picker">',
+      '<div class="pl-map-picker-modal">',
+      '<div class="pl-map-picker-header"><span class="pl-map-picker-title">' + (state.mapPickStep === 'pick' ? 'Choose a drawing' : 'Use this drawing') + '</span><button type="button" class="pl-map-picker-close" data-map-act="close">✕</button></div>'];
+
+    if (state.mapPickStep === 'pick') {
+      h.push('<div class="pl-map-picker-body">');
+      if (!state.mapDrawings.length) h.push('<div class="pl-empty">No drawings yet. Upload drawings in the Drawings section first.</div>');
+      state.mapDrawings.forEach(function (d) {
+        var isImage = d.mimeType && d.mimeType.indexOf('image/') === 0;
+        var isPdf = d.mimeType === 'application/pdf';
+        var icon = isPdf ? '📄' : (isImage ? '🖼️' : '📁');
+        h.push('<button type="button" class="pl-map-picker-drawing" data-map-act="pick" data-map-id="' + esc(d.id) + '"><span class="pl-map-picker-icon">' + icon + '</span><span class="pl-map-picker-name">' + esc(d.name || 'Drawing') + '</span></button>');
+      });
+      h.push('</div>');
+    } else {
+      var d = state.mapPickDrawing;
+      h.push('<div class="pl-map-picker-body">');
+      h.push('<div class="pl-map-picker-selected">' + esc((d && d.name) || 'Drawing') + '</div>');
+      h.push('<button type="button" class="pl-map-picker-mode" data-map-act="full">Use whole plan as-is</button>');
+      h.push('<button type="button" class="pl-map-picker-mode" data-map-act="crop">Crop area</button>');
+      h.push('<button type="button" class="pl-map-picker-back" data-map-act="back">← Back</button>');
+      h.push('</div>');
+    }
+
+    h.push('</div></div>');
+    var el = document.createElement('div');
+    el.innerHTML = h.join('');
+    var overlay = el.firstElementChild;
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function (event) {
+      var target = event.target.closest('[data-map-act]');
+      if (!target) return;
+      var act = target.getAttribute('data-map-act');
+      if (act === 'close') { _closeMapPicker(); return; }
+      if (act === 'pick') {
+        var id = target.getAttribute('data-map-id');
+        state.mapPickDrawing = state.mapDrawings.find(function (dd) { return dd.id === id; }) || null;
+        if (state.mapPickDrawing) { state.mapPickStep = 'choose-mode'; _renderMapPicker(); }
+        return;
+      }
+      if (act === 'back') { state.mapPickStep = 'pick'; _renderMapPicker(); return; }
+      if (act === 'full') { _setMapFull(); return; }
+      if (act === 'crop') { _setMapCrop(); return; }
+    });
+  }
+
+  function _closeMapPicker() {
+    state.mapPickOpen = false;
+    var el = document.getElementById('pl-map-picker');
+    if (el) el.remove();
+  }
+
+  function _setMapFull() {
+    var d = state.mapPickDrawing;
+    if (!d) return;
+    _closeMapPicker();
+    api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/crop'), {
+      method: 'PUT',
+      body: JSON.stringify({ drawingId: d.id, sheetNumber: 0, cropMode: 'full', vertices: null })
+    }).then(function () { _loadListItems(); }).catch(notifyError);
+  }
+
+  function _setMapCrop() {
+    var d = state.mapPickDrawing;
+    if (!d) return;
+    _closeMapPicker();
+    if (!window.AlignDrawings || !window.AlignDrawings.openListCrop) { alert('Drawings module is not available.'); return; }
+    window.AlignDrawings.openListCrop({
+      projectId: state.projectId,
+      drawingId: d.id,
+      sheet: 0,
+      listId: state.activeList.id,
+      onSaved: function () { _loadListItems(); },
+      onCancel: function () {}
+    }).catch(notifyError);
+  }
+
+  function _placePin(itemId) {
+    var crop = state.listCrop;
+    if (!crop || !crop.configured) { alert('Set a location map for this list first.'); return; }
+    if (!window.AlignDrawings || !window.AlignDrawings.openListPin) { alert('Drawings module is not available.'); return; }
+    window.AlignDrawings.openListPin({
+      projectId: state.projectId,
+      drawingId: crop.drawingId,
+      sheet: crop.sheetNumber || 0,
+      listId: state.activeList.id,
+      itemId: itemId,
+      cropMode: crop.cropMode,
+      vertices: crop.vertices,
+      onPlaced: function () { _loadListItems(); },
+      onCancel: function () {}
+    }).catch(notifyError);
+  }
+
   function _handleListClick(event) {
     var action = event.target.closest('[data-pl-act]');
     if (action) {
       var id = action.getAttribute('data-pl-id');
-      if (action.getAttribute('data-pl-act') === 'edit-item') { state.editingItem = JSON.parse(JSON.stringify(state.items.find(function (i) { return i.id === id; }) || {})); state.viewMode = 'item-form'; _paint(); }
-      if (action.getAttribute('data-pl-act') === 'delete-item' && confirm('Delete this item?')) api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(id)), {method:'DELETE'}).then(_loadListItems).catch(notifyError);
+      var act = action.getAttribute('data-pl-act');
+      if (act === 'edit-item') { state.editingItem = JSON.parse(JSON.stringify(state.items.find(function (i) { return i.id === id; }) || {})); state.viewMode = 'item-form'; _paint(); }
+      if (act === 'delete-item' && confirm('Delete this item?')) api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(id)), {method:'DELETE'}).then(_loadListItems).catch(notifyError);
+      if (act === 'pin-item') { _placePin(id); }
+      if (act === 'set-map' || act === 'edit-map') { _openMapPicker(); }
       return;
     }
     var row = event.target.closest('[data-pl-item]');
