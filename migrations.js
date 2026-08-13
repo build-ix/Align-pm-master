@@ -521,6 +521,52 @@ const MIGRATIONS = [
       // Existing lists remain private; the CHECK constraint is enforced for new values.
       db.exec("ALTER TABLE punchlist_lists ADD COLUMN privacy TEXT NOT NULL DEFAULT 'private' CHECK (privacy IN ('private', 'public'))");
     }
+  },
+  /* ── v27: punchlist per-list drawing crop (polygon pin-location map) ─────────── */
+  {
+    version: 27,
+    name: 'punchlist_list_crops',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS punchlist_list_crops (
+          list_id        TEXT PRIMARY KEY,
+          drawing_id     TEXT NOT NULL,
+          sheet_number   INTEGER NOT NULL,
+          crop_mode      TEXT NOT NULL DEFAULT 'full',
+          crop_vertices  TEXT,
+          created_at     TEXT NOT NULL,
+          updated_at     TEXT NOT NULL,
+
+          FOREIGN KEY (list_id)
+            REFERENCES punchlist_lists(id)
+            ON DELETE CASCADE,
+
+          CHECK (sheet_number >= 0),
+
+          CHECK (crop_mode IN ('full', 'polygon')),
+
+          CHECK (
+            (
+              crop_mode = 'full'
+              AND crop_vertices IS NULL
+            )
+            OR
+            (
+              crop_mode = 'polygon'
+              AND crop_vertices IS NOT NULL
+              AND json_valid(crop_vertices)
+              AND json_type(crop_vertices) = 'array'
+              AND json_array_length(crop_vertices) >= 4
+            )
+          )
+        )
+      `);
+
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_punchlist_list_crops_drawing
+          ON punchlist_list_crops(drawing_id, sheet_number)
+      `);
+    }
   }
 ];
 

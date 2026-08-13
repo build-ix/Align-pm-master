@@ -225,6 +225,99 @@ function getAuthorizedPunchlist(req, pid, listId) {
   return list;
 }
 
+// ── Punchlist per-list crop (polygon pin-location map) helpers ──────────────
+function pointOnSegmentCrop(px, py, ax, ay, bx, by, eps) {
+  var abx = bx - ax, aby = by - ay, apx = px - ax, apy = py - ay;
+  var cross = abx * apy - aby * apx;
+  if (Math.abs(cross) > eps) return false;
+  var dot = apx * abx + apy * aby;
+  if (dot < -eps) return false;
+  var lenSq = abx * abx + aby * aby;
+  if (dot - lenSq > eps) return false;
+  return true;
+}
+
+function pointInPolygonCrop(x, y, vertices) {
+  var eps = 1e-9, inside = false;
+  for (var i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+    var a = vertices[j], b = vertices[i];
+    if (pointOnSegmentCrop(x, y, a.x, a.y, b.x, b.y, eps)) return true;
+    var crosses = ((a.y > y) !== (b.y > y)) && (x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x);
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function parseCropVertices(jsonStr) {
+  if (!jsonStr) return null;
+  try {
+    var arr = JSON.parse(jsonStr);
+    if (!Array.isArray(arr)) return null;
+    var out = [];
+    for (var i = 0; i < arr.length; i++) {
+      var v = arr[i];
+      if (!v || typeof v.x !== 'number' || typeof v.y !== 'number' || !isFinite(v.x) || !isFinite(v.y)) return null;
+      out.push({ x: v.x, y: v.y });
+    }
+    return out;
+  } catch (e) { return null; }
+}
+
+function getListCrop(listId) {
+  return dbGet('SELECT * FROM punchlist_list_crops WHERE list_id = ?', listId) || null;
+}
+
+function _cropCross(o, p, q) { return (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x); }
+function _cropOnSeg(o, p, q) {
+  return Math.min(o.x, q.x) <= p.x && p.x <= Math.max(o.x, q.x) &&
+         Math.min(o.y, q.y) <= p.y && p.y <= Math.max(o.y, q.y);
+}
+function _cropSegmentsIntersect(a, b, c, d) {
+  var d1 = _cropCross(c, d, a), d2 = _cropCross(c, d, b), d3 = _cropCross(a, b, c), d4 = _cropCross(a, b, d);
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+  if (d1 === 0 && _cropOnSeg(c, a, d)) return true;
+  if (d2 === 0 && _cropOnSeg(c, b, d)) return true;
+  if (d3 === 0 && _cropOnSeg(a, c, b)) return true;
+  if (d4 === 0 && _cropOnSeg(a, d, b)) return true;
+  return false;
+}
+function _cropSelfIntersects(vertices) {
+  var n = vertices.length;
+  for (var i = 0; i < n; i++) {
+    var a = vertices[i], b = vertices[(i + 1) % n];
+    for (var j = i + 1; j < n; j++) {
+      var c = vertices[j], d = vertices[(j + 1) % n];
+      if ((a.x === c.x && a.y === c.y) || (a.x === d.x && a.y === d.y) || (b.x === c.x && b.y === c.y) || (b.x === d.x && b.y === d.y)) continue;
+      if (_cropSegmentsIntersect(a, b, c, d)) return true;
+    }
+  }
+  return false;
+}
+
+function validateCropVertices(vertices) {
+  // Returns null if valid, else an error string
+  if (!Array.isArray(vertices)) return 'vertices must be an array';
+  if (vertices.length < 4 || vertices.length > 256) return 'polygon requires 4-256 vertices';
+  for (var i = 0; i < vertices.length; i++) {
+    var v = vertices[i];
+    if (!v || typeof v !== 'object' || typeof v.x !== 'number' || typeof v.y !== 'number') return 'each vertex needs numeric x,y';
+    if (!isFinite(v.x) || !isFinite(v.y)) return 'vertex coordinates must be finite';
+    if (v.x < 0 || v.x > 1 || v.y < 0 || v.y > 1) return 'vertex coordinates must be 0-1 (normalized)';
+  }
+  for (var j = 0; j < vertices.length; j++) {
+    var a = vertices[j], b = vertices[(j + 1) % vertices.length];
+    if (a.x === b.x && a.y === b.y) return 'duplicate adjacent vertices';
+  }
+  var area = 0;
+  for (var k = 0; k < vertices.length; k++) {
+    var p = vertices[k], q = vertices[(k + 1) % vertices.length];
+    area += p.x * q.y - q.x * p.y;
+  }
+  if (Math.abs(area) / 2 < 1e-9) return 'polygon area too small';
+  if (_cropSelfIntersects(vertices)) return 'polygon self-intersects';
+  return null;
+}
+
 // Normalize room permissions — strip invalid rooms, coerce to valid levels
 const VALID_ROOMS = ['drawings','daily-logs','specs','rfis','punchlist','schedule','budget','contacts','photos','tasks','procurement','files','settings'];
 const VALID_LEVELS = ['none', 'r', 'rw'];
@@ -1677,6 +1770,126 @@ app.delete('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAu
   }
 });
 
+// ── Punchlist per-list crop (pin-location map) ───────────────────────────────
+
+// GET /api/projects/:pid/punchlist-lists/:listId/crop
+app.get('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'r'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  if (!getAuthorizedPunchlist(req, pid, listId)) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  var crop = getListCrop(listId);
+  if (!crop) {
+    return res.json({ listId: listId, configured: false });
+  }
+  res.json({
+    listId: listId,
+    drawingId: crop.drawing_id,
+    sheetNumber: crop.sheet_number,
+    cropMode: crop.crop_mode,
+    vertices: crop.crop_mode === 'polygon' ? parseCropVertices(crop.crop_vertices) : null,
+    updatedAt: crop.updated_at
+  });
+});
+
+// PUT /api/projects/:pid/punchlist-lists/:listId/crop  (create or replace)
+app.put('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  var body = req.body || {};
+
+  if (!getAuthorizedPunchlist(req, pid, listId)) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+
+  var drawingId = (body.drawingId || '').trim();
+  var sheetNumber = parseInt(body.sheetNumber, 10);
+  var cropMode = (body.cropMode || '').trim();
+
+  if (!drawingId) return res.status(400).json({ error: 'drawingId required' });
+  if (Number.isNaN(sheetNumber) || sheetNumber < 0) return res.status(400).json({ error: 'sheetNumber must be >= 0' });
+  if (cropMode !== 'full' && cropMode !== 'polygon') return res.status(400).json({ error: 'cropMode must be "full" or "polygon"' });
+
+  var vertices = null;
+  if (cropMode === 'polygon') {
+    if (!Array.isArray(body.vertices)) return res.status(400).json({ error: 'vertices array required for polygon crop' });
+    var verr = validateCropVertices(body.vertices);
+    if (verr) return res.status(400).json({ error: verr });
+    vertices = body.vertices.map(function (v) { return { x: v.x, y: v.y }; });
+  }
+
+  // ── Conflict check: existing pins must remain valid under the new map ──
+  var itemRows = dbAll("SELECT id FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?", pid, listId);
+  var conflicts = [];
+  (itemRows || []).forEach(function (row) {
+    var locs = dbAll('SELECT punch_item_id, drawing_id, sheet_number, x, y FROM punch_item_locations WHERE punch_item_id = ?', row.id);
+    (locs || []).forEach(function (loc) {
+      if (loc.drawing_id !== drawingId || loc.sheet_number !== sheetNumber) {
+        conflicts.push({ punchItemId: loc.punch_item_id, reason: 'wrong_drawing_or_sheet' });
+      } else if (cropMode === 'polygon' && !pointInPolygonCrop(loc.x, loc.y, vertices)) {
+        conflicts.push({ punchItemId: loc.punch_item_id, reason: 'outside_polygon' });
+      }
+    });
+  });
+  if (conflicts.length > 0) {
+    return res.status(409).json({ error: 'crop_conflicts_with_existing_pins', message: 'Existing pins must be removed or repositioned before changing this map.', conflicts: conflicts });
+  }
+
+  var now = new Date().toISOString();
+  try {
+    dbRun(`
+      INSERT INTO punchlist_list_crops (list_id, drawing_id, sheet_number, crop_mode, crop_vertices, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(list_id) DO UPDATE SET
+        drawing_id = excluded.drawing_id,
+        sheet_number = excluded.sheet_number,
+        crop_mode = excluded.crop_mode,
+        crop_vertices = excluded.crop_vertices,
+        updated_at = excluded.updated_at
+    `, listId, drawingId, sheetNumber, cropMode, cropMode === 'polygon' ? JSON.stringify(vertices) : null, now, now);
+
+    res.json({
+      ok: true,
+      crop: {
+        listId: listId,
+        drawingId: drawingId,
+        sheetNumber: sheetNumber,
+        cropMode: cropMode,
+        vertices: vertices,
+        updatedAt: now
+      }
+    });
+  } catch (err) {
+    console.error('[PUNCHLIST] Save crop error:', err.message);
+    res.status(500).json({ error: 'Failed to save crop' });
+  }
+});
+
+// DELETE /api/projects/:pid/punchlist-lists/:listId/crop
+app.delete('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  if (!getAuthorizedPunchlist(req, pid, listId)) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  var crop = getListCrop(listId);
+  if (!crop) return res.status(404).json({ error: 'No map configured for this list' });
+
+  var itemRows = dbAll("SELECT id FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?", pid, listId);
+  var hasPins = false;
+  (itemRows || []).forEach(function (row) {
+    var n = dbGet('SELECT COUNT(*) AS n FROM punch_item_locations WHERE punch_item_id = ?', row.id);
+    if (n && n.n > 0) hasPins = true;
+  });
+  if (hasPins) {
+    return res.status(409).json({ error: 'crop_in_use', message: 'Remove all pins from this list before clearing its map.' });
+  }
+
+  dbRun('DELETE FROM punchlist_list_crops WHERE list_id = ?', listId);
+  res.status(204).end();
+});
+
 
 app.get('/api/projects/:pid/:cat', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
   const search = (req.query.search || '').toLowerCase().trim();
@@ -2391,8 +2604,30 @@ app.post('/api/drawings/:drawingId/punch-items/:itemId', (req, res) => {
   }
   
   // Validate punch item exists
-  if (!stmtGetRecord.get(punchItemId)) {
+  var punchRecord = dbGet('SELECT id, project_id, data FROM records WHERE id = ? AND category = ?', punchItemId, 'punchlist');
+  if (!punchRecord) {
     return res.status(404).json({ error: 'Punch item not found' });
+  }
+  
+  // ── Per-list crop constraint: pins must land on the list's configured map ──
+  var listId = null;
+  try {
+    var pdata = JSON.parse(punchRecord.data || '{}');
+    listId = pdata.listId || null;
+  } catch (e) { listId = null; }
+  if (listId) {
+    var crop = getListCrop(listId);
+    if (crop) {
+      if (crop.drawing_id !== drawingId || crop.sheet_number !== sheet) {
+        return res.status(422).json({ error: 'pin_wrong_drawing', message: "This item must be pinned on its list's configured map." });
+      }
+      if (crop.crop_mode === 'polygon') {
+        var cropVerts = parseCropVertices(crop.crop_vertices);
+        if (!cropVerts || !pointInPolygonCrop(x, y, cropVerts)) {
+          return res.status(422).json({ error: 'pin_outside_list_crop', message: "The pin must be placed inside this list's mapped area." });
+        }
+      }
+    }
   }
   
   const locId = crypto.randomBytes(8).toString('hex');
