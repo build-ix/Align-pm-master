@@ -714,10 +714,7 @@ select.pl-input {
 /* ── Item rows ────────────────────────────────────────────────────────── */
 .pl-items { display: flex; flex-direction: column; gap: 4px; }
 .pl-item-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 12px;
+  display: block;
   min-width: 0;
   padding: 12px 14px;
   border: 1px solid var(--line);
@@ -733,9 +730,7 @@ select.pl-input {
 .pl-item-title,
 .pl-item-meta {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 .pl-item-title {
   font-size: 0.85rem;
