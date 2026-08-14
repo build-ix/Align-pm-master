@@ -1865,7 +1865,7 @@
   function _mvStartMode() {
     if (!_mv) return;
     if (_mv.mode === 'list-crop') { _mvStartCrop(); return; }
-    if (_mv.mode === 'list-pin') { _mvStartPin(); return; }
+    if (_mv.mode === 'list-pin' || _mv.mode === 'list-layout') { _mvStartPin(); return; }
     // Normal viewing: show pins read-only
     _mvInitPinOverlay();
   }
@@ -1943,7 +1943,7 @@
     var markupToggle = document.getElementById('dr-mv-markup-toggle');
     if (markupToggle) markupToggle.style.display = 'none';
     var backBtn = document.getElementById('dr-mv-back');
-    if (backBtn) backBtn.textContent = '← Cancel';
+    if (backBtn) backBtn.textContent = (_mv.mode === 'list-layout') ? '← Back' : '← Cancel';
   }
 
   // Convert a full-sheet normalized point to crop-document normalized (0-1).
@@ -3724,11 +3724,40 @@
     return getDrawingsList();
   }
 
+  // Read-only "View Layout": show the list's map (rendered crop or full drawing)
+  // with pins; no placement, pins are tappable.
+  function openLayoutView(opts) {
+    if (!opts || !opts.projectId || !opts.drawingId || !opts.listId) return Promise.reject(new Error('missing layout args'));
+    state.projectId = opts.projectId;
+    _mvModeArgs = {
+      mode: 'list-layout',
+      projectId: opts.projectId,
+      drawingId: opts.drawingId,
+      sheet: opts.sheet || 0,
+      listId: opts.listId,
+      cropMode: opts.cropMode,
+      vertices: opts.vertices,
+      cropRenderStatus: opts.cropRenderStatus,
+      cropImage: opts.cropImage,
+      cropRenderMeta: opts.cropRenderMeta,
+      onCancel: opts.onCancel,
+      onOpenItem: opts.onOpenItem
+    };
+    var hasRenderedCrop = opts.cropRenderStatus === 'ready' && opts.cropImage && opts.cropImage.fileId;
+    var loadId = hasRenderedCrop ? opts.cropImage.fileId : opts.drawingId;
+    return _loadDrawingForViewer(opts.projectId, loadId).then(function (file) {
+      if (!file) throw new Error('Drawing not found');
+      if (hasRenderedCrop) file.meta._isCropImage = true;
+      _viewDrawing(file);
+    });
+  }
+
   global.AlignDrawings = {
     render: render,
     listDrawings: listDrawingsForProject,
     openListCrop: openListCrop,
-    openListPin: openListPin
+    openListPin: openListPin,
+    openLayoutView: openLayoutView
   };
 
   if (window.TileRegistry) window.TileRegistry.register({ id: 'drawings', title: 'Drawings', icon: '#', route: 'drawings', roles: ['user','admin'], order: 3 });

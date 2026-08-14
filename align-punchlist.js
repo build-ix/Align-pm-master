@@ -6,6 +6,7 @@
   var CATEGORY = 'punchlist';
   var STATUSES = ['open', 'in_progress', 'resolved', 'verified'];
   var PRIORITIES = ['low', 'medium', 'high', 'critical'];
+  var PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 };
   var state = {
     container: null, chrome: null, projectId: null,
     apartments: [],
@@ -207,6 +208,8 @@
   function _listHtml() {
     var list = state.activeList, h = [];
     h.push('<div class="pl-wrap">');
+    var hasMap = !!(state.listCrop && state.listCrop.configured);
+    h.push('<div class="pl-layout-row"><button type="button" class="pm-btn" data-pl-act="view-layout"' + (hasMap ? '' : ' disabled') + '>View Layout</button></div>');
     h.push('<div class="pl-list-toolbar">' +
       '<button type="button" class="pm-btn primary" data-pl-act="add-item">+ Add Item</button>' +
       '<button type="button" class="pm-btn" data-pl-act="notify-all">Notify All</button>' +
@@ -216,7 +219,15 @@
     if (list.description) h.push('<div class="pl-detail-section pl-detail-desc">' + esc(list.description) + '</div>');
     if (!state.items.length) h.push('<div class="pl-empty">No items yet.</div>');
     else {
-      var openItems = state.items.filter(function (i) { return i.status !== 'completed'; });
+      var openItems = state.items
+        .map(function (item, sourceIndex) { return { item: item, sourceIndex: sourceIndex }; })
+        .filter(function (entry) { return entry.item.status !== 'completed'; })
+        .sort(function (a, b) {
+          var aRank = Object.prototype.hasOwnProperty.call(PRIORITY_RANK, a.item.priority) ? PRIORITY_RANK[a.item.priority] : PRIORITY_RANK.medium;
+          var bRank = Object.prototype.hasOwnProperty.call(PRIORITY_RANK, b.item.priority) ? PRIORITY_RANK[b.item.priority] : PRIORITY_RANK.medium;
+          return (aRank - bRank) || (a.sourceIndex - b.sourceIndex);
+        })
+        .map(function (entry) { return entry.item; });
       var completedItems = state.items.filter(function (i) { return i.status === 'completed'; });
       if (openItems.length) {
         h.push('<div class="pl-items">');
@@ -233,7 +244,10 @@
   }
 
   function _itemRowHtml(item, index) {
-    return '<div class="pl-item-row" data-pl-item="' + esc(item.id) + '">' +
+    var priority = Object.prototype.hasOwnProperty.call(PRIORITY_RANK, item.priority) ? item.priority : 'medium';
+    var isOpen = item.status !== 'completed';
+    var rowClass = 'pl-item-row' + (isOpen ? ' pl-item-row--open pl-priority-' + priority : '');
+    return '<div class="' + rowClass + '" data-pl-item="' + esc(item.id) + '">' +
       '<div class="pl-item-head"><div class="pl-item-left"><span class="pl-item-num">#' + String(index + 1).padStart(2, '0') + '</span><span class="pl-item-title">' + esc(item.title || 'Untitled') + '</span></div><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span></div>' +
     '</div>';
   }
@@ -372,6 +386,60 @@
     }).catch(notifyError);
   }
 
+  function _openLayout() {
+    var crop = state.listCrop;
+    if (!crop || !crop.configured) return;
+    if (!window.AlignDrawings || !window.AlignDrawings.openLayoutView) { alert('Drawings module is not available.'); return; }
+    window.AlignDrawings.openLayoutView({
+      projectId: state.projectId,
+      drawingId: crop.drawingId,
+      sheet: crop.sheetNumber || 0,
+      listId: state.activeList.id,
+      cropMode: crop.cropMode,
+      vertices: crop.vertices,
+      cropRenderStatus: crop.cropRenderStatus,
+      cropImage: crop.cropImage,
+      cropRenderMeta: crop.cropRenderMeta,
+      onCancel: function () {}
+    }).catch(notifyError);
+  }
+
+  function _openItemFromLayout(itemId) {
+    var item = state.items.find(function (i) { return i.id === itemId; }) || null;
+    if (!item) return;
+    state.detailItem = item;
+    state.viewMode = 'detail';
+    _paint();
+  }
+
+  function _closeLayoutCallout() {
+    var el = document.getElementById('pl-layout-callout');
+    if (el) el.remove();
+  }
+
+  function _showLayoutPinCallout(detail) {
+    if (!detail || !detail.pin) return;
+    var pin = detail.pin;
+    var data = {};
+    try { data = typeof pin.data === 'string' ? JSON.parse(pin.data || '{}') : (pin.data || {}); } catch (e) { data = {}; }
+    var title = data.title || 'Untitled item';
+    var img = (Array.isArray(data.images) && data.images.length) ? data.images[0] : null;
+    _closeLayoutCallout();
+    var callout = document.createElement('div');
+    callout.id = 'pl-layout-callout';
+    callout.className = 'pl-layout-callout';
+    var thumb = img && img.fileId
+      ? '<img class="pl-layout-callout-thumb" src="/api/files/' + esc(img.fileId) + '?thumb=1" alt="">'
+      : '<span class="pl-layout-callout-thumb pl-layout-callout-thumb--empty"></span>';
+    callout.innerHTML = '<button type="button" class="pl-layout-callout-close" aria-label="Close">&times;</button>' +
+      '<button type="button" class="pl-layout-callout-open">' + thumb + '<span class="pl-layout-callout-title">' + esc(title) + '</span></button>';
+    callout.querySelector('.pl-layout-callout-close').addEventListener('click', function (e) { e.stopPropagation(); _closeLayoutCallout(); });
+    callout.querySelector('.pl-layout-callout-open').addEventListener('click', function () { _closeLayoutCallout(); _openItemFromLayout(pin.punch_item_id); });
+    document.body.appendChild(callout);
+  }
+
+  document.addEventListener('pinClicked', function (event) { _showLayoutPinCallout(event.detail); });
+
   function _handleListClick(event) {
     var action = event.target.closest('[data-pl-act]');
     if (action) {
@@ -382,6 +450,7 @@
       if (act === 'add-item') { _addItem(); return; }
       if (act === 'notify-all') { _notifyAllList(action); return; }
       if (act === 'export-pdf') { _exportListPdf(action); return; }
+      if (act === 'view-layout') { _openLayout(); return; }
       return;
     }
     var row = event.target.closest('[data-pl-item]');
