@@ -1894,36 +1894,40 @@ app.put('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.req
     vertices = body.vertices.map(function (v) { return { x: v.x, y: v.y }; });
   }
 
-  // ── Conflict check: existing pins must remain valid under the new map ──
-  var itemRows = dbAll("SELECT id FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?", pid, listId);
-  var conflicts = [];
-  (itemRows || []).forEach(function (row) {
-    var locs = dbAll('SELECT punch_item_id, drawing_id, sheet_number, x, y FROM punch_item_locations WHERE punch_item_id = ?', row.id);
-    (locs || []).forEach(function (loc) {
-      if (loc.drawing_id !== drawingId || loc.sheet_number !== sheetNumber) {
-        conflicts.push({ punchItemId: loc.punch_item_id, reason: 'wrong_drawing_or_sheet' });
-      } else if (cropMode === 'polygon' && !pointInPolygonCrop(loc.x, loc.y, vertices)) {
-        conflicts.push({ punchItemId: loc.punch_item_id, reason: 'outside_polygon' });
-      }
-    });
-  });
-  if (conflicts.length > 0) {
-    return res.status(409).json({ error: 'crop_conflicts_with_existing_pins', message: 'Existing pins must be removed or repositioned before changing this map.', conflicts: conflicts });
+  // ── Map-change detection: a changed map clears all pins for this list ──
+  var normVertices = cropMode === 'polygon' ? (vertices || []).map(function (v) { return { x: Number(v.x), y: Number(v.y) }; }) : [];
+  var existingCrop = getListCrop(listId);
+  var existingVertices = [];
+  if (existingCrop && existingCrop.crop_mode === 'polygon') {
+    try { existingVertices = JSON.parse(existingCrop.crop_vertices || '[]'); } catch (e) { existingVertices = []; }
+    existingVertices = existingVertices.map(function (v) { return { x: Number(v.x), y: Number(v.y) }; });
   }
+  var mapChanged = !existingCrop ||
+    String(existingCrop.drawing_id) !== String(drawingId) ||
+    Number(existingCrop.sheet_number) !== Number(sheetNumber) ||
+    String(existingCrop.crop_mode) !== String(cropMode) ||
+    JSON.stringify(existingVertices) !== JSON.stringify(normVertices);
 
   var now = new Date().toISOString();
+  var pinsCleared = 0;
   try {
-    dbRun(`
-      INSERT INTO punchlist_list_crops (list_id, drawing_id, sheet_number, crop_mode, crop_vertices, created_at, updated_at, crop_render_status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(list_id) DO UPDATE SET
-        drawing_id = excluded.drawing_id,
-        sheet_number = excluded.sheet_number,
-        crop_mode = excluded.crop_mode,
-        crop_vertices = excluded.crop_vertices,
-        updated_at = excluded.updated_at,
-        crop_render_status = excluded.crop_render_status
-    `, listId, drawingId, sheetNumber, cropMode, cropMode === 'polygon' ? JSON.stringify(vertices) : null, now, now, 'rendering');
+    var saveTx = _db.transaction(function () {
+      if (mapChanged) {
+        pinsCleared = stmtDeletePinsForList.run(pid, listId).changes;
+      }
+      dbRun(`
+        INSERT INTO punchlist_list_crops (list_id, drawing_id, sheet_number, crop_mode, crop_vertices, created_at, updated_at, crop_render_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(list_id) DO UPDATE SET
+          drawing_id = excluded.drawing_id,
+          sheet_number = excluded.sheet_number,
+          crop_mode = excluded.crop_mode,
+          crop_vertices = excluded.crop_vertices,
+          updated_at = excluded.updated_at,
+          crop_render_status = excluded.crop_render_status
+      `, listId, drawingId, sheetNumber, cropMode, cropMode === 'polygon' ? JSON.stringify(vertices) : null, now, now, 'rendering');
+    });
+    saveTx();
 
     // Render the polygon crop into a standalone PNG document (white bg + header).
     if (cropMode === 'polygon') {
@@ -1940,7 +1944,7 @@ app.put('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.req
       dbRun("UPDATE punchlist_list_crops SET crop_image_file_id = NULL, crop_render_meta = NULL, crop_render_status = 'missing' WHERE list_id = ?", listId);
     }
 
-    res.json({ ok: true, crop: cropResource(getListCrop(listId), listId) });
+    res.json({ ok: true, crop: cropResource(getListCrop(listId), listId), mapChanged: mapChanged, pinsCleared: pinsCleared });
   } catch (err) {
     console.error('[PUNCHLIST] Save crop error:', err.message);
     res.status(500).json({ error: 'Failed to save crop' });
@@ -2702,6 +2706,14 @@ const stmtListLocationsByDrawing = _db.prepare(`
 const stmtDeleteLocation = _db.prepare(`
   DELETE FROM punch_item_locations 
   WHERE punch_item_id = ? AND drawing_id = ? AND sheet_number = ?
+`);
+const stmtDeletePinsForList = _db.prepare(`
+  DELETE FROM punch_item_locations
+  WHERE punch_item_id IN (
+    SELECT id FROM records
+    WHERE project_id = ? AND category = 'punchlist'
+      AND CAST(json_extract(data, '$.listId') AS TEXT) = CAST(? AS TEXT)
+  )
 `);
 
 function enqueueNotification({ punchItemId, listId, type, recipientEmail, subject, body, attachmentFileId }) {
