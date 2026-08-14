@@ -2236,6 +2236,27 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   overflow: hidden;
 }
 .pl-item-row-assigned-label { color: var(--muted, #6b7280); font-weight: 600; }
+/* Item-row status badge — small pill, in normal flow (never absolute), vertically centered */
+.pl-item-row .pl-item-status {
+  position: static;
+  align-self: center;
+  flex: none;
+  width: auto;
+  min-width: 28px;
+  height: 24px;
+  margin: 0;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
 .pl-completed-section { margin-top: 18px; border-top: 2px solid var(--line, #d8e0e6); }
 .pl-completed-header { padding: 12px 14px 6px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted, #6b7280); }
 
