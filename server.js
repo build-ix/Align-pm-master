@@ -1395,12 +1395,11 @@ app.get('/api/projects/:pid/punchlist-lists', requireAuth, auth.requireProjectMe
       id, project_id, name, description, scope_type, apartment_label, status, privacy,
       created_by, created_at, updated_at,
       COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = punchlist_lists.id), 0) as item_count,
-      COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = punchlist_lists.id AND json_extract(data, '$.status') = 'open'), 0) as open_count,
-      COALESCE((SELECT GROUP_CONCAT(name, ', ') FROM (SELECT DISTINCT u.name FROM punchlist_assignments pa JOIN records r ON r.id = pa.punch_item_id JOIN users u ON u.id = pa.user_id WHERE r.project_id = ? AND r.category = 'punchlist' AND json_extract(r.data, '$.listId') = punchlist_lists.id)), '') as assigned_to
+      COALESCE((SELECT COUNT(*) FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = punchlist_lists.id AND json_extract(data, '$.status') = 'open'), 0) as open_count
     FROM punchlist_lists
     WHERE project_id = ?
     ORDER BY updated_at DESC
-  `, pid, pid, pid, pid);
+  `, pid, pid, pid);
   lists = (lists || []).filter(function(list) {
     return isListAuthorized(req.user, list, getProjectRole(req.user, pid, req.projectRole));
   });

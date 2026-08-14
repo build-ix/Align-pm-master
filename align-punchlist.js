@@ -178,8 +178,6 @@
     var h = '<div class="pl-apt-tile pl-list-tile' + (isClosed ? ' is-closed' : '') + '" data-pl-list="' + esc(list.id) + '">';
     h += '<span class="pl-list-ribbon"></span>';
     h += '<div class="pl-apt-name">' + esc(list.apartment_label || list.name) + '</div>';
-    if (list.description) h += '<div class="pl-list-desc">' + esc(list.description) + '</div>';
-    if (list.assigned_to) h += '<div class="pl-list-assigned"><span class="pl-list-assigned-label">Assigned to:</span> ' + esc(list.assigned_to) + '</div>';
     if (isClosed) h += '<span class="pl-list-closed-badge">Closed</span>';
     else if (openCount > 0) h += '<span class="pl-item-badge">' + openCount + ' Opened</span>';
     h += '</div>';
@@ -249,8 +247,12 @@
     var priority = Object.prototype.hasOwnProperty.call(PRIORITY_RANK, item.priority) ? item.priority : 'medium';
     var isOpen = item.status !== 'completed';
     var rowClass = 'pl-item-row' + (isOpen ? ' pl-item-row--open pl-priority-' + priority : '');
+    var assigns = state.itemAssignments[item.id] || [];
+    var assignedNames = assigns.map(function (a) { return a.name; }).filter(Boolean).join(', ');
     return '<div class="' + rowClass + '" data-pl-item="' + esc(item.id) + '">' +
       '<div class="pl-item-head"><div class="pl-item-left"><span class="pl-item-num">#' + String(index + 1).padStart(2, '0') + '</span><span class="pl-item-title">' + esc(item.title || 'Untitled') + '</span></div><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span></div>' +
+      (item.description ? '<div class="pl-item-row-desc">' + esc(item.description) + '</div>' : '') +
+      (assignedNames ? '<div class="pl-item-row-assigned"><span class="pl-item-row-assigned-label">Assigned to:</span> ' + esc(assignedNames) + '</div>' : '') +
     '</div>';
   }
 
@@ -642,7 +644,7 @@
     var statusBtn = list.id ? '<button class="pm-btn" id="pl-list-form-toggle-status" type="button">' + (!list.status || list.status === 'open' ? 'Close List' : 'Reopen List') + '</button>' : '';
     // Location map is managed from the Edit List menu (existing lists only).
     var mapSection = list.id ? _mapSectionHtml() : '';
-    return '<form id="pl-list-form" class="pl-form-wrap pl-list-form"><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><label class="pl-field-label" for="pl-list-desc">Description</label><textarea class="pl-textarea" id="pl-list-desc" rows="2" maxlength="500" placeholder="What needs fixing in this unit">' + esc(list.description) + '</textarea></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div>' + mapSection + (deleteBtn || statusBtn ? '<div class="pl-form-footer">' + statusBtn + deleteBtn + '</div>' : '') + '</form>';
+    return '<form id="pl-list-form" class="pl-form-wrap pl-list-form"><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div>' + mapSection + (deleteBtn || statusBtn ? '<div class="pl-form-footer">' + statusBtn + deleteBtn + '</div>' : '') + '</form>';
   }
   function _bindListForm() {
     var form = document.getElementById('pl-list-form');
@@ -653,12 +655,10 @@
       var name = document.getElementById('pl-list-name').value.trim();
       var privacyInput = document.querySelector('input[name="pl-list-privacy"]:checked');
       var privacy = privacyInput ? privacyInput.value : '';
-      var descEl = document.getElementById('pl-list-desc');
-      var desc = descEl ? descEl.value.trim() : '';
       if (!name) { alert('Name is required.'); return; }
       if (name.length > 120) { alert('Name must be 120 characters or fewer.'); return; }
       if (privacy !== 'private' && privacy !== 'public') { alert('Privacy must be private or public.'); return; }
-      var payload = {name:name, description:desc, privacy:privacy, scope_type:'project', status:'open'};
+      var payload = {name:name, privacy:privacy, scope_type:'project', status:'open'};
       submitting = true;
       var saveButton = document.getElementById('pl-save-list');
       if (saveButton) { saveButton.disabled = true; saveButton.setAttribute('aria-busy', 'true'); }

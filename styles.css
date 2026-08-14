@@ -2217,6 +2217,28 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
 .pl-item-left { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
 .pl-item-title { font-weight: 700; overflow-wrap: anywhere; }
 .pl-item-num { flex: none; color: var(--muted, #6b7280); font-size: 0.8rem; font-weight: 700; }
+.pl-item-row-desc {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: var(--muted, #6b7280);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pl-item-row-assigned {
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--ink, #17212b);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pl-item-row-assigned-label { color: var(--muted, #6b7280); font-weight: 600; }
 .pl-completed-section { margin-top: 18px; border-top: 2px solid var(--line, #d8e0e6); }
 .pl-completed-header { padding: 12px 14px 6px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted, #6b7280); }
 

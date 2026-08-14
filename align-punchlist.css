@@ -528,7 +528,6 @@ select.pl-input {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 6px;
   padding: 18px 14px;
   background: var(--card);
   border: 1px solid var(--line);
@@ -536,7 +535,7 @@ select.pl-input {
   cursor: pointer;
   transition: all 0.15s;
   touch-action: manipulation;
-  min-height: 190px;
+  min-height: 140px;
   position: relative;
   overflow: hidden;
 }
@@ -558,31 +557,6 @@ select.pl-input {
   top: 14px; right: 14px;
   color: #6B7280;
   font-size: 13px;
-  font-weight: 600;
-}
-.pl-list-desc {
-  font-size: 0.78rem;
-  color: var(--muted);
-  line-height: 1.35;
-  padding-right: 8px;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.pl-list-assigned {
-  font-size: 0.78rem;
-  color: var(--ink);
-  padding-right: 8px;
-  overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.pl-list-assigned-label {
-  color: var(--muted);
   font-weight: 600;
 }
 .pl-lists-separator {
