@@ -141,13 +141,13 @@
   }
 
   function getOpenCount() {
-    return state.allItems.filter(function (item) { return item.status === 'open'; }).length;
+    return state.allItems.filter(function (item) { return item.status !== 'completed'; }).length;
   }
   function getCriticalCount() {
-    return state.allItems.filter(function (item) { return item.priority === 'critical'; }).length;
+    return state.allItems.filter(function (item) { return item.status !== 'completed' && item.priority === 'critical'; }).length;
   }
   function getClosedCount() {
-    return state.allItems.filter(function (item) { return item.status === 'resolved' || item.status === 'verified'; }).length;
+    return state.allItems.filter(function (item) { return item.status === 'completed'; }).length;
   }
 
   /* Lists are the first-level tiles. The apartment label is the only card content. */
