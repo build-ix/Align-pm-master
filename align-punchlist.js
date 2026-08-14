@@ -36,8 +36,8 @@
   }
   function uid() { return 'pl_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
   function nowISO() { return new Date().toISOString(); }
-  function statusLabel(s) { return ({open:'Open', in_progress:'In Progress', resolved:'Resolved', verified:'Verified'})[s] || s || ''; }
-  function statusColor(s) { return ({open:'var(--danger)', in_progress:'var(--warning)', resolved:'var(--brand)', verified:'var(--success)'})[s] || 'var(--muted)'; }
+  function statusLabel(s) { return ({open:'Open', in_progress:'In Progress', resolved:'Resolved', verified:'Verified', completed:'Complete'})[s] || s || ''; }
+  function statusColor(s) { return ({open:'var(--danger)', in_progress:'var(--warning)', resolved:'var(--brand)', verified:'var(--success)', completed:'var(--success)'})[s] || 'var(--muted)'; }
   function currentUser() {
     try { var u = A() && A().getActiveUser && A().getActiveUser(); return u ? (u.name || u.id || 'Unknown') : 'Unknown'; } catch (e) { return 'Unknown'; }
   }
@@ -158,18 +158,29 @@
       '<div class="summary-item summary-closed"><span class="summary-count">' + getClosedCount() + '</span><span class="summary-label">Closed</span></div>',
       '</div>'];
     if (!state.lists.length) h.push('<div class="pl-empty">No punchlist lists yet. Create a list to get started.</div>');
+    var openLists = state.lists.filter(function (l) { return !l.status || l.status === 'open'; });
+    var closedLists = state.lists.filter(function (l) { return l.status && l.status !== 'open'; });
     h.push('<div class="pl-apt-grid pl-list-grid">');
-    state.lists.forEach(function (list) {
-      h.push('<div class="pl-apt-tile pl-list-tile" data-pl-list="' + esc(list.id) + '">');
-      var items = state.listItems[list.id] || [], openCount = items.filter(function (item) { return item.status === 'open'; }).length;
-      h.push('<div class="pl-apt-name">' + esc(list.apartment_label || list.name) + '</div>');
-      if (openCount > 0) {
-        h.push('<span class="pl-item-badge">' + openCount + ' Opened</span>');
-      }
-      h.push('</div>');
-    });
+    openLists.forEach(function (list) { h.push(_listCardHtml(list)); });
+    if (closedLists.length) {
+      h.push('<div class="pl-lists-separator"></div>');
+      closedLists.forEach(function (list) { h.push(_listCardHtml(list)); });
+    }
     h.push('</div></div>');
     return h.join('');
+  }
+
+  function _listCardHtml(list) {
+    var isClosed = list.status && list.status !== 'open';
+    var items = state.listItems[list.id] || [];
+    var openCount = items.filter(function (item) { return item.status === 'open'; }).length;
+    var h = '<div class="pl-apt-tile pl-list-tile' + (isClosed ? ' is-closed' : '') + '" data-pl-list="' + esc(list.id) + '">';
+    h += '<span class="pl-list-ribbon"></span>';
+    h += '<div class="pl-apt-name">' + esc(list.apartment_label || list.name) + '</div>';
+    if (isClosed) h += '<span class="pl-list-closed-badge">Closed</span>';
+    else if (openCount > 0) h += '<span class="pl-item-badge">' + openCount + ' Opened</span>';
+    h += '</div>';
+    return h;
   }
   function _handleListsClick(event) {
     if (event.target.closest('#pl-new-list')) { state.editingList = {}; state.viewMode = 'list-form'; _paint(); return; }
@@ -205,32 +216,26 @@
     if (list.description) h.push('<div class="pl-detail-section pl-detail-desc">' + esc(list.description) + '</div>');
     if (!state.items.length) h.push('<div class="pl-empty">No items yet.</div>');
     else {
-      h.push('<div class="pl-items">');
-      state.items.forEach(function (item, index) {
-        var assigns = state.itemAssignments[item.id] || [];
-        var assignedNames = assigns.length ? assigns.map(function (a) { return a.name; }).join(', ') : 'Unassigned';
-        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '">' +
-          '<div class="pl-item-media">' + _itemThumbHtml(item) + '</div>' +
-          '<div class="pl-item-body">' +
-            '<div class="pl-item-head"><span class="pl-item-title">' + esc(item.title || 'Untitled') + '</span><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span></div>' +
-            '<div class="pl-item-num">Item #' + String(index + 1).padStart(3, '0') + '</div>' +
-            '<button type="button" class="pl-item-assigned" data-pl-act="assign-item" data-pl-id="' + esc(item.id) + '"><span class="pl-item-assigned-label">Assigned To:</span><span class="pl-item-assigned-names">' + esc(assignedNames) + '</span></button>' +
-            '<button type="button" class="pl-item-notify" data-pl-act="notify-item" data-pl-id="' + esc(item.id) + '"' + (assigns.length ? '' : ' disabled') + '>Notify Now</button>' +
-          '</div>' +
-        '</div>');
-      });
-      h.push('</div>');
+      var openItems = state.items.filter(function (i) { return i.status !== 'completed'; });
+      var completedItems = state.items.filter(function (i) { return i.status === 'completed'; });
+      if (openItems.length) {
+        h.push('<div class="pl-items">');
+        openItems.forEach(function (item, index) { h.push(_itemRowHtml(item, index)); });
+        h.push('</div>');
+      }
+      if (completedItems.length) {
+        h.push('<div class="pl-completed-section"><div class="pl-completed-header">Completed</div>');
+        completedItems.forEach(function (item, index) { h.push(_itemRowHtml(item, openItems.length + index)); });
+        h.push('</div>');
+      }
     }
     h.push('</div>'); return h.join('');
   }
 
-  function _itemThumbHtml(item) {
-    var img = null;
-    if (Array.isArray(item.images)) {
-      img = item.images.find(function (i) { return i && i.fileId && String(i.mimeType || '').indexOf('image/') === 0; });
-    }
-    if (img) return '<img class="pl-item-thumb" src="/api/files/' + esc(img.fileId) + '?thumb=1" alt="" loading="lazy" decoding="async">';
-    return '<div class="pl-item-thumb-placeholder">No photo</div>';
+  function _itemRowHtml(item, index) {
+    return '<div class="pl-item-row" data-pl-item="' + esc(item.id) + '">' +
+      '<div class="pl-item-head"><div class="pl-item-left"><span class="pl-item-num">#' + String(index + 1).padStart(2, '0') + '</span><span class="pl-item-title">' + esc(item.title || 'Untitled') + '</span></div><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span></div>' +
+    '</div>';
   }
 
   function _mapSectionHtml() {
@@ -388,7 +393,14 @@
     window.PunchlistAssignments.openAssignmentSheet({
       projectId: state.projectId,
       punchItemId: itemId,
-      onSaved: function () { _loadListItems(); }
+      onSaved: function (assignments) {
+        state.itemAssignments[itemId] = assignments || [];
+        if (state.viewMode === 'detail' && state.detailItem) {
+          state.container.innerHTML = _detailHtml(state.detailItem);
+        } else {
+          _loadListItems();
+        }
+      }
     });
   }
 
@@ -396,17 +408,44 @@
     if (!window.PunchlistAssignments) { alert('Assignments module not available.'); return; }
     var itemId = button.getAttribute('data-pl-id');
     if (!itemId) return;
-    var orig = button.textContent;
+    if (!confirm('Notify all assigned to this item?')) return;
     button.disabled = true;
-    button.textContent = 'Queuing…';
-    window.PunchlistAssignments.notifyItem(itemId).then(function () {
-      button.textContent = 'Queued';
-      setTimeout(function () { button.disabled = false; button.textContent = orig; }, 2500);
+    button.classList.add('is-busy');
+    window.PunchlistAssignments.notifyItem(itemId).then(function (data) {
+      alert('Queued ' + (data.queuedCount || 0) + ' notification(s).');
+      button.disabled = false;
+      button.classList.remove('is-busy');
     }).catch(function (err) {
       alert('Notify failed: ' + err.message);
       button.disabled = false;
-      button.textContent = orig;
+      button.classList.remove('is-busy');
     });
+  }
+
+  function _changePriority(itemId, priority) {
+    if (!priority || PRIORITIES.indexOf(priority) === -1) return;
+    api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(itemId)), { method: 'PATCH', body: JSON.stringify({ priority: priority }) })
+      .then(function () {
+        if (state.detailItem && state.detailItem.id === itemId) state.detailItem.priority = priority;
+        var it = state.items.find(function (i) { return i.id === itemId; });
+        if (it) it.priority = priority;
+      })
+      .catch(notifyError);
+  }
+
+  function _toggleComplete(itemId) {
+    var item = state.items.find(function (i) { return i.id === itemId; }) || state.detailItem;
+    if (!item) return;
+    var newStatus = item.status === 'completed' ? 'open' : 'completed';
+    api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(itemId)), { method: 'PATCH', body: JSON.stringify({ status: newStatus }) })
+      .then(function () {
+        item.status = newStatus;
+        if (state.detailItem && state.detailItem.id === itemId) {
+          state.detailItem.status = newStatus;
+          state.container.innerHTML = _detailHtml(state.detailItem);
+        }
+      })
+      .catch(notifyError);
   }
 
   function _addItem() {
@@ -414,7 +453,20 @@
     state.viewMode = 'item-form';
     _paint();
   }
-
+  function _toggleListStatus() {
+    var list = state.activeList;
+    if (!list) return;
+    var isOpen = !list.status || list.status === 'open';
+    var newStatus = isOpen ? 'archived' : 'open';
+    if (isOpen && !confirm('Close this list?')) return;
+    api(projectPath('/' + encodeURIComponent(list.id)), { method: 'PATCH', body: JSON.stringify({ status: newStatus }) })
+      .then(function (data) {
+        state.activeList = (data && data.list) || state.activeList;
+        _renderHeader();
+        _loadListItems();
+      })
+      .catch(notifyError);
+  }
   function _exportListPdf(button) {
     var orig = button.textContent;
     button.disabled = true;
@@ -423,8 +475,17 @@
       .then(function (data) {
         button.disabled = false;
         button.textContent = orig;
-        if (data && data.file && data.file.url) window.open(data.file.url, '_blank');
-        else alert('Export ready.');
+        if (data && data.file && data.file.url) {
+          var a = document.createElement('a');
+          a.href = data.file.url + '?download=1';
+          a.download = data.file.name || 'punchlist.pdf';
+          a.rel = 'noopener';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function () { if (a.parentNode) a.parentNode.removeChild(a); }, 100);
+        } else {
+          alert('Export ready.');
+        }
       })
       .catch(function (err) {
         button.disabled = false;
@@ -466,6 +527,9 @@
       var id = btn.getAttribute('data-pl-id');
       if (act === 'edit-item') { state.editingItem = JSON.parse(JSON.stringify(state.detailItem || state.items.find(function (i) { return i.id === id; }) || {})); state.viewMode = 'item-form'; _paint(); return; }
       if (act === 'pin-item') { _placePin(id); return; }
+      if (act === 'assign-item') { _openAssignSheet(id); return; }
+      if (act === 'notify-item') { _notifyItem(btn); return; }
+      if (act === 'toggle-complete') { _toggleComplete(id); return; }
       if (act === 'delete-item' && confirm('Delete this item?')) {
         api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items/' + encodeURIComponent(id)), {method:'DELETE'}).then(function () { state.detailItem = null; state.viewMode = 'list'; _loadListItems(); }).catch(notifyError);
       }
@@ -490,6 +554,13 @@
     if (state._boundEl === state.container) return;
     state._boundEl = state.container;
     state.container.addEventListener('click', _onContainerClick);
+    state.container.addEventListener('change', _onContainerChange);
+  }
+
+  function _onContainerChange(event) {
+    var sel = event.target.closest('[data-pl-detail-act="priority-change"]');
+    if (!sel) return;
+    _changePriority(sel.getAttribute('data-pl-id'), sel.value);
   }
 
   /* Dedicated list form: no priority, images, location, or trade controls. */
@@ -497,9 +568,10 @@
     var list = state.editingList || {};
     var privacy = list.privacy === 'public' ? 'public' : 'private';
     var deleteBtn = list.id ? '<button class="pm-btn danger" id="pl-list-form-delete" type="button">Delete List</button>' : '';
+    var statusBtn = list.id ? '<button class="pm-btn" id="pl-list-form-toggle-status" type="button">' + (!list.status || list.status === 'open' ? 'Close List' : 'Reopen List') + '</button>' : '';
     // Location map is managed from the Edit List menu (existing lists only).
     var mapSection = list.id ? _mapSectionHtml() : '';
-    return '<form id="pl-list-form" class="pl-form-wrap pl-list-form"><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div>' + mapSection + (deleteBtn ? '<div class="pl-form-footer">' + deleteBtn + '</div>' : '') + '</form>';
+    return '<form id="pl-list-form" class="pl-form-wrap pl-list-form"><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div>' + mapSection + (deleteBtn || statusBtn ? '<div class="pl-form-footer">' + statusBtn + deleteBtn + '</div>' : '') + '</form>';
   }
   function _bindListForm() {
     var form = document.getElementById('pl-list-form');
@@ -525,6 +597,21 @@
       deleteButton.addEventListener('click', function () {
         if (!confirm('Delete this list and all items? This cannot be undone.')) return;
         api(projectPath('/' + encodeURIComponent(state.editingList.id)), {method:'DELETE'}).then(function () { state.activeList = null; state.editingList = null; state.viewMode = 'lists'; _loadLists(); }).catch(notifyError);
+      });
+    }
+    var statusButton = document.getElementById('pl-list-form-toggle-status');
+    if (statusButton) {
+      statusButton.addEventListener('click', function () {
+        var isOpen = !state.editingList.status || state.editingList.status === 'open';
+        var newStatus = isOpen ? 'archived' : 'open';
+        if (isOpen && !confirm('Close this list?')) return;
+        api(projectPath('/' + encodeURIComponent(state.editingList.id)), { method: 'PATCH', body: JSON.stringify({ status: newStatus }) })
+          .then(function (data) {
+            state.editingList = (data && data.list) || state.editingList;
+            state.container.innerHTML = _listFormHtml();
+            _bindListForm();
+          })
+          .catch(notifyError);
       });
     }
   }
@@ -626,7 +713,10 @@
   function _detailHtml(item) {
     var h = [
       '<div class="pl-detail-wrap">',
-      '<div class="pl-detail-section"><span class="pl-detail-status-badge" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span> <span class="pl-priority-badge">' + esc(item.priority || '') + '</span></div>'
+      '<div class="pl-detail-section"><span class="pl-detail-status-badge" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span> ' +
+        '<select class="pl-priority-select" data-pl-detail-act="priority-change" data-pl-id="' + esc(item.id) + '" aria-label="Priority">' +
+        PRIORITIES.map(function (p) { return '<option value="' + p + '"' + (item.priority === p ? ' selected' : '') + '>' + p.charAt(0).toUpperCase() + p.slice(1) + '</option>'; }).join('') +
+        '</select></div>'
     ];
     if (item.description) h.push('<div class="pl-detail-section"><span class="pl-detail-label">Description</span><div class="pl-detail-value">' + esc(item.description) + '</div></div>');
     var images = item.images || [];
@@ -642,11 +732,20 @@
       h.push('</div></div>');
     }
     h.push('<div class="pl-detail-section"><span class="pl-detail-label">Location</span><div class="pl-detail-value">' + esc(item.location || '—') + '</div></div>');
-    h.push('<div class="pl-detail-section"><span class="pl-detail-label">Trade</span><div class="pl-detail-value">' + esc(item.trade || '—') + '</div></div>');
+    var assigns = state.itemAssignments[item.id] || [];
+    var assignedNames = assigns.length ? assigns.map(function (a) { return a.name; }).join(', ') : 'Unassigned';
+    h.push('<div class="pl-detail-section"><span class="pl-detail-label">Assigned To</span><div class="pl-detail-assign-row">' +
+      '<button type="button" class="pl-item-assigned" data-pl-detail-act="assign-item" data-pl-id="' + esc(item.id) + '"><span class="pl-item-assigned-names">' + esc(assignedNames) + '</span></button>' +
+      '<button type="button" class="pl-item-notify-icon" data-pl-detail-act="notify-item" data-pl-id="' + esc(item.id) + '" aria-label="Notify all assigned to this item"' + (assigns.length ? '' : ' disabled') + ' title="' + (assigns.length ? 'Notify all assigned to this item' : 'No one assigned yet') + '"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg></button>' +
+      '</div></div>');
+    var isComplete = item.status === 'completed';
     h.push('<div class="pl-detail-actions">',
       '<button type="button" class="pm-btn" data-pl-detail-act="edit-item" data-pl-id="' + esc(item.id) + '">Edit</button>',
       '<button type="button" class="pm-btn" data-pl-detail-act="pin-item" data-pl-id="' + esc(item.id) + '">Pin Location</button>',
-      '<button type="button" class="pm-btn danger" data-pl-detail-act="delete-item" data-pl-id="' + esc(item.id) + '">Delete</button>',
+      '<button type="button" class="pm-btn" data-pl-detail-act="toggle-complete" data-pl-id="' + esc(item.id) + '">' + (isComplete ? 'Reopen' : 'Mark Complete') + '</button>',
+      '</div>');
+    h.push('<div class="pl-detail-footer">',
+      '<button type="button" class="pl-item-delete-icon" data-pl-detail-act="delete-item" data-pl-id="' + esc(item.id) + '" aria-label="Delete item"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>',
       '</div>');
     h.push('</div>');
     return h.join('');

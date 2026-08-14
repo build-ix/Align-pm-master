@@ -1737,7 +1737,7 @@ app.patch('/api/projects/:pid/punchlist-lists/:listId/items/:itemId', requireAut
     }
     if (body.hasOwnProperty('trade')) item.trade = (body.trade || '').trim();
     if (body.hasOwnProperty('status')) {
-      if (!['open', 'in_progress', 'resolved', 'verified'].includes(body.status)) {
+      if (!['open', 'in_progress', 'resolved', 'verified', 'completed'].includes(body.status)) {
         return res.status(400).json({ error: 'Invalid status' });
       }
       item.status = body.status;
@@ -2404,7 +2404,8 @@ app.get('/api/files/:id', requireAuth, requireFileProjectMember, requireFileRoom
     return fs.createReadStream(thumbPath).pipe(res);
   }
   res.setHeader('Content-Type', file.mime_type);
-  res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(file.original_name) + '"');
+  var disposition = req.query.download === '1' ? 'attachment' : 'inline';
+  res.setHeader('Content-Disposition', disposition + '; filename="' + encodeURIComponent(file.original_name) + '"');
   fs.createReadStream(file.stored_path).pipe(res);
 });
 

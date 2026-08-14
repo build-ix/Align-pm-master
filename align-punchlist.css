@@ -544,6 +544,26 @@ select.pl-input {
   border-color: var(--brand);
   box-shadow: 0 0 0 2px rgba(26,95,212,0.15);
 }
+.pl-list-ribbon {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 5px;
+  background: #EF4444;
+}
+.pl-list-tile.is-closed .pl-list-ribbon { background: #9CA3AF; }
+.pl-list-tile.is-closed .pl-apt-name { color: var(--muted); }
+.pl-list-closed-badge {
+  position: absolute;
+  top: 14px; right: 14px;
+  color: #6B7280;
+  font-size: 13px;
+  font-weight: 600;
+}
+.pl-lists-separator {
+  grid-column: 1 / -1;
+  border-top: 2px solid var(--line);
+  margin: 6px 0;
+}
 .pl-apt-name {
   font-size: 28px;
   font-weight: 700;

@@ -609,8 +609,12 @@ html[data-theme="dark"] .logo-dark { display: block; }
   touch-action: manipulation;
 }
 #section-title {
-  flex: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ── MODALS ────────────────────────────────────────────────────────────── */
@@ -1215,6 +1219,8 @@ html[data-theme="dark"] .logo-dark { display: block; }
   body.auth-ready .tile-grid { display: none !important; }
   /* Add bottom padding to body so content isn't hidden behind nav */
   body.auth-ready { padding-bottom: calc(80px + env(safe-area-inset-bottom)); }
+  /* Section pages scroll independently — clear the fixed bottom nav */
+  #section-page { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
 
 .bn-tab {
@@ -2201,31 +2207,18 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
 }
 .pl-list-toolbar .pm-btn { min-height: 44px; }
 
-/* Punchlist item row (thumbnail + Assigned To + Notify Now) */
+/* Punchlist item row (Assigned To + Notify Now) */
 .pl-item-row {
-  display: grid;
-  grid-template-columns: minmax(110px, 38%) 1fr;
-  gap: 14px;
   padding: 14px;
   border-bottom: 1px solid var(--line, #d8e0e6);
   background: var(--card, #fff);
 }
-.pl-item-media { min-width: 0; }
-.pl-item-thumb, .pl-item-thumb-placeholder {
-  display: block; width: 100%;
-  height: clamp(140px, 30vw, 220px);
-  border-radius: 8px;
-  background: #edf1f4;
-  object-fit: cover;
-}
-.pl-item-thumb-placeholder {
-  display: flex; align-items: center; justify-content: center;
-  padding: 12px; color: var(--muted, #6b7280); text-align: center;
-}
-.pl-item-body { min-width: 0; }
-.pl-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.pl-item-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pl-item-left { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
 .pl-item-title { font-weight: 700; overflow-wrap: anywhere; }
-.pl-item-num { color: var(--muted, #6b7280); font-size: 0.78rem; margin: 2px 0 10px; }
+.pl-item-num { flex: none; color: var(--muted, #6b7280); font-size: 0.8rem; font-weight: 700; }
+.pl-completed-section { margin-top: 18px; border-top: 2px solid var(--line, #d8e0e6); }
+.pl-completed-header { padding: 12px 14px 6px; font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted, #6b7280); }
 .pl-item-assigned {
   display: block; width: 100%; min-height: 44px; padding: 9px 11px;
   border: 1px solid var(--line, #d8e0e6); border-radius: 8px;
@@ -2236,9 +2229,46 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
 .pl-item-assigned-names { display: block; margin-top: 2px; overflow-wrap: anywhere; }
 .pl-item-notify { margin-top: 8px; min-height: 44px; width: 100%; }
 .pl-item-notify:disabled { opacity: 0.5; }
-@media (max-width: 620px) {
-  .pl-item-row { grid-template-columns: 1fr; }
-  .pl-item-thumb, .pl-item-thumb-placeholder { height: min(56vw, 280px); }
+
+/* Detail view: Assigned To row + small notify icon */
+.pl-detail-assign-row { display: flex; align-items: stretch; gap: 8px; }
+.pl-detail-assign-row .pl-item-assigned { flex: 1; }
+.pl-item-notify-icon {
+  flex: none; width: 44px; min-height: 44px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line, #d8e0e6); border-radius: 8px;
+  color: var(--brand, #175d8d); background: transparent; cursor: pointer;
+}
+.pl-item-notify-icon:disabled { opacity: 0.4; cursor: default; }
+.pl-item-notify-icon.is-busy { opacity: 0.55; }
+
+/* Detail view: inline priority select + small delete icon (bottom-left) */
+.pl-priority-select {
+  padding: 3px 8px;
+  border: 1px solid var(--line, #d8e0e6);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--card, #fff);
+  color: var(--ink, #17212b);
+  cursor: pointer;
+}
+.pl-detail-footer {
+  display: flex;
+  justify-content: flex-start;
+  padding: 8px 0 16px;
+}
+.pl-item-delete-icon {
+  width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line, #d8e0e6);
+  border-radius: 8px;
+  color: #ef4444;
+  background: transparent;
+  cursor: pointer;
 }
 
 /* Assignment multi-select bottom sheet */
