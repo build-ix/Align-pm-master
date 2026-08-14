@@ -1205,6 +1205,20 @@ app.get('/api/projects/:pid/companies', requireAuth, auth.requireProjectMember(d
   res.json({ companies: companies });
 });
 
+// Directory contacts (project members w/ company) — for the assignment picker.
+// NOTE: placed before the generic /api/projects/:pid/:cat/:rid route so it wins.
+app.get('/api/projects/:pid/directory/contacts', requireAuth, auth.requireProjectMember(dbGet), (req, res) => {
+  var rows = dbAll(`
+    SELECT u.id AS userId, u.name, u.email, up.company_id AS companyId, c.name AS companyName
+    FROM user_projects up
+    JOIN users u ON u.id = up.user_id
+    LEFT JOIN companies c ON c.id = up.company_id AND c.project_id = up.project_id
+    WHERE up.project_id = ? AND u.status = 'active'
+    ORDER BY COALESCE(c.name, ''), u.name COLLATE NOCASE
+  `, req.params.pid);
+  res.json({ contacts: rows });
+});
+
 // Create company (project admin only)
 app.post('/api/projects/:pid/companies', requireAuth, auth.requireProjectAdmin(dbGet), auth.requireRoom(dbGet, 'contacts', 'rw'), (req, res) => {
   var name = (req.body.name || '').trim();
@@ -2511,8 +2525,8 @@ const stmtInsertAssign   = _db.prepare(`
   ON CONFLICT (punch_item_id, user_id) DO NOTHING
 `);
 const stmtInsertNotif    = _db.prepare(`
-  INSERT INTO notifications (punch_item_id, recipient_email, subject, body)
-  VALUES (?, ?, ?, ?)
+  INSERT INTO notifications (punch_item_id, punchlist_list_id, notification_type, recipient_email, subject, body)
+  VALUES (?, ?, ?, ?, ?, ?)
 `);
 const stmtDeleteAssign   = _db.prepare(
   'DELETE FROM punchlist_assignments WHERE punch_item_id = ? AND user_id = ?'
@@ -2550,20 +2564,52 @@ const stmtDeleteLocation = _db.prepare(`
   WHERE punch_item_id = ? AND drawing_id = ? AND sheet_number = ?
 `);
 
-function queueAssignmentNotification(userId, punchItemId, assignedBy) {
+function enqueueNotification({ punchItemId, listId, type, recipientEmail, subject, body }) {
   try {
-    const user = stmtGetUser.get(userId);
-    if (!user || !user.email) return;
-    
-    const punchItem = stmtGetRecord.get(punchItemId);
-    const itemLabel = punchItem ? `#${punchItemId}` : 'item';
-    const subject = `Punch Item Assigned: ${itemLabel}`;
-    const body = `You've been assigned punch item ${itemLabel}. Please review and update status as needed.`;
-    
-    stmtInsertNotif.run(punchItemId, user.email, subject, body);
+    stmtInsertNotif.run(punchItemId || null, listId || null, type || 'item_manual', recipientEmail, subject, body);
   } catch (err) {
     console.error('[NOTIFY] Queue failed:', err.message);
   }
+}
+
+function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+// Resolve a punch item + its list + project names for notification copy.
+function getPunchItemContext(punchItemId) {
+  var item = dbGet("SELECT id, project_id, data FROM records WHERE id = ? AND category = 'punchlist'", punchItemId);
+  if (!item) return null;
+  var listId = null, listName = 'List';
+  try { var d = JSON.parse(item.data || '{}'); listId = d.listId || null; } catch (e) {}
+  if (listId) {
+    var list = dbGet('SELECT name FROM punchlist_lists WHERE id = ?', listId);
+    if (list) listName = list.name || 'List';
+  }
+  var project = dbGet('SELECT name FROM projects WHERE id = ?', item.project_id);
+  var parsed = {};
+  try { parsed = JSON.parse(item.data || '{}'); } catch (e) { parsed = {}; }
+  return {
+    itemId: punchItemId,
+    projectId: item.project_id,
+    projectName: project ? project.name : 'Project',
+    listId: listId,
+    listName: listName,
+    data: parsed
+  };
+}
+
+// Assignees (with emails) for a punch item, project-scoped via Directory membership.
+function getItemAssignees(punchItemId, projectId) {
+  return dbAll(`
+    SELECT pa.user_id, u.name, u.email
+    FROM punchlist_assignments pa
+    JOIN users u ON u.id = pa.user_id
+    WHERE pa.punch_item_id = ?
+      AND u.status = 'active'
+      AND EXISTS (SELECT 1 FROM user_projects up WHERE up.user_id = u.id AND up.project_id = ?)
+    ORDER BY u.name COLLATE NOCASE
+  `, punchItemId, projectId);
 }
 
 // GET /api/users?companyId=X
@@ -2601,10 +2647,7 @@ app.post('/api/punchlist/:id/assignments', (req, res) => {
     for (const uid of ids) {
       if (!stmtGetUser.get(uid)) throw Object.assign(new Error(`User ${uid} not found`), { status: 404 });
       const info = stmtInsertAssign.run(punchItemId, uid, assignedBy);
-      if (info.changes > 0) {
-        queueAssignmentNotification(uid, punchItemId, assignedBy);
-        created.push(uid);
-      }
+      if (info.changes > 0) created.push(uid);
     }
     return created;
   });
@@ -2620,8 +2663,8 @@ app.post('/api/punchlist/:id/assignments', (req, res) => {
 // DELETE /api/punchlist/:id/assignments/:userId
 app.delete('/api/punchlist/:id/assignments/:userId', (req, res) => {
   const punchItemId = req.params.id;
-  const userId = parseInt(req.params.userId, 10);
-  if (!punchItemId || Number.isNaN(userId)) {
+  const userId = req.params.userId;
+  if (!punchItemId || !userId) {
     return res.status(400).json({ error: 'Invalid id' });
   }
   const info = stmtDeleteAssign.run(punchItemId, userId);
@@ -2639,6 +2682,76 @@ app.get('/api/punchlist/:id/assignments', (req, res) => {
     return res.status(404).json({ error: 'Punch item not found' });
   }
   res.json(stmtListAssign.all(punchItemId));
+});
+
+// PUT /api/punchlist/:id/assignments — replace the full assignment set (no notify)
+app.put('/api/punchlist/:id/assignments', (req, res) => {
+  const punchItemId = req.params.id;
+  if (!punchItemId || typeof punchItemId !== 'string') return res.status(400).json({ error: 'Invalid punch item id' });
+  const { userIds, assignedBy } = req.body || {};
+  if (!Array.isArray(userIds)) return res.status(400).json({ error: 'userIds must be an array' });
+  const record = dbGet("SELECT id, project_id FROM records WHERE id = ? AND category = 'punchlist'", punchItemId);
+  if (!record) return res.status(404).json({ error: 'Punch item not found' });
+  const projectId = record.project_id;
+  const unique = Array.from(new Set(userIds.map(String)));
+  if (unique.length > 200) return res.status(400).json({ error: 'Too many assignees' });
+  for (const uid of unique) {
+    const ok = dbGet('SELECT 1 FROM user_projects WHERE user_id = ? AND project_id = ?', uid, projectId);
+    if (!ok) return res.status(400).json({ error: 'Assignee is not a member of this project' });
+  }
+  const replace = _db.transaction(() => {
+    const current = dbAll('SELECT user_id FROM punchlist_assignments WHERE punch_item_id = ?', punchItemId).map(r => r.user_id);
+    const requested = new Set(unique);
+    const removed = [];
+    for (const cur of current) {
+      if (!requested.has(cur)) { stmtDeleteAssign.run(punchItemId, cur); removed.push(cur); }
+    }
+    const added = [];
+    for (const uid of unique) {
+      const info = stmtInsertAssign.run(punchItemId, uid, assignedBy || null);
+      if (info.changes > 0) added.push(uid);
+    }
+    return { added, removed };
+  });
+  let result;
+  try { result = replace(); } catch (err) { return res.status(err.status || 500).json({ error: err.message }); }
+  res.json({ punchItemId, assignments: stmtListAssign.all(punchItemId), added: result.added, removed: result.removed });
+});
+
+// POST /api/punchlist/:id/notify — manually notify this item's assignees (manual only)
+app.post('/api/punchlist/:id/notify', (req, res) => {
+  const punchItemId = req.params.id;
+  if (!punchItemId || typeof punchItemId !== 'string') return res.status(400).json({ error: 'Invalid punch item id' });
+  const ctx = getPunchItemContext(punchItemId);
+  if (!ctx) return res.status(404).json({ error: 'Punch item not found' });
+  const assignees = getItemAssignees(punchItemId, ctx.projectId);
+  const recipients = [];
+  const skipped = [];
+  const seen = new Set();
+  assignees.forEach(function (a) {
+    const email = normalizeEmail(a.email);
+    if (!email) { skipped.push({ userId: a.user_id, name: a.name, reason: 'missing_email' }); return; }
+    if (seen.has(email)) return;
+    seen.add(email);
+    recipients.push({ userId: a.user_id, name: a.name, email: email });
+  });
+  if (recipients.length === 0) {
+    return res.status(422).json({ ok: false, code: 'NO_NOTIFIABLE_ASSIGNEES', message: 'This item has no assigned people with an email address.', queuedCount: 0, skipped: skipped });
+  }
+  const title = (ctx.data && ctx.data.title) || 'Item';
+  const subject = 'Punchlist notification: ' + title;
+  const body = 'You were notified about item "' + title + '" in list "' + ctx.listName + '".\n\n' +
+    'Project: ' + ctx.projectName + '\nList: ' + ctx.listName + '\nItem: ' + title + '\n' +
+    'Description: ' + ((ctx.data && ctx.data.description) || 'No description') + '\n' +
+    'Priority: ' + ((ctx.data && ctx.data.priority) || 'Not specified') + '\n\n' +
+    'Open Align PM to review.';
+  const enqueue = _db.transaction(() => {
+    recipients.forEach(function (r) {
+      enqueueNotification({ punchItemId: punchItemId, listId: ctx.listId, type: 'item_manual', recipientEmail: r.email, subject: subject, body: body });
+    });
+  });
+  try { enqueue(); } catch (err) { return res.status(500).json({ error: 'Failed to queue notifications' }); }
+  res.json({ ok: true, punchItemId: punchItemId, queuedCount: recipients.length, recipients: recipients, skipped: skipped });
 });
 
 // ── Phase 3: Drawing Integration ──

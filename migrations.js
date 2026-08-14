@@ -577,6 +577,47 @@ const MIGRATIONS = [
       safeAdd("ALTER TABLE punchlist_list_crops ADD COLUMN crop_render_meta TEXT");
       safeAdd("ALTER TABLE punchlist_list_crops ADD COLUMN crop_render_status TEXT NOT NULL DEFAULT 'missing'");
     }
+  },
+  {
+    version: 29,
+    name: 'notify_all_notifications',
+    up(db) {
+      // The notifications table is created by migrations/001_punchlist_assignments.sql
+      // (applied via migrate.js), which may or may not have run. Guard for that.
+      const has = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='notifications'").get();
+      if (!has) return;
+      const cols = db.prepare('PRAGMA table_info(notifications)').all().map(c => c.name);
+      if (!cols.includes('notification_type')) db.exec("ALTER TABLE notifications ADD COLUMN notification_type TEXT NOT NULL DEFAULT 'item_manual'");
+      if (!cols.includes('punchlist_list_id')) db.exec("ALTER TABLE notifications ADD COLUMN punchlist_list_id TEXT");
+      if (!cols.includes('attachment_file_id')) db.exec("ALTER TABLE notifications ADD COLUMN attachment_file_id TEXT");
+      // Make punch_item_id nullable so list-level (notify-all) rows can have no item.
+      const pk = db.prepare('PRAGMA table_info(notifications)').all().find(c => c.name === 'punch_item_id');
+      if (pk && pk.notnull === 1) {
+        db.exec(`
+          ALTER TABLE notifications RENAME TO notifications_old;
+          CREATE TABLE notifications (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            punch_item_id TEXT,
+            punchlist_list_id TEXT,
+            notification_type TEXT NOT NULL DEFAULT 'item_manual',
+            recipient_email TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            body TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            notify_attempts INTEGER NOT NULL DEFAULT 0,
+            notify_error TEXT,
+            sent_at TEXT,
+            attachment_file_id TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+          );
+          INSERT INTO notifications (id, punch_item_id, recipient_email, subject, body, status, notify_attempts, notify_error, sent_at, created_at)
+            SELECT id, punch_item_id, recipient_email, subject, body, status, notify_attempts, notify_error, sent_at, created_at FROM notifications_old;
+          DROP TABLE notifications_old;
+          CREATE INDEX idx_notif_pending ON notifications(status) WHERE status = 'pending';
+          CREATE INDEX idx_notif_created ON notifications(created_at);
+        `);
+      }
+    }
   }
 ];
 
