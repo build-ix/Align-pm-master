@@ -15,6 +15,7 @@
     viewMode: 'lists', // lists | list-form | list | item-form | detail | profile-edit
     items: [], allItems: [], listItems: {},
     listCrop: null,          // {configured, drawingId, sheetNumber, cropMode, vertices}
+    itemAssignments: {},     // { itemId: [{user_id, name, email}] } (batch-loaded)
     mapDrawings: [],         // drawings list for the map picker
     mapPickOpen: false,      // map picker overlay open
     mapPickStep: 'pick',     // 'pick' | 'choose-mode'
@@ -184,9 +185,11 @@
     if (state.viewMode === 'list') state.container.innerHTML = '<div class="pl-empty">Loading list…</div>';
     var itemsPromise = api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items'));
     var cropPromise = api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/crop')).catch(function () { return { configured: false }; });
-    Promise.all([itemsPromise, cropPromise]).then(function (results) {
+    var assignPromise = api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/assignments')).catch(function () { return { items: {} }; });
+    Promise.all([itemsPromise, cropPromise, assignPromise]).then(function (results) {
       state.items = results[0].items || [];
       state.listCrop = results[1] || { configured: false };
+      state.itemAssignments = (results[2] && results[2].items) || {};
       if (state.viewMode === 'list') { state.container.innerHTML = _listHtml(); }
       else if (state.viewMode === 'list-form') { state.container.innerHTML = _listFormHtml(); _bindListForm(); }
     }).catch(notifyError);
@@ -200,11 +203,30 @@
     else {
       h.push('<div class="pl-items">');
       state.items.forEach(function (item, index) {
-        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '"><div class="pl-item-info"><div class="pl-item-title">' + esc(item.title || 'Untitled') + '</div><div class="pl-item-meta">' + esc(item.location || '') + (item.trade ? ' • ' + esc(item.trade) : '') + ' • Item #' + String(index + 1).padStart(3, '0') + '</div></div><div class="pl-item-right"><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span></div></div>');
+        var assigns = state.itemAssignments[item.id] || [];
+        var assignedNames = assigns.length ? assigns.map(function (a) { return a.name; }).join(', ') : 'Unassigned';
+        h.push('<div class="pl-item-row" data-pl-item="' + esc(item.id) + '">' +
+          '<div class="pl-item-media">' + _itemThumbHtml(item) + '</div>' +
+          '<div class="pl-item-body">' +
+            '<div class="pl-item-head"><span class="pl-item-title">' + esc(item.title || 'Untitled') + '</span><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span></div>' +
+            '<div class="pl-item-num">Item #' + String(index + 1).padStart(3, '0') + '</div>' +
+            '<button type="button" class="pl-item-assigned" data-pl-act="assign-item" data-pl-id="' + esc(item.id) + '"><span class="pl-item-assigned-label">Assigned To:</span><span class="pl-item-assigned-names">' + esc(assignedNames) + '</span></button>' +
+            '<button type="button" class="pl-item-notify" data-pl-act="notify-item" data-pl-id="' + esc(item.id) + '"' + (assigns.length ? '' : ' disabled') + '>Notify Now</button>' +
+          '</div>' +
+        '</div>');
       });
       h.push('</div>');
     }
     h.push('</div>'); return h.join('');
+  }
+
+  function _itemThumbHtml(item) {
+    var img = null;
+    if (Array.isArray(item.images)) {
+      img = item.images.find(function (i) { return i && i.fileId && String(i.mimeType || '').indexOf('image/') === 0; });
+    }
+    if (img) return '<img class="pl-item-thumb" src="/api/files/' + esc(img.fileId) + '?thumb=1" alt="" loading="lazy" decoding="async">';
+    return '<div class="pl-item-thumb-placeholder">No photo</div>';
   }
 
   function _mapSectionHtml() {
@@ -345,11 +367,39 @@
     var action = event.target.closest('[data-pl-act]');
     if (action) {
       var act = action.getAttribute('data-pl-act');
-      if (act === 'set-map' || act === 'edit-map') { _openMapPicker(); }
+      if (act === 'set-map' || act === 'edit-map') { _openMapPicker(); return; }
+      if (act === 'assign-item') { _openAssignSheet(action.getAttribute('data-pl-id')); return; }
+      if (act === 'notify-item') { _notifyItem(action); return; }
       return;
     }
     var row = event.target.closest('[data-pl-item]');
     if (row) { state.detailItem = state.items.find(function (i) { return i.id === row.getAttribute('data-pl-item'); }) || null; if (state.detailItem) { state.viewMode = 'detail'; _paint(); } }
+  }
+
+  function _openAssignSheet(itemId) {
+    if (!window.PunchlistAssignments) { alert('Assignments module not available.'); return; }
+    window.PunchlistAssignments.openAssignmentSheet({
+      projectId: state.projectId,
+      punchItemId: itemId,
+      onSaved: function () { _loadListItems(); }
+    });
+  }
+
+  function _notifyItem(button) {
+    if (!window.PunchlistAssignments) { alert('Assignments module not available.'); return; }
+    var itemId = button.getAttribute('data-pl-id');
+    if (!itemId) return;
+    var orig = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Queuing…';
+    window.PunchlistAssignments.notifyItem(itemId).then(function () {
+      button.textContent = 'Queued';
+      setTimeout(function () { button.disabled = false; button.textContent = orig; }, 2500);
+    }).catch(function (err) {
+      alert('Notify failed: ' + err.message);
+      button.disabled = false;
+      button.textContent = orig;
+    });
   }
 
   function _onContainerClick(event) {

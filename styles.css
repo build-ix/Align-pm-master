@@ -2190,6 +2190,76 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   min-width: 120px;
 }
 
+/* Punchlist item row (thumbnail + Assigned To + Notify Now) */
+.pl-item-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 38%) 1fr;
+  gap: 14px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line, #d8e0e6);
+  background: var(--card, #fff);
+}
+.pl-item-media { min-width: 0; }
+.pl-item-thumb, .pl-item-thumb-placeholder {
+  display: block; width: 100%;
+  height: clamp(140px, 30vw, 220px);
+  border-radius: 8px;
+  background: #edf1f4;
+  object-fit: cover;
+}
+.pl-item-thumb-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  padding: 12px; color: var(--muted, #6b7280); text-align: center;
+}
+.pl-item-body { min-width: 0; }
+.pl-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.pl-item-title { font-weight: 700; overflow-wrap: anywhere; }
+.pl-item-num { color: var(--muted, #6b7280); font-size: 0.78rem; margin: 2px 0 10px; }
+.pl-item-assigned {
+  display: block; width: 100%; min-height: 44px; padding: 9px 11px;
+  border: 1px solid var(--line, #d8e0e6); border-radius: 8px;
+  color: var(--ink, #17212b); background: transparent; text-align: left;
+  cursor: pointer;
+}
+.pl-item-assigned-label { display: block; color: var(--muted, #6b7280); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.pl-item-assigned-names { display: block; margin-top: 2px; overflow-wrap: anywhere; }
+.pl-item-notify { margin-top: 8px; min-height: 44px; width: 100%; }
+.pl-item-notify:disabled { opacity: 0.5; }
+@media (max-width: 620px) {
+  .pl-item-row { grid-template-columns: 1fr; }
+  .pl-item-thumb, .pl-item-thumb-placeholder { height: min(56vw, 280px); }
+}
+
+/* Assignment multi-select bottom sheet */
+.assign-sheet { position: fixed; z-index: 1000; inset: 0; }
+.assign-sheet__backdrop { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: rgba(10,20,30,.48); }
+.assign-sheet__panel {
+  position: absolute; right: 0; bottom: 0; left: 0;
+  display: flex; flex-direction: column;
+  max-height: min(88dvh, 760px);
+  padding-bottom: env(safe-area-inset-bottom);
+  overflow: hidden;
+  border-radius: 16px 16px 0 0;
+  background: var(--card, #fff);
+  box-shadow: 0 -8px 30px rgba(0,0,0,.2);
+}
+.assign-sheet__header { display: grid; grid-template-columns: 80px 1fr 80px; align-items: center; min-height: 54px; padding: 0 8px; border-bottom: 1px solid var(--line, #d8e0e6); }
+.assign-sheet__header h2 { margin: 0; font-size: 1.05rem; text-align: center; }
+.assign-sheet__cancel, .assign-sheet__save { min-height: 44px; border: 0; color: var(--brand, #175d8d); background: transparent; font: inherit; cursor: pointer; }
+.assign-sheet__save { font-weight: 700; }
+.assign-sheet__search-wrap { padding: 10px 12px; }
+.assign-sheet__search { width: 100%; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line, #d8e0e6); border-radius: 8px; background: var(--bg, #fff); color: var(--ink, #17212b); font: inherit; }
+.assign-sheet__body { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
+.assign-sheet__loading, .assign-sheet__empty, .assign-sheet__error { display: block; padding: 20px; color: var(--muted, #6b7280); text-align: center; }
+.assign-group { margin-top: 12px; }
+.assign-group__title { margin: 0 0 6px; color: var(--muted, #6b7280); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.assign-option { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 6px; border-radius: 8px; cursor: pointer; }
+.assign-option:active { background: #f0f3f6; }
+.assign-option input[type=checkbox] { width: 20px; height: 20px; flex: none; }
+.assign-option__text { display: flex; flex-direction: column; min-width: 0; }
+.assign-option__name { overflow-wrap: anywhere; }
+.assign-option__meta { color: var(--muted, #6b7280); font-size: 0.78rem; }
+
 /* Teardrop map-pin marker (punchlist pin overlay) */
 .drawing-pin__svg {
   overflow: visible;

@@ -1970,6 +1970,24 @@ app.delete('/api/projects/:pid/punchlist-lists/:listId/crop', requireAuth, auth.
   res.status(204).end();
 });
 
+// GET /api/projects/:pid/punchlist-lists/:listId/assignments — batch assignments for all items in a list
+app.get('/api/projects/:pid/punchlist-lists/:listId/assignments', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'r'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  if (!getAuthorizedPunchlist(req, pid, listId)) {
+    return res.status(404).json({ error: 'List not found' });
+  }
+  var items = dbAll("SELECT id FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?", pid, listId);
+  var out = {};
+  items.forEach(function (it) {
+    out[it.id] = dbAll(
+      'SELECT pa.user_id, u.name, u.email FROM punchlist_assignments pa JOIN users u ON u.id = pa.user_id WHERE pa.punch_item_id = ? ORDER BY pa.assigned_at',
+      it.id
+    );
+  });
+  res.json({ items: out });
+});
+
 
 app.get('/api/projects/:pid/:cat', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
   const search = (req.query.search || '').toLowerCase().trim();
