@@ -1986,8 +1986,8 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/assignments', requireAuth, a
   var out = {};
   items.forEach(function (it) {
     out[it.id] = dbAll(
-      'SELECT pa.user_id, u.name, u.email FROM punchlist_assignments pa JOIN users u ON u.id = pa.user_id WHERE pa.punch_item_id = ? ORDER BY pa.assigned_at',
-      it.id
+      'SELECT pa.user_id, u.name, u.email, c.name AS company_name FROM punchlist_assignments pa JOIN users u ON u.id = pa.user_id LEFT JOIN user_projects up ON up.user_id = pa.user_id AND up.project_id = ? LEFT JOIN companies c ON c.id = up.company_id AND c.project_id = up.project_id WHERE pa.punch_item_id = ? ORDER BY pa.assigned_at',
+      pid, it.id
     );
   });
   res.json({ items: out });

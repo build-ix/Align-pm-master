@@ -248,11 +248,19 @@
     var isOpen = item.status !== 'completed';
     var rowClass = 'pl-item-row' + (isOpen ? ' pl-item-row--open pl-priority-' + priority : '');
     var assigns = state.itemAssignments[item.id] || [];
-    var assignedNames = assigns.map(function (a) { return a.name; }).filter(Boolean).join(', ');
+    var byCompany = {};
+    assigns.forEach(function (a) {
+      var c = a.company_name || '';
+      (byCompany[c] = byCompany[c] || []).push(a.name);
+    });
+    var assignedNames = Object.keys(byCompany).map(function (c) {
+      var names = byCompany[c].filter(Boolean).join(', ');
+      return c ? (c + ': ' + names) : names;
+    }).join(' · ');
     return '<div class="' + rowClass + '" data-pl-item="' + esc(item.id) + '">' +
       '<div class="pl-item-head"><div class="pl-item-left"><span class="pl-item-num">#' + String(index + 1).padStart(2, '0') + '</span><span class="pl-item-title">' + esc(item.title || 'Untitled') + '</span></div><span class="pl-item-status" style="background:' + statusColor(item.status) + '">' + statusLabel(item.status) + '</span></div>' +
-      (item.description ? '<div class="pl-item-row-desc">' + esc(item.description) + '</div>' : '') +
-      (assignedNames ? '<div class="pl-item-row-assigned"><span class="pl-item-row-assigned-label">Assigned to:</span> ' + esc(assignedNames) + '</div>' : '') +
+      '<div class="pl-item-row-desc">' + (item.description ? esc(item.description) : '') + '</div>' +
+      '<div class="pl-item-row-assigned">' + (assignedNames ? '<span class="pl-item-row-assigned-label">Assigned to:</span> ' + esc(assignedNames) : '') + '</div>' +
     '</div>';
   }
 
