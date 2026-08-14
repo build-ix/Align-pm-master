@@ -1842,13 +1842,20 @@
   }
 
   /* ── List-map mode: crop authoring + pin placement (driven from Punchlist) ── */
+  var _mvPinOverlaySubscribed = false;
   function _mvInitPinOverlay() {
     var canvas = document.getElementById('dr-mv-canvas');
     if (!canvas || !_mv || !window.PinOverlay) return;
     try {
-      window.PinOverlay.init(canvas, _mv.drawingId);
+      var stage = document.getElementById('dr-mv-stage');
+      var overlayHost = (stage && stage.parentElement) ? stage.parentElement : canvas.parentElement;
+      window.PinOverlay.init(canvas, _mv.drawingId, overlayHost);
       if (_mv._pdfDoc) window.PinOverlay.updateSheet(Math.max(0, (_mv._pdfPageNum || 1) - 1));
-      _mvSyncPinOverlaySize();
+      if (!_mvPinOverlaySubscribed) {
+        _mvPinOverlaySubscribed = true;
+        _mvOnTransformChanged(function () { if (window.PinOverlay) window.PinOverlay.updateTransform(); });
+      }
+      window.PinOverlay.updateTransform();
     } catch (e) {
       console.warn('[AlignDrawings] Pin overlay init failed:', e);
     }
