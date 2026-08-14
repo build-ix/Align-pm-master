@@ -2554,7 +2554,7 @@
       _cropTool.pointerDown(e.clientX, e.clientY);
       return;
     }
-    if (_mv.mode === 'list-pin') {
+    if (_mv.mode === 'list-pin' || _mv.mode === 'list-layout') {
       e.preventDefault();
       _mvPinDown = { x: e.clientX, y: e.clientY, moved: false, lastX: e.clientX, lastY: e.clientY };
       return;
@@ -2625,7 +2625,7 @@
       _cropTool.pointerMove(e.clientX, e.clientY);
       return;
     }
-    if (_mv.mode === 'list-pin') {
+    if (_mv.mode === 'list-pin' || _mv.mode === 'list-layout') {
       if (_mvPinDown) {
         var pdx = e.clientX - _mvPinDown.x, pdy = e.clientY - _mvPinDown.y;
         if (!_mvPinDown.moved && Math.sqrt(pdx * pdx + pdy * pdy) > 10) {
@@ -2675,9 +2675,9 @@
       _cropTool.pointerUp(e.clientX, e.clientY);
       return;
     }
-    if (_mv.mode === 'list-pin') {
+    if (_mv.mode === 'list-pin' || _mv.mode === 'list-layout') {
       if (_mvPinDown) {
-        if (!_mvPinDown.moved) {
+        if (!_mvPinDown.moved && _mv.mode === 'list-pin') {
           _mvPlacePin(e.clientX, e.clientY);
         }
         _mvPinDown = null;
