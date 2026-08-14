@@ -97,8 +97,7 @@
       state.chrome.setHeader({
         title: state.activeList.name || 'List', backLabel: 'All Lists',
         actions: [
-          { id: 'pl-edit-list', label: 'Edit List', variant: 'secondary', onClick: function () { state.editingList = JSON.parse(JSON.stringify(state.activeList)); state.viewMode = 'list-form'; _paint(); } },
-          { id: 'pl-add-item', label: '+ Add Item', variant: 'primary', onClick: function () { state.editingItem = {}; state.viewMode = 'item-form'; _paint(); } }
+          { id: 'pl-edit-list', label: 'Edit List', variant: 'secondary', onClick: function () { state.editingList = JSON.parse(JSON.stringify(state.activeList)); state.viewMode = 'list-form'; _paint(); } }
         ]
       });
     } else if (view === 'detail' && state.detailItem) {
@@ -197,6 +196,11 @@
   function _listHtml() {
     var list = state.activeList, h = [];
     h.push('<div class="pl-wrap">');
+    h.push('<div class="pl-list-toolbar">' +
+      '<button type="button" class="pm-btn primary" data-pl-act="add-item">+ Add Item</button>' +
+      '<button type="button" class="pm-btn" data-pl-act="notify-all">Notify All</button>' +
+      '<button type="button" class="pm-btn" data-pl-act="export-pdf">Export PDF</button>' +
+    '</div>');
     if (list.apartment_label) h.push('<div class="pl-detail-section">Apartment: <strong>' + esc(list.apartment_label) + '</strong></div>');
     if (list.description) h.push('<div class="pl-detail-section pl-detail-desc">' + esc(list.description) + '</div>');
     if (!state.items.length) h.push('<div class="pl-empty">No items yet.</div>');
@@ -370,6 +374,9 @@
       if (act === 'set-map' || act === 'edit-map') { _openMapPicker(); return; }
       if (act === 'assign-item') { _openAssignSheet(action.getAttribute('data-pl-id')); return; }
       if (act === 'notify-item') { _notifyItem(action); return; }
+      if (act === 'add-item') { _addItem(); return; }
+      if (act === 'notify-all') { _notifyAllList(action); return; }
+      if (act === 'export-pdf') { _exportListPdf(action); return; }
       return;
     }
     var row = event.target.closest('[data-pl-item]');
@@ -400,6 +407,49 @@
       button.disabled = false;
       button.textContent = orig;
     });
+  }
+
+  function _addItem() {
+    state.editingItem = {};
+    state.viewMode = 'item-form';
+    _paint();
+  }
+
+  function _exportListPdf(button) {
+    var orig = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Generating…';
+    api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/export'), { method: 'POST', body: JSON.stringify({}) })
+      .then(function (data) {
+        button.disabled = false;
+        button.textContent = orig;
+        if (data && data.file && data.file.url) window.open(data.file.url, '_blank');
+        else alert('Export ready.');
+      })
+      .catch(function (err) {
+        button.disabled = false;
+        button.textContent = orig;
+        alert('Export failed: ' + (err && err.message ? err.message : err));
+      });
+  }
+
+  function _notifyAllList(button) {
+    if (!confirm('Send one email (with a filtered PDF) to every contact assigned to an item in this list?')) return;
+    var orig = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Preparing…';
+    api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/notify-all'), { method: 'POST', body: JSON.stringify({}) })
+      .then(function (data) {
+        button.disabled = false;
+        button.textContent = orig;
+        var skipped = data.skipped ? data.skipped.length : 0;
+        alert('Queued ' + (data.queuedCount || 0) + ' notification(s)' + (skipped ? ' (' + skipped + ' skipped — no email)' : '') + '.');
+      })
+      .catch(function (err) {
+        button.disabled = false;
+        button.textContent = orig;
+        alert('Notify failed: ' + (err && err.message ? err.message : err));
+      });
   }
 
   function _onContainerClick(event) {

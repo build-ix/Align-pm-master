@@ -18,6 +18,7 @@ const multer = require('multer');
 const sharp = require('sharp');
 const rateLimit = require('express-rate-limit');
 const { renderPunchlistCrop } = require('./punchlist-crop-renderer');
+const { generatePunchlistPdf } = require('./punchlist-export-service');
 const cookieParser = require('cookie-parser');
 const Database = require('better-sqlite3');
 const nodemailer = require('nodemailer');
@@ -1988,6 +1989,126 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/assignments', requireAuth, a
   res.json({ items: out });
 });
 
+// POST /api/projects/:pid/punchlist-lists/:listId/export — generate a PDF of the list (optionally filtered to one user)
+app.post('/api/projects/:pid/punchlist-lists/:listId/export', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'r'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  if (!getAuthorizedPunchlist(req, pid, listId)) return res.status(404).json({ error: 'List not found' });
+  var list = dbGet('SELECT name FROM punchlist_lists WHERE id = ?', listId);
+  var filterUserId = req.body && req.body.userId ? String(req.body.userId) : null;
+
+  var genDir = path.join(UPLOADS_DIR, 'generated', 'punchlist-exports');
+  fs.mkdirSync(genDir, { recursive: true });
+  var fileId = uid();
+  var filename = fileId + '.pdf';
+  var finalPath = path.join(genDir, filename);
+
+  generatePunchlistPdf({ db: _db, projectId: pid, listId: listId, filterUserId: filterUserId, uploadsDir: UPLOADS_DIR, outputPath: finalPath })
+    .then(function (result) {
+      var size = fs.statSync(finalPath).size;
+      var ts = nowISO();
+      var safeName = (list ? list.name : 'punchlist').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'punchlist';
+      var originalName = safeName.toLowerCase() + (filterUserId ? '-filtered' : '') + '-punchlist.pdf';
+      dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        fileId, pid, null, 'punchlist-export', filename, originalName, 'application/pdf', size, finalPath, ts, (req.user && req.user.id) || 'system', JSON.stringify({ kind: 'punchlist-export', listId: listId, filterUserId: filterUserId }));
+      res.json({ ok: true, file: { id: fileId, name: originalName, mimeType: 'application/pdf', size: size, url: '/api/files/' + fileId }, itemCount: result.itemCount, filteredForUserId: filterUserId });
+    })
+    .catch(function (err) {
+      console.error('[PUNCHLIST] Export failed:', err);
+      try { fs.rmSync(finalPath, { force: true }); } catch (e) {}
+      res.status(500).json({ error: 'Export failed: ' + (err && err.message ? err.message : 'unknown error') });
+    });
+});
+
+// POST /api/projects/:pid/punchlist-lists/:listId/notify-all — one email per assignee + filtered PDF
+app.post('/api/projects/:pid/punchlist-lists/:listId/notify-all', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'punchlist', 'rw'), (req, res) => {
+  var pid = req.params.pid;
+  var listId = req.params.listId;
+  if (!getAuthorizedPunchlist(req, pid, listId)) return res.status(404).json({ error: 'List not found' });
+  var list = dbGet('SELECT name FROM punchlist_lists WHERE id = ?', listId);
+  var project = dbGet('SELECT name FROM projects WHERE id = ?', pid);
+
+  var items = dbAll("SELECT id, data FROM records WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ? ORDER BY created_at ASC, id ASC", pid, listId);
+  var itemIds = items.map(function (r) { return r.id; });
+  if (!itemIds.length) return res.status(422).json({ ok: false, code: 'NO_ASSIGNEES', message: 'This list has no items.', queuedCount: 0, recipients: [], skipped: [] });
+
+  var placeholders = itemIds.map(function () { return '?'; }).join(',');
+  var assignRows = dbAll(
+    'SELECT pa.punch_item_id, pa.user_id, u.name, u.email FROM punchlist_assignments pa JOIN users u ON u.id = pa.user_id WHERE pa.punch_item_id IN (' + placeholders + ') AND u.status = ? ORDER BY u.name COLLATE NOCASE',
+    ...itemIds, 'active'
+  );
+
+  var recipients = [];
+  var byEmail = {};
+  var skipped = [];
+  var seenSkipped = {};
+  assignRows.forEach(function (a) {
+    var email = normalizeEmail(a.email);
+    if (!email) {
+      if (!seenSkipped[a.user_id]) { seenSkipped[a.user_id] = true; skipped.push({ userId: a.user_id, name: a.name, reason: 'missing_email' }); }
+      return;
+    }
+    if (!byEmail[email]) { byEmail[email] = { userId: a.user_id, name: a.name, email: email, itemIds: [] }; recipients.push(byEmail[email]); }
+    if (byEmail[email].itemIds.indexOf(a.punch_item_id) === -1) byEmail[email].itemIds.push(a.punch_item_id);
+  });
+
+  if (!recipients.length) {
+    return res.status(422).json({ ok: false, code: 'NO_NOTIFIABLE_ASSIGNEES', message: 'No assigned people have an email address.', queuedCount: 0, recipients: [], skipped: skipped });
+  }
+
+  var genDir = path.join(UPLOADS_DIR, 'generated', 'punchlist-exports');
+  fs.mkdirSync(genDir, { recursive: true });
+  var safeName = (list ? list.name : 'punchlist').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-') || 'punchlist';
+  var senderName = (req.user && req.user.name) || 'Align PM';
+
+  function generateRecipient(r) {
+    var fileId = uid();
+    var filename = fileId + '.pdf';
+    var finalPath = path.join(genDir, filename);
+    return generatePunchlistPdf({ db: _db, projectId: pid, listId: listId, filterUserId: r.userId, uploadsDir: UPLOADS_DIR, outputPath: finalPath })
+      .then(function (result) {
+        var size = fs.statSync(finalPath).size;
+        var ts = nowISO();
+        dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          fileId, pid, null, 'punchlist-export', filename, safeName.toLowerCase() + '-filtered-punchlist.pdf', 'application/pdf', size, finalPath, ts, (req.user && req.user.id) || 'system', JSON.stringify({ kind: 'punchlist-export', listId: listId, filterUserId: r.userId }));
+        return { recipient: r, fileId: fileId, itemCount: result.itemCount };
+      });
+  }
+
+  // Bounded concurrency (2 at a time).
+  var idx = 0;
+  var generated = [];
+  function worker() {
+    if (idx >= recipients.length) return Promise.resolve();
+    var r = recipients[idx++];
+    return generateRecipient(r).then(function (g) { generated.push(g); return worker(); });
+  }
+
+  Promise.all([worker(), worker()]).then(function () {
+    var queued = 0;
+    generated.forEach(function (g) {
+      var r = g.recipient;
+      var subject = 'Punchlist items for you: ' + (list ? list.name : 'List');
+      var body = senderName + ' sent you the punchlist items assigned to you.\n\n' +
+        'Project: ' + (project ? project.name : 'Project') + '\n' +
+        'List: ' + (list ? list.name : 'List') + '\n\n' +
+        'Your assigned items: ' + r.itemIds.length + ' item(s)\n\n' +
+        'A filtered PDF is attached — it contains the location map and the punch items assigned to you.\n\n' +
+        'Open Align PM to review.';
+      enqueueNotification({ listId: listId, type: 'list_notify_all', recipientEmail: r.email, subject: subject, body: body, attachmentFileId: g.fileId });
+      queued++;
+    });
+    res.json({
+      ok: true, listId: listId, queuedCount: queued, generatedPdfCount: generated.length,
+      recipients: recipients.map(function (r) { return { userId: r.userId, name: r.name, email: r.email, itemCount: r.itemIds.length }; }),
+      skipped: skipped
+    });
+  }).catch(function (err) {
+    console.error('[PUNCHLIST] Notify-all failed:', err);
+    res.status(500).json({ error: 'Notify-all failed: ' + (err && err.message ? err.message : 'unknown error') });
+  });
+});
+
 
 app.get('/api/projects/:pid/:cat', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoomFromParams(dbGet, 'r'), (req, res) => {
   const search = (req.query.search || '').toLowerCase().trim();
@@ -2543,8 +2664,8 @@ const stmtInsertAssign   = _db.prepare(`
   ON CONFLICT (punch_item_id, user_id) DO NOTHING
 `);
 const stmtInsertNotif    = _db.prepare(`
-  INSERT INTO notifications (punch_item_id, punchlist_list_id, notification_type, recipient_email, subject, body)
-  VALUES (?, ?, ?, ?, ?, ?)
+  INSERT INTO notifications (punch_item_id, punchlist_list_id, notification_type, recipient_email, subject, body, attachment_file_id)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
 const stmtDeleteAssign   = _db.prepare(
   'DELETE FROM punchlist_assignments WHERE punch_item_id = ? AND user_id = ?'
@@ -2582,9 +2703,9 @@ const stmtDeleteLocation = _db.prepare(`
   WHERE punch_item_id = ? AND drawing_id = ? AND sheet_number = ?
 `);
 
-function enqueueNotification({ punchItemId, listId, type, recipientEmail, subject, body }) {
+function enqueueNotification({ punchItemId, listId, type, recipientEmail, subject, body, attachmentFileId }) {
   try {
-    stmtInsertNotif.run(punchItemId || null, listId || null, type || 'item_manual', recipientEmail, subject, body);
+    stmtInsertNotif.run(punchItemId || null, listId || null, type || 'item_manual', recipientEmail, subject, body, attachmentFileId || null);
   } catch (err) {
     console.error('[NOTIFY] Queue failed:', err.message);
   }

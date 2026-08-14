@@ -26,7 +26,7 @@ function initMailer() {
   return transporter;
 }
 
-async function sendEmail(to, subject, text) {
+async function sendEmail(to, subject, text, attachments) {
   const mailer = initMailer();
   const fromEmail = process.env.FROM_EMAIL || 'noreply@alignprojects.net';
   
@@ -35,7 +35,8 @@ async function sendEmail(to, subject, text) {
       from: fromEmail,
       to,
       subject,
-      text
+      text,
+      attachments: attachments || []
     });
     return { success: true, info };
   } catch (err) {

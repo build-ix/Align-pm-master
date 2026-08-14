@@ -2190,6 +2190,17 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   min-width: 120px;
 }
 
+/* Punchlist list toolbar (Add Item / Notify All / Export PDF) */
+.pl-list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line, #d8e0e6);
+  margin-bottom: 12px;
+}
+.pl-list-toolbar .pm-btn { min-height: 44px; }
+
 /* Punchlist item row (thumbnail + Assigned To + Notify Now) */
 .pl-item-row {
   display: grid;
