@@ -181,13 +181,14 @@
 
   function _loadListItems() {
     _renderHeader();
-    state.container.innerHTML = '<div class="pl-empty">Loading list…</div>';
+    if (state.viewMode === 'list') state.container.innerHTML = '<div class="pl-empty">Loading list…</div>';
     var itemsPromise = api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/items'));
     var cropPromise = api(projectPath('/' + encodeURIComponent(state.activeList.id) + '/crop')).catch(function () { return { configured: false }; });
     Promise.all([itemsPromise, cropPromise]).then(function (results) {
       state.items = results[0].items || [];
       state.listCrop = results[1] || { configured: false };
       if (state.viewMode === 'list') { state.container.innerHTML = _listHtml(); }
+      else if (state.viewMode === 'list-form') { state.container.innerHTML = _listFormHtml(); _bindListForm(); }
     }).catch(notifyError);
   }
   function _listHtml() {
@@ -195,7 +196,6 @@
     h.push('<div class="pl-wrap">');
     if (list.apartment_label) h.push('<div class="pl-detail-section">Apartment: <strong>' + esc(list.apartment_label) + '</strong></div>');
     if (list.description) h.push('<div class="pl-detail-section pl-detail-desc">' + esc(list.description) + '</div>');
-    h.push(_mapSectionHtml());
     if (!state.items.length) h.push('<div class="pl-empty">No items yet.</div>');
     else {
       h.push('<div class="pl-items">');
@@ -355,6 +355,7 @@
   function _onContainerClick(event) {
     if (state.viewMode === 'lists') { _handleListsClick(event); return; }
     if (state.viewMode === 'list') { _handleListClick(event); return; }
+    if (state.viewMode === 'list-form') { _handleListClick(event); return; }
     if (state.viewMode === 'detail') { _handleDetailClick(event); return; }
   }
 
@@ -396,7 +397,9 @@
     var list = state.editingList || {};
     var privacy = list.privacy === 'public' ? 'public' : 'private';
     var deleteBtn = list.id ? '<button class="pm-btn danger" id="pl-list-form-delete" type="button">Delete List</button>' : '';
-    return '<form id="pl-list-form" class="pl-form-wrap pl-list-form"><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div>' + (deleteBtn ? '<div class="pl-form-footer">' + deleteBtn + '</div>' : '') + '</form>';
+    // Location map is managed from the Edit List menu (existing lists only).
+    var mapSection = list.id ? _mapSectionHtml() : '';
+    return '<form id="pl-list-form" class="pl-form-wrap pl-list-form"><div class="pl-form-section"><label class="pl-field-label" for="pl-list-name">Name</label><input class="pl-input" id="pl-list-name" value="' + esc(list.name) + '" maxlength="120" required></div><div class="pl-form-section"><span class="pl-field-label">Privacy</span><div class="pl-privacy-options" role="radiogroup" aria-label="Privacy"><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="private"' + (privacy === 'private' ? ' checked' : '') + '> <span>Private</span></label><label class="pl-privacy-option"><input type="radio" name="pl-list-privacy" value="public"' + (privacy === 'public' ? ' checked' : '') + '> <span>Public</span></label></div></div>' + mapSection + (deleteBtn ? '<div class="pl-form-footer">' + deleteBtn + '</div>' : '') + '</form>';
   }
   function _bindListForm() {
     var form = document.getElementById('pl-list-form');
