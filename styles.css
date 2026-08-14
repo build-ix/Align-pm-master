@@ -1953,13 +1953,9 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   margin-left: auto;
 }
 
-/* Punchlist item rows — grid layout with non-shrinking status+actions */
+/* Punchlist item rows — block layout (head stacks above description + assigned) */
 .pl-item-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 12px;
-
+  display: block;
   min-width: 0;
   padding: 12px 14px;
   border: 1px solid var(--line);
@@ -1968,7 +1964,6 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   transition: border-color 0.15s;
   touch-action: manipulation;
   box-sizing: border-box;
-
   overflow: hidden;
 }
 
@@ -2219,6 +2214,7 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
 .pl-item-num { flex: none; color: var(--muted, #6b7280); font-size: 0.8rem; font-weight: 700; }
 .pl-item-row-desc {
   margin-top: 6px;
+  min-height: 2.7em;
   font-size: 0.8rem;
   color: var(--muted, #6b7280);
   line-height: 1.35;
@@ -2230,6 +2226,7 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
 }
 .pl-item-row-assigned {
   margin-top: 6px;
+  min-height: 1.35em;
   font-size: 0.78rem;
   color: var(--ink, #17212b);
   overflow-wrap: anywhere;
