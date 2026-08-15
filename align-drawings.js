@@ -1524,6 +1524,7 @@
       overlayHost: div,
       projectId: pid,
       drawingId: did,
+      sourceDrawingId: (modeArgs && modeArgs.drawingId) || did,
       strokes: [],
       undoStack: [],
       redoStack: [],
@@ -1737,6 +1738,7 @@
             overlayHost: div,
             projectId: pid,
             drawingId: did,
+            sourceDrawingId: (modeArgs && modeArgs.drawingId) || did,
             strokes: [],
             undoStack: [],
             redoStack: [],
@@ -1849,7 +1851,7 @@
     try {
       var stage = document.getElementById('dr-mv-stage');
       var overlayHost = (stage && stage.parentElement) ? stage.parentElement : canvas.parentElement;
-      window.PinOverlay.init(canvas, _mv.drawingId, overlayHost);
+      window.PinOverlay.init(canvas, _mv.sourceDrawingId || _mv.drawingId, overlayHost);
       if (_mv._pdfDoc) window.PinOverlay.updateSheet(Math.max(0, (_mv._pdfPageNum || 1) - 1));
       if (!_mvPinOverlaySubscribed) {
         _mvPinOverlaySubscribed = true;
