@@ -71,110 +71,28 @@ function parseEpsBoundingBox(epsBuffer) {
   return { llx, lly, urx, ury, width: urx - llx, height: ury - lly };
 }
 
-// ── PDF source → vector single-page PDF ────────────────────────────────
+// ── PDF source → raster PNG (pdftoppm applies /Rotate, full page, top-left origin) ──
 async function renderPdfCrop({ drawingFilePath, sheetNumber, vertices, listName, outputPath }) {
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'align-map-'));
-  const epsPath = path.join(workDir, 'source-page.eps');
-  const wrapperPath = path.join(workDir, 'wrapper.ps');
-
+  const pdfPage = (Number(sheetNumber) || 0) + 1; // 0-based sheet -> 1-based page
+  const pngBase = path.join(workDir, 'page');
   try {
-    const pdfPage = (Number(sheetNumber) || 0) + 1; // 0-based sheet -> 1-based page
-
-    await execFileAsync('/usr/bin/pdftocairo', [
+    // Rasterize the full page. pdftoppm honors /Rotate and emits a top-left-origin
+    // PNG whose aspect ratio matches the client's pdf.js viewport (e.g. 1.5 for
+    // this 1728x2592 /Rotate-270 page -> 2592x1728). This keeps the server's crop
+    // coordinate space identical to the client's normalized (0..1) coords.
+    await execFileAsync('/usr/bin/pdftoppm', [
       '-f', String(pdfPage), '-l', String(pdfPage),
-      '-eps', drawingFilePath, epsPath
-    ], { timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
+      '-singlefile', '-r', '200', '-png',
+      drawingFilePath, pngBase
+    ], { timeout: 180000, maxBuffer: 8 * 1024 * 1024 });
 
-    const epsBuffer = fs.readFileSync(epsPath);
-    const epsBox = parseEpsBoundingBox(epsBuffer);
+    const pngPath = pngBase + '.png';
+    if (!fs.existsSync(pngPath)) throw new Error('pdftoppm produced no raster');
 
-    // Normalized polygon (top-left origin, like pdf.js) -> EPS coords (bottom-left).
-    const leftN = Math.min(...vertices.map(p => p.x));
-    const rightN = Math.max(...vertices.map(p => p.x));
-    const topN = Math.min(...vertices.map(p => p.y));
-    const bottomN = Math.max(...vertices.map(p => p.y));
-
-    const cropLeft = epsBox.llx + leftN * epsBox.width;
-    const cropBottom = epsBox.lly + (1 - bottomN) * epsBox.height;
-    const cropWidth = (rightN - leftN) * epsBox.width;
-    const cropHeight = (bottomN - topN) * epsBox.height;
-
-    if (cropWidth < MIN_CROP_SIDE || cropHeight < MIN_CROP_SIDE) {
-      throw new Error('Crop area is too small');
-    }
-
-    // Local polygon (relative to crop bbox, bottom-left origin).
-    const localPolygon = vertices.map(p => ({
-      x: (epsBox.llx + p.x * epsBox.width) - cropLeft,
-      y: (epsBox.lly + (1 - p.y) * epsBox.height) - cropBottom
-    }));
-
-    const outputWidth = cropWidth;
-    const outputHeight = cropHeight + HEADER_HEIGHT;
-
-    const prefix = `%!PS-Adobe-3.0
-%%Pages: 1
-%%BoundingBox: 0 0 ${Math.ceil(outputWidth)} ${Math.ceil(outputHeight)}
-<< /PageSize [${psNumber(outputWidth)} ${psNumber(outputHeight)}] >> setpagedevice
-/finalshowpage /showpage load def
-/showpage {} bind def
-gsave
-  1 1 1 setrgbcolor
-  0 0 ${psNumber(outputWidth)} ${psNumber(outputHeight)} rectfill
-grestore
-gsave
-  ${polygonPath(localPolygon)}
-  clip
-  newpath
-  ${psNumber(-cropLeft)} ${psNumber(-cropBottom)} translate
-`;
-
-    const suffix = `
-grestore
-gsave
-  1 1 1 setrgbcolor
-  0 ${psNumber(cropHeight)} ${psNumber(outputWidth)} ${psNumber(HEADER_HEIGHT)} rectfill
-grestore
-gsave
-  0.72 setgray
-  0.5 setlinewidth
-  newpath
-  0 ${psNumber(cropHeight)} moveto
-  ${psNumber(outputWidth)} ${psNumber(cropHeight)} lineto
-  stroke
-grestore
-gsave
-  0 setgray
-  /Helvetica-Bold findfont ${HEADER_FONT_SIZE} scalefont setfont
-  12 ${psNumber(cropHeight + 16)} moveto
-  ${psHexString(listName || '')} show
-grestore
-finalshowpage
-%%EOF
-`;
-
-    await fs.promises.writeFile(wrapperPath, Buffer.concat([
-      Buffer.from(prefix, 'ascii'), epsBuffer, Buffer.from(suffix, 'ascii')
-    ]));
-
-    await execFileAsync('/usr/bin/gs', [
-      '-q', '-dBATCH', '-dNOPAUSE', '-dSAFER',
-      '-sDEVICE=pdfwrite', '-dCompatibilityLevel=1.7', '-dAutoRotatePages=/None',
-      '-dEmbedAllFonts=true', '-dSubsetFonts=true',
-      '-sOutputFile=' + outputPath,
-      wrapperPath
-    ], { timeout: 120000, maxBuffer: 4 * 1024 * 1024 });
-
-    const st = fs.statSync(outputPath);
-    if (st.size === 0) throw new Error('Generated PDF is empty');
-
-    return {
-      mimeType: 'application/pdf',
-      sheetWidth: epsBox.width,
-      sheetHeight: epsBox.height,
-      bbox: { x: leftN * epsBox.width, y: topN * epsBox.height, width: cropWidth, height: cropHeight },
-      document: { width: outputWidth, height: outputHeight, drawingLeft: 0, drawingTop: HEADER_HEIGHT }
-    };
+    // Reuse the raster crop path (extract + polygon mask + white header).
+    // Must await so the temp dir (holding the raster) survives until it finishes.
+    return await renderImageCrop({ drawingFilePath: pngPath, vertices, listName, outputPath });
   } finally {
     fs.rmSync(workDir, { recursive: true, force: true });
   }

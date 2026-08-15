@@ -1799,9 +1799,9 @@ async function renderAndStoreCropImage(pid, drawingId, sheetNumber, vertices, li
   const genDir = path.join(UPLOADS_DIR, 'generated', 'punchlist-crops');
   fs.mkdirSync(genDir, { recursive: true });
   const fileId = uid();
-  // PDF sources produce a vector PDF; image sources produce a PNG.
-  const ext = drawing.mime_type === 'application/pdf' ? 'pdf' : 'png';
-  const finalPath = path.join(genDir, fileId + '.' + ext);
+  // Both PDF and image sources now produce a raster PNG crop document.
+  const ext = 'png';
+  const finalPath = path.join(genDir, fileId + '.png');
 
   let meta;
   try {
