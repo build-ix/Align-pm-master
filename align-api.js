@@ -828,6 +828,26 @@
     if (el) { el.textContent = ''; el.classList.remove('visible'); }
   }
 
+  // v2: generic password Show/Hide toggles (login, card view, create admin, setup)
+  function _bindPasswordToggles(scope) {
+    if (!scope || !scope.querySelectorAll) return;
+    Array.prototype.forEach.call(scope.querySelectorAll('.auth-pw-toggle'), function (btn) {
+      if (btn.__alignBound) return; // avoid double-binding
+      btn.__alignBound = true;
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var wrap = btn.closest ? btn.closest('.auth-pw-wrap') : null;
+        var inp = wrap ? wrap.querySelector('input') : null;
+        if (!inp) return;
+        var reveal = inp.type === 'password';
+        inp.type = reveal ? 'text' : 'password';
+        btn.textContent = reveal ? 'Hide' : 'Show';
+        btn.setAttribute('aria-label', reveal ? 'Hide password' : 'Show password');
+        inp.focus();
+      });
+    });
+  }
+
   /* ── Setup page (invite accept) ─────────────────────────────────── */
 
   function _renderSetupPage(token, authInstance) {
@@ -835,23 +855,38 @@
     overlay.id = 'align-auth-overlay';
     overlay.className = 'auth-overlay';
     overlay.innerHTML = '<div class="auth-container">' +
-      '<div class="auth-brand">' +
-        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
-        '<h1 class="auth-title">Set Up Your Account</h1>' +
-        '<p class="auth-subtitle">Choose a username and create a password</p>' +
-      '</div>' +
-      '<div class="auth-create-form">' +
-        '<label class="auth-input-label">Username</label>' +
-        '<input class="auth-input" id="setup-username" type="text" placeholder="e.g. johnsmith" autocomplete="username" />' +
-        '<p class="auth-input-hint" id="setup-username-hint"></p>' +
-        '<label class="auth-input-label">Create a password (min 8 characters)</label>' +
-        '<input class="auth-input" id="setup-pin" type="password" placeholder="Password" minlength="8" autocomplete="new-password" />' +
-        '<input class="auth-input" id="setup-pin-confirm" type="password" placeholder="Confirm password" minlength="8" autocomplete="new-password" />' +
-        '<p class="auth-pin-error" id="setup-error"></p>' +
-        '<button class="auth-btn primary" id="setup-submit">Create Account</button>' +
+      '<div class="auth-card">' +
+        '<div class="auth-brand">' +
+          '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+          '<p class="auth-subtitle">Choose a username and create a password</p>' +
+        '</div>' +
+        '<div class="auth-create-form">' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="setup-username">Username</label>' +
+            '<input class="auth-input" id="setup-username" type="text" placeholder="e.g. johnsmith" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" />' +
+            '<p class="auth-input-hint" id="setup-username-hint"></p>' +
+          '</div>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="setup-pin">Create a password</label>' +
+            '<div class="auth-pw-wrap">' +
+              '<input class="auth-input" id="setup-pin" type="password" placeholder="Min 8 characters" minlength="8" autocomplete="new-password" />' +
+              '<button type="button" class="auth-pw-toggle" tabindex="-1" aria-label="Show password">Show</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="setup-pin-confirm">Confirm password</label>' +
+            '<div class="auth-pw-wrap">' +
+              '<input class="auth-input" id="setup-pin-confirm" type="password" placeholder="Min 8 characters" minlength="8" autocomplete="new-password" />' +
+              '<button type="button" class="auth-pw-toggle" tabindex="-1" aria-label="Show password">Show</button>' +
+            '</div>' +
+          '</div>' +
+          '<p class="auth-pin-error" id="setup-error"></p>' +
+          '<button class="auth-signin-btn" id="setup-submit">Create Account</button>' +
+        '</div>' +
       '</div>' +
     '</div>';
     document.body.appendChild(overlay);
+    _bindPasswordToggles(overlay);
 
     // Pre-fill username suggestion from invite info
     var inviteUser = null;
@@ -889,25 +924,41 @@
 
   function _renderCreateAdminHTML() {
     return '<div class="auth-container">' +
-      '<div class="auth-brand">' +
-        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
-        '<p class="auth-subtitle">Welcome! Create your admin account to get started.</p>' +
-      '</div>' +
-      '<div class="auth-create-form" id="auth-create-form">' +
-        '<div class="auth-form-row">' +
-          '<input class="auth-input" id="auth-first" type="text" placeholder="First name" autocomplete="given-name" />' +
-          '<input class="auth-input" id="auth-last" type="text" placeholder="Last name" autocomplete="family-name" />' +
+      '<div class="auth-card">' +
+        '<div class="auth-brand">' +
+          '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+          '<p class="auth-subtitle">Create your admin account to get started</p>' +
         '</div>' +
-        '<input class="auth-input" id="auth-email" type="email" placeholder="Email address" autocomplete="email" />' +
-        '<div class="auth-form-row">' +
-          '<input class="auth-input" id="auth-pin" type="password" placeholder="Create a password (min 8 chars)" minlength="8" autocomplete="new-password" />' +
-          '<input class="auth-input" id="auth-pin-confirm" type="password" placeholder="Confirm password" minlength="8" autocomplete="new-password" />' +
+        '<div class="auth-create-form" id="auth-create-form">' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-first">First name</label>' +
+            '<input class="auth-input" id="auth-first" type="text" placeholder="First name" autocomplete="given-name" />' +
+          '</div>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-last">Last name</label>' +
+            '<input class="auth-input" id="auth-last" type="text" placeholder="Last name" autocomplete="family-name" />' +
+          '</div>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-email">Email address</label>' +
+            '<input class="auth-input" id="auth-email" type="email" placeholder="Email address" autocomplete="email" />' +
+          '</div>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-pin">Create a password</label>' +
+            '<div class="auth-pw-wrap">' +
+              '<input class="auth-input" id="auth-pin" type="password" placeholder="Min 8 characters" minlength="8" autocomplete="new-password" />' +
+              '<button type="button" class="auth-pw-toggle" tabindex="-1" aria-label="Show password">Show</button>' +
+            '</div>' +
+          '</div>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-pin-confirm">Confirm password</label>' +
+            '<div class="auth-pw-wrap">' +
+              '<input class="auth-input" id="auth-pin-confirm" type="password" placeholder="Min 8 characters" minlength="8" autocomplete="new-password" />' +
+              '<button type="button" class="auth-pw-toggle" tabindex="-1" aria-label="Show password">Show</button>' +
+            '</div>' +
+          '</div>' +
+          '<button class="auth-signin-btn" id="auth-create-submit">Create Admin Account</button>' +
+          '<p class="auth-pin-error" id="auth-create-error"></p>' +
         '</div>' +
-        '<button class="auth-btn primary" id="auth-create-submit">Create Admin Account</button>' +
-        '<p class="auth-pin-error" id="auth-create-error"></p>' +
-        '<p style="font-size:0.75rem;color:var(--muted);text-align:center;margin-top:4px;">' +
-          'This password will be used to sign in. Keep it safe.' +
-        '</p>' +
       '</div>' +
     '</div>';
   }
@@ -940,34 +991,48 @@
     var displayName = u.name || (u.firstName + ' ' + (u.lastName || ''));
 
     return '<div class="auth-container">' +
-      '<div class="auth-brand">' +
-        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
-        '<p class="auth-subtitle">Welcome back</p>' +
-      '</div>' +
-      '<div class="auth-card-view" id="auth-card-view">' +
-        '<div class="auth-user-card" id="auth-returning-card" data-uid="' + _esc(u.id) + '" data-username="' + _esc(u.username || u.email) + '" data-role="' + _esc(u.role) + '">' +
-          '<div class="auth-user-avatar' + cls + '">' + _esc(initials) + '</div>' +
-          '<div class="auth-user-info">' +
-            '<div class="auth-user-name">' + _esc(displayName) + '</div>' +
-            '<div class="auth-user-email">@' + _esc(label) + '</div>' +
-            '<span class="auth-user-role ' + u.role + '">' + u.role + '</span>' +
+      '<div class="auth-card">' +
+        '<div class="auth-brand">' +
+          '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+          '<p class="auth-subtitle">Welcome back</p>' +
+        '</div>' +
+        '<div class="auth-card-view" id="auth-card-view">' +
+          '<div class="auth-user-card" id="auth-returning-card" data-uid="' + _esc(u.id) + '" data-username="' + _esc(u.username || u.email) + '" data-role="' + _esc(u.role) + '">' +
+            '<div class="auth-user-avatar' + cls + '">' + _esc(initials) + '</div>' +
+            '<div class="auth-user-info">' +
+              '<div class="auth-user-name">' + _esc(displayName) + '</div>' +
+              '<div class="auth-user-email">@' + _esc(label) + '</div>' +
+              '<span class="auth-user-role ' + u.role + '">' + u.role + '</span>' +
+            '</div>' +
           '</div>' +
+          '<div class="auth-card-pin" id="auth-card-pin" style="display:none;">' +
+            '<p class="auth-pin-label">Enter password for <strong>' + _esc(displayName) + '</strong></p>' +
+            '<div class="auth-pw-wrap" style="margin-bottom:0.75rem;">' +
+              '<input class="auth-input" id="auth-card-password" type="password" placeholder="Password" autocomplete="current-password" />' +
+              '<button type="button" class="auth-pw-toggle" tabindex="-1" aria-label="Show password">Show</button>' +
+            '</div>' +
+            '<p class="auth-pin-error" id="auth-card-pin-error"></p>' +
+            '<button class="auth-signin-btn" id="auth-card-pin-submit">Sign in</button>' +
+          '</div>' +
+          '<button class="auth-manual-toggle" id="auth-not-you-btn">Not you?</button>' +
         '</div>' +
-        '<div class="auth-card-pin" id="auth-card-pin" style="display:none;">' +
-          '<p class="auth-pin-label">Enter password for <strong>' + _esc(displayName) + '</strong></p>' +
-          '<input class="auth-input" id="auth-card-password" type="password" placeholder="Password" autocomplete="current-password" style="margin-bottom:0.75rem;" />' +
-          '<p class="auth-pin-error" id="auth-card-pin-error"></p>' +
-          '<button class="auth-signin-btn" id="auth-card-pin-submit">Sign In</button>' +
+        // Hidden login form — shown when "Not you?" is clicked
+        '<div class="auth-login-form" id="auth-login-form" style="display:none;">' +
+          '<button class="auth-pin-back" id="auth-login-back">← Back</button>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-login-username">Username</label>' +
+            '<input class="auth-input" id="auth-login-username" type="text" placeholder="Username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" />' +
+          '</div>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-login-password">Password</label>' +
+            '<div class="auth-pw-wrap">' +
+              '<input class="auth-input" id="auth-login-password" type="password" placeholder="Password" autocomplete="current-password" />' +
+              '<button type="button" class="auth-pw-toggle" tabindex="-1" aria-label="Show password">Show</button>' +
+            '</div>' +
+          '</div>' +
+          '<p class="auth-pin-error" id="auth-login-error"></p>' +
+          '<button class="auth-signin-btn" id="auth-login-submit">Sign in</button>' +
         '</div>' +
-        '<button class="auth-manual-toggle" id="auth-not-you-btn">Not you?</button>' +
-      '</div>' +
-      // Hidden login form — shown when "Not you?" is clicked
-      '<div class="auth-login-form" id="auth-login-form" style="display:none;">' +
-        '<button class="auth-pin-back" id="auth-login-back">← Back</button>' +
-        '<input class="auth-input" id="auth-login-username" type="text" placeholder="Username" autocomplete="username" />' +
-        '<input class="auth-input" id="auth-login-password" type="password" placeholder="Password" autocomplete="current-password" style="margin-bottom:0.75rem;" />' +
-        '<p class="auth-pin-error" id="auth-login-error"></p>' +
-        '<button class="auth-signin-btn" id="auth-login-submit">Sign In</button>' +
       '</div>' +
     '</div>';
   }
@@ -975,31 +1040,45 @@
   function _renderLoginFormHTML() {
     // Clean login form (no cards) — first visit or after "Not you?" from card view
     return '<div class="auth-container">' +
-      '<div class="auth-brand">' +
-        '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
-        '<p class="auth-subtitle">Sign in to continue</p>' +
+      '<div class="auth-card">' +
+        '<div class="auth-brand">' +
+          '<div class="auth-logo-wrap"><img class="auth-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align" /><img class="auth-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align" /></div>' +
+          '<p class="auth-subtitle">Sign in to your project</p>' +
+        '</div>' +
+        '<div class="auth-login-form" id="auth-login-form">' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-login-username">Username</label>' +
+            '<input class="auth-input" id="auth-login-username" type="text" placeholder="Username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" />' +
+          '</div>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-login-password">Password</label>' +
+            '<div class="auth-pw-wrap">' +
+              '<input class="auth-input" id="auth-login-password" type="password" placeholder="Password" autocomplete="current-password" />' +
+              '<button type="button" class="auth-pw-toggle" tabindex="-1" aria-label="Show password">Show</button>' +
+            '</div>' +
+          '</div>' +
+          '<p class="auth-pin-error" id="auth-login-error"></p>' +
+          '<button class="auth-signin-btn" id="auth-login-submit">Sign in</button>' +
+        '</div>' +
+        // Hidden invite code form
+        '<div class="auth-invite-form" id="auth-invite-form" style="display:none;">' +
+          '<button class="auth-pin-back" id="auth-invite-back">← Back to sign in</button>' +
+          '<div class="auth-field">' +
+            '<label class="auth-label" for="auth-invite-code">Invite code</label>' +
+            '<input class="auth-input" id="auth-invite-code" type="text" placeholder="Invite code (e.g. ABCDEFGH)" maxlength="8" autocomplete="off" style="text-transform:uppercase;letter-spacing:3px;text-align:center;font-size:1.25rem;" />' +
+          '</div>' +
+          '<p class="auth-pin-error" id="auth-invite-error"></p>' +
+          '<button class="auth-signin-btn" id="auth-invite-submit">Continue</button>' +
+        '</div>' +
       '</div>' +
-      '<div class="auth-login-form" id="auth-login-form">' +
-        '<input class="auth-input" id="auth-login-username" type="text" placeholder="Username" autocomplete="username" />' +
-        '<input class="auth-input" id="auth-login-password" type="password" placeholder="Password" autocomplete="current-password" style="margin-bottom:0.75rem;" />' +
-        '<p class="auth-pin-error" id="auth-login-error"></p>' +
-        '<button class="auth-signin-btn" id="auth-login-submit">Sign In</button>' +
-        '<p class="auth-alt-action">' +
-          'New to Align? <a href="#" id="auth-show-invite">I have an invite code</a>' +
-        '</p>' +
-      '</div>' +
-      // Hidden invite code form
-      '<div class="auth-invite-form" id="auth-invite-form" style="display:none;">' +
-        '<button class="auth-pin-back" id="auth-invite-back">← Back to sign in</button>' +
-        '<p class="auth-subtitle" style="margin-bottom:1rem;">Enter the 8-character code from your invite email.</p>' +
-        '<input class="auth-input" id="auth-invite-code" type="text" placeholder="Invite code (e.g. ABCDEFGH)" maxlength="8" autocomplete="off" style="text-transform:uppercase;letter-spacing:3px;text-align:center;font-size:1.25rem;" />' +
-        '<p class="auth-pin-error" id="auth-invite-error"></p>' +
-        '<button class="auth-signin-btn" id="auth-invite-submit">Continue</button>' +
-      '</div>' +
+      '<p class="auth-footer" id="auth-footer">New to Align? <a href="#" id="auth-show-invite">Enter invite code</a></p>' +
     '</div>';
   }
 
   function _bindAuthEventsAPI(overlay, users, authInstance) {
+    // v2: wire password Show/Hide toggles for any form rendered in this overlay
+    _bindPasswordToggles(overlay);
+
     // ── Create admin form ──────────────────────────────────────────────
     var createForm = document.getElementById('auth-create-form');
     if (createForm) {
@@ -1172,6 +1251,7 @@
         e.preventDefault();
         loginForm.style.display = 'none';
         inviteForm.style.display = 'block';
+        var f = overlay.querySelector('#auth-footer'); if (f) f.style.display = 'none';
         if (inviteCodeInput) { inviteCodeInput.value = ''; inviteCodeInput.focus(); }
       });
     }
@@ -1180,6 +1260,7 @@
       inviteBackBtn.addEventListener('click', function() {
         inviteForm.style.display = 'none';
         loginForm.style.display = 'flex';
+        var f = overlay.querySelector('#auth-footer'); if (f) f.style.display = '';
         if (loginUsername) loginUsername.focus();
       });
     }
