@@ -2214,3 +2214,18 @@ html[data-theme="light"] #ct-form input, html[data-theme="light"] #ct-form selec
 #ct-perms-section{ background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:12px; padding:12px; }
 html[data-theme="light"] #ct-perms-section{ background:#f8fafc; border-color:rgba(14,27,44,0.08); }
 #ct-perms-section input[type="checkbox"]{ accent-color:#e8641b; width:auto; height:auto; }
+
+/* --- Company ribbon: name on line 1, chip/edit/count on line 2 (Fable review) --- */
+.ct-ribbon{
+  gap: 6px 10px;
+  padding-bottom: 12px !important;
+}
+.ct-ribbon-name{
+  flex: 0 0 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.3;
+}
+.ct-ribbon-count{ color: var(--align-muted, #9aabba); }
+html[data-theme="light"] .ct-ribbon-count{ color: #475569; }
+.ct-ribbon-count:nth-child(2){ margin-left: 0; }
