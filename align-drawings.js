@@ -1087,13 +1087,9 @@
 
         h.push('<div class="dwg-card' + selClass + '" data-file-id="' + esc(d.id) + '" data-cat="' + catCode + '">');
         h.push('<div class="dr-card-check" data-check-id="' + esc(d.id) + '"></div>');
-        if (isImage) {
-          h.push('<div class="dwg-thumb">');
-          h.push('<img src="/api/files/' + encodeURIComponent(d.id) + '?thumb=1" alt="' + esc(d.name) + '" loading="lazy" onerror="this.style.display=\'none\'">');
-        } else {
-          h.push('<div class="dwg-thumb dwg-thumb-icon">');
-          h.push('<span class="dwg-icon">' + icon + '</span>');
-        }
+        h.push('<div class="dwg-thumb">');
+        h.push('<span class="dwg-icon">' + icon + '</span>');
+        h.push('<img src="/api/files/' + encodeURIComponent(d.id) + '?thumb=1" alt="' + esc(d.name) + '" loading="lazy" onerror="this.style.display=\'none\'">');
         if (cat) {
           h.push('<span class="dwg-tag"><span class="dwg-dot" data-cat="' + cat.code + '"></span>' + esc(cat.label) + '</span>');
         }
