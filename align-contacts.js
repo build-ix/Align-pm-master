@@ -3,11 +3,13 @@
 var A=function(){return g.AlignAuth;};
 var S=function(){return g.AlignStorage;};
 
-var state={container:null,chrome:null,projectId:null,search:'',viewMode:'list',editingContact:null,
+var state={container:null,chrome:null,projectId:null,search:'',tradeFilter:'',viewMode:'list',editingContact:null,
            companies:[],users:[],loaded:false,newCompanyName:''};
 
 function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function nowISO(){return new Date().toISOString();}
+function _initials(name){var p=String(name==null?'':name).trim().split(/\s+/);var a=p.length?(p[0].charAt(0)||''):'';var b=p.length>1?(p[p.length-1].charAt(0)||''):'';var s=(a+b).toUpperCase();return s||'?';}
+function _avatarColor(name){var pal=['#e8641b','#2f6fb0','#3d8f6f','#8a5fb0','#b0642f','#4a6b8a'];var s=String(name==null?'':name);var h=0;for(var i=0;i<s.length;i++){h=(h*31+s.charCodeAt(i))>>>0;}return pal[h%pal.length];}
 function isAdmin(){try{var u=A()&&A().getActiveUser?A().getActiveUser():null;return u&&u.role==='admin';}catch(e){return false;}}
 
 /* ── Data fetching ─────────────────────────────────────────────────── */
@@ -31,7 +33,7 @@ function _loadData(){
 }
 
 /* ── Public render ─────────────────────────────────────────────────── */
-function render(c, chrome){if(!c)return;state.container=c;state.chrome=chrome||null;state.projectId=null;state.search='';state.viewMode='list';state.editingContact=null;state.companies=[];state.users=[];state.loaded=false;state.newCompanyName='';_resolvePid();
+function render(c, chrome){if(!c)return;state.container=c;state.chrome=chrome||null;state.projectId=null;state.search='';state.tradeFilter='';state.viewMode='list';state.editingContact=null;state.companies=[];state.users=[];state.loaded=false;state.newCompanyName='';_resolvePid();
   if(!state.projectId){
     // Project not ready yet — retry after a short delay
     c.innerHTML='<div class="ct-empty">Loading directory…</div>';
@@ -90,78 +92,93 @@ function handleBack(){
 function _listHtml(){
   var companies=state.companies;
   var users=state.users;
-  var s=state.search.toLowerCase();
-  if(s){
-    users=users.filter(function(u){return(u.name||'').toLowerCase().indexOf(s)>-1||(u.role||'').toLowerCase().indexOf(s)>-1||(u.email||'').toLowerCase().indexOf(s)>-1;});
-    companies=companies.filter(function(c){return(c.name||'').toLowerCase().indexOf(s)>-1||(c.trade||'').toLowerCase().indexOf(s)>-1;});
-  }
+  var s=(state.search||'').toLowerCase();
+  var tf=state.tradeFilter||'';
 
-  // Build company lookup by id
   var companyById={};
   companies.forEach(function(c){companyById[c.id]=c;});
 
-  var h=[];
-  h.push('<div class="ct-wrap"><div class="ct-header">');
-  h.push('<input type="search" class="ct-search" id="ct-search" placeholder="Search name, company, role..." value="'+esc(state.search)+'">');
-  h.push('</div>');
+  // Filter contacts by search + trade
+  var fUsers=users.filter(function(u){
+    var co=companyById[u.company_id];
+    if(tf&&(!co||(co.trade||'')!==tf))return false;
+    if(s){
+      var hay=(u.name||'')+' '+(u.role||'')+' '+(u.email||'')+' '+(co?co.name:'')+' '+(co?(co.trade||''):'');
+      if(hay.toLowerCase().indexOf(s)===-1)return false;
+    }
+    return true;
+  });
 
-  var total=users.length;
-  h.push('<div class="ct-count">'+total+' contact'+(total!==1?'s':'')+'</div>');
+  // Filter companies (for standalone rendering)
+  var fCompanies=companies.filter(function(c){
+    if(tf&&(c.trade||'')!==tf)return false;
+    if(s){var hay=(c.name||'')+' '+(c.trade||'');if(hay.toLowerCase().indexOf(s)===-1)return false;}
+    return true;
+  });
+
+  // Distinct trades for chips (from all companies)
+  var trades=[];
+  companies.forEach(function(c){if(c.trade&&trades.indexOf(c.trade)===-1)trades.push(c.trade);});
+
+  var h=[];
+  h.push('<div class="ct-wrap">');
+  h.push('<div class="ct-header"><input type="search" class="ct-search" id="ct-search" placeholder="Search people, companies, trades…" value="'+esc(state.search)+'"></div>');
+  h.push('<div class="ct-count">'+fUsers.length+' contact'+(fUsers.length!==1?'s':'')+' · '+companies.length+' compan'+(companies.length!==1?'ies':'y')+'</div>');
+
+  if(trades.length){
+    h.push('<div class="ct-trades">');
+    h.push('<button type="button" class="ct-trade-chip'+(tf?'':' active')+'" data-trade="">All</button>');
+    trades.forEach(function(t){h.push('<button type="button" class="ct-trade-chip'+(tf===t?' active':'')+'" data-trade="'+esc(t)+'">'+esc(t)+'</button>');});
+    h.push('</div>');
+  }
 
   if(!companies.length&&!users.length){
     if(isAdmin()){
-      h.push('<div class="ct-empty"><strong>No companies yet</strong><p>Add a company first, then add users.</p></div>');
+      h.push('<div class="ct-empty"><div class="ico">👥</div><h3>Your directory is empty</h3><p>Add a company or a contact to start building your project directory.</p><button type="button" class="ct-add-first" data-ct-add="user">＋ Add contact</button></div>');
     }else{
-      h.push('<div class="ct-empty"><strong>No contacts yet</strong><p>No users or companies have been added to this project.</p></div>');
+      h.push('<div class="ct-empty"><div class="ico">👥</div><h3>No contacts yet</h3><p>No users or companies have been added to this project.</p></div>');
     }
+  }else if(!fUsers.length&&!fCompanies.length){
+    h.push('<div class="ct-empty"><div class="ico">🔎</div><h3>No matches'+(s?' for "'+esc(state.search)+'"':'')+'</h3><p>Try a different name, company, or trade.</p><button type="button" class="ct-clear-search">Clear search</button></div>');
   }else{
-    // Group users by company_id
     var grouped={};
-    users.forEach(function(u){
+    fUsers.forEach(function(u){
       var key=u.company_id||'none';
       if(!grouped[key])grouped[key]=[];
       grouped[key].push(u);
     });
-
-    // Sort company keys by company name
     var keys=Object.keys(grouped).sort(function(a,b){
       var na=companyById[a]?companyById[a].name:(a==='none'?'Unassigned':a);
       var nb=companyById[b]?companyById[b].name:(b==='none'?'Unassigned':b);
       return na.localeCompare(nb);
     });
-
     keys.forEach(function(key){
       var group=grouped[key];
       var co=companyById[key];
       var displayName=co?co.name:(key==='none'?'Unassigned':key);
-      h.push('<div class="ct-group">');
-      h.push('<div class="ct-ribbon">');
+      var isUnassigned=!co;
+      h.push('<div class="ct-ribbon'+(isUnassigned?' ct-unassigned':'')+'">');
       h.push('<span class="ct-ribbon-name">'+esc(displayName)+'</span>');
-      h.push('<span class="ct-ribbon-right">');
-      if(co && co.trade) h.push('<span class="ct-ribbon-trade">'+esc(co.trade)+'</span>');
-      h.push('<button class="ct-ribbon-edit" data-coid="'+esc(key)+'">Edit</button>');
-      h.push('<span class="ct-ribbon-count">'+group.length+'</span>');
-      h.push('</span>');
+      if(co&&co.trade)h.push('<span class="ct-ribbon-trade">'+esc(co.trade)+'</span>');
+      if(co)h.push('<button class="ct-ribbon-edit" data-coid="'+esc(key)+'">Edit</button>');
+      h.push('<span class="ct-ribbon-count">'+group.length+(group.length===1?' person':' people')+'</span>');
       h.push('</div>');
+      h.push('<div class="ct-grid">');
       group.forEach(function(ct){h.push(_userCard(ct));});
       h.push('</div>');
     });
 
-    // Render standalone companies (no users)
     var seenIds={};
     keys.forEach(function(k){seenIds[k]=true;});
-    companies.forEach(function(co){
+    fCompanies.forEach(function(co){
       if(!seenIds[co.id]){
-        h.push('<div class="ct-group">');
         h.push('<div class="ct-ribbon">');
         h.push('<span class="ct-ribbon-name">'+esc(co.name)+'</span>');
-        h.push('<span class="ct-ribbon-right">');
-        if(co.trade) h.push('<span class="ct-ribbon-trade">'+esc(co.trade)+'</span>');
+        if(co.trade)h.push('<span class="ct-ribbon-trade">'+esc(co.trade)+'</span>');
         h.push('<button class="ct-ribbon-edit" data-coid="'+esc(co.id)+'">Edit</button>');
-        h.push('<span class="ct-ribbon-count">0</span>');
-        h.push('</span>');
+        h.push('<span class="ct-ribbon-count">No contacts</span>');
         h.push('</div>');
-        h.push('</div>');
+        h.push('<div class="ct-empty-co">No people at this company yet.</div>');
       }
     });
   }
@@ -171,24 +188,20 @@ function _listHtml(){
 
 function _userCard(ct){
   var admin=isAdmin();
-  var h='';
-  h+='<div class="ac-card" data-user-id="'+esc(ct.id)+'">';
-  h+='<div class="ac-card-header">';
-  h+='<span class="ac-username">'+esc(ct.name||'Unnamed')+'</span>';
-  h+='<button class="ac-key-btn" title="Permissions" data-uid="'+esc(ct.id)+'">🔑</button>';
-  h+='</div>';
-  h+='<div class="ac-card-dropdown" hidden>';
-  if(ct.email)h+='<p class="ac-email"><a href="mailto:'+esc(ct.email)+'">'+esc(ct.email)+'</a></p>';
-  if(ct.phone)h+='<p class="ac-phone"><a href="tel:'+esc(ct.phone)+'">'+esc(ct.phone)+'</a></p>';
-  if(admin){
-    h+='<div class="ac-actions">';
-    h+='<span class="ac-link ac-edit" data-uid="'+esc(ct.id)+'">Edit</span>';
-    h+='<span class="ac-link ac-delete" data-uid="'+esc(ct.id)+'">Delete</span>';
-    h+='</div>';
-  }
-  h+='</div>';
-  h+='</div>';
-  return h;
+  var role=[ct.role, ct.project_role].filter(Boolean).map(esc).join(' · ');
+  var tel=ct.phone?'tel:'+String(ct.phone).replace(/[^\d+]/g,''):'';
+  var call=ct.phone?'<a class="ac-call" href="'+tel+'">📞 <span>'+esc(ct.phone)+'</span></a>':'<a class="ac-none" href="#">No phone</a>';
+  var mail=ct.email?'<a class="ac-mail" href="mailto:'+esc(ct.email)+'">✉️ <span>'+esc(ct.email)+'</span></a>':'<a class="ac-none" href="#">No email</a>';
+  var tools='<button class="ac-perms" data-uid="'+esc(ct.id)+'" title="Room permissions">🔑</button>';
+  if(admin){tools+='<button class="ac-link ac-edit" data-uid="'+esc(ct.id)+'">Edit</button><button class="ac-link ac-delete" data-uid="'+esc(ct.id)+'">Delete</button>';}
+  return '<div class="ac-card" data-user-id="'+esc(ct.id)+'">'
+    +'<div class="ac-top">'
+    +'<div class="ac-avatar" style="background:'+_avatarColor(ct.name)+'">'+_initials(ct.name)+'</div>'
+    +'<div class="ac-id"><div class="ac-name">'+esc(ct.name||'Unnamed')+'</div>'+(role?'<div class="ac-role">'+role+'</div>':'')+'</div>'
+    +'<div class="ac-tools">'+tools+'</div>'
+    +'</div>'
+    +'<div class="ac-actions">'+call+mail+'</div>'
+    +'</div>';
 }
 
 function _bindList(){
@@ -200,6 +213,13 @@ function _bindList(){
 
   var wrap=document.querySelector('.ct-wrap');
   if(wrap)wrap.addEventListener('click',function(e){
+    // Trade chip filter
+    var chip = e.target.closest('.ct-trade-chip');
+    if (chip) { state.tradeFilter = chip.getAttribute('data-trade') || ''; _paint(); return; }
+    // Empty-state add contact
+    if (e.target.closest('.ct-add-first')) { _newUser(); return; }
+    // Clear search
+    if (e.target.closest('.ct-clear-search')) { state.search=''; state.tradeFilter=''; var _s=document.getElementById('ct-search'); if(_s)_s.value=''; _paint(); return; }
     // Company ribbon edit button
     var coEdit = e.target.closest('.ct-ribbon-edit');
     if (coEdit) {
@@ -214,7 +234,7 @@ function _bindList(){
     }
 
     // Key button → individual permissions
-    var keyBtn = e.target.closest('.ac-key-btn');
+    var keyBtn = e.target.closest('.ac-perms');
     if (keyBtn) {
       e.stopPropagation();
       var uid = keyBtn.getAttribute('data-uid');
@@ -243,18 +263,6 @@ function _bindList(){
         _api('/api/people/' + did, { method: 'DELETE' }).then(_loadData).catch(function(e){ alert(e.message); });
       }
       return;
-    }
-
-    // Card click → toggle dropdown
-    var card = e.target.closest('.ac-card');
-    if (card) {
-      var dd = card.querySelector('.ac-card-dropdown');
-      if (!dd) return;
-      var isOpen = !dd.hidden;
-      // Close all others
-      document.querySelectorAll('.ac-card-dropdown').forEach(function(d){ d.hidden = true; });
-      document.querySelectorAll('.ac-card').forEach(function(c){ c.classList.remove('ac-open'); });
-      if (!isOpen) { dd.hidden = false; card.classList.add('ac-open'); }
     }
   });
 }
