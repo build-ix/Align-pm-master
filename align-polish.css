@@ -1289,3 +1289,6 @@ html[data-theme="light"] .auth-card .auth-input:-webkit-autofill:focus {
     animation: none !important;
   }
 }
+
+/* --- Bottom nav: only inside a project, never on project-select --- */
+body.ps-open #bottom-nav { display: none !important; }
