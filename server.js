@@ -1258,6 +1258,8 @@ app.put('/api/projects/:pid/companies/:cid', requireAuth, auth.requireProjectAdm
 app.delete('/api/projects/:pid/companies/:cid', requireAuth, auth.requireProjectAdmin(dbGet), auth.requireRoom(dbGet, 'contacts', 'rw'), (req, res) => {
   var company = dbGet('SELECT * FROM companies WHERE id = ? AND project_id = ?', req.params.cid, req.params.pid);
   if (!company) return res.status(404).json({ error: 'Company not found' });
+  // Unassign this company's users (they are NOT deleted) — for both soft- and hard-delete
+  dbRun('UPDATE user_projects SET company_id = NULL WHERE project_id = ? AND company_id = ?', req.params.pid, req.params.cid);
   // Check if any punchlist items reference this company
   var inUse = dbGet("SELECT COUNT(*) as n FROM records WHERE project_id = ? AND category = 'punchlist' AND pl_company = ?",
     req.params.pid, req.params.cid);

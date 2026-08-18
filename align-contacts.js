@@ -57,10 +57,15 @@ function _renderHeader(){
   if(!state.chrome||!state.chrome.setHeader)return;
   if(state.viewMode==='form'&&state.editingContact){
     var ct=state.editingContact,isCompany=ct.mode==='company';
+    var formActions=[];
+    if(ct.id && !(ct.mode==='user' && ct.role==='admin')){
+      formActions.push({id:'ct-delete',label:'Delete',variant:'danger',type:'button',onClick:_deleteContact});
+    }
+    formActions.push({id:'ct-save',label:'Save',variant:'primary',type:'submit',form:'ct-form'});
     state.chrome.setHeader({
       title:(ct.id?'Edit ':'New ')+(isCompany?'Company':'User'),
       backLabel:'Back to Directory',
-      actions:[{id:'ct-save',label:'Save',variant:'primary',type:'submit',form:'ct-form'}]
+      actions:formActions
     });
   }else{
     var actions=[];
@@ -86,6 +91,32 @@ function _newUser(){
 function handleBack(){
   if(state.viewMode==='form'){state.viewMode='list';state.editingContact=null;_paint();return true;}
   return false;
+}
+function _deleteContact(){
+  var ct=state.editingContact;
+  if(!ct||!ct.id)return;
+  var isCompany=(ct.mode==='company');
+  var displayName=ct.name||(isCompany?'this company':'this user');
+  var msg=isCompany
+    ?'Delete "'+displayName+'"? Its users will become unassigned (they will not be deleted).'
+    :'Remove "'+displayName+'"?';
+  if(!confirm(msg))return;
+  var delBtn=document.getElementById('ct-delete');
+  if(delBtn)delBtn.disabled=true;
+  var path=isCompany
+    ?'/api/projects/'+state.projectId+'/companies/'+ct.id
+    :'/api/people/'+ct.id;
+  _api(path,{method:'DELETE'})
+    .then(function(res){
+      if(res&&res.softDeleted){
+        alert('This company is referenced by '+res.itemCount+' punch list item(s), so it was deactivated instead of deleted. Its users have been unassigned.');
+      }
+      state.viewMode='list';state.editingContact=null;_loadData();
+    })
+    .catch(function(err){
+      if(delBtn)delBtn.disabled=false;
+      alert('Delete failed: '+(err&&err.message?err.message:'Unknown error'));
+    });
 }
 
 /* ── List view ──────────────────────────────────────────────────────── */

@@ -2242,6 +2242,13 @@ html[data-theme="light"] .ct-ribbon-count{ color: #475569; }
 .dlog-copy-toast.fade-out{ opacity: 0; }
 html[data-theme="light"] .dlog-copy-toast{ background: #fff; border-color: rgba(14,27,44,0.12); box-shadow: 0 8px 24px rgba(14,27,44,0.14); }
 
+/* Header danger action (Delete) */
+.section-header-action--danger{
+  background: transparent; color: #d64545; border-color: #d64545;
+}
+.section-header-action--danger:hover{ background: #d64545; color: #fff; }
+html[data-theme="light"] .section-header-action--danger{ color: #d64545; border-color: #d64545; }
+
 /* Edit icon: small blue pencil at end of name (replaces the text button) */
 .ct-ribbon-edit{
   display:inline-flex; align-items:center; justify-content:center;
