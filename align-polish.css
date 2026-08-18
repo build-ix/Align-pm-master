@@ -1934,3 +1934,6 @@ html[data-theme="light"] body.pl-open .section-header-action:not(.section-header
   border-color: rgba(14,27,44,0.12);
   color: #475569;
 }
+
+/* --- Pin Location button now lives inside the Location section --- */
+body.pl-open .pl-detail-section .pl-pin-location { margin-top: 10px; }

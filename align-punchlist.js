@@ -812,7 +812,7 @@
       });
       h.push('</div></div>');
     }
-    h.push('<div class="pl-detail-section"><span class="pl-detail-label">Location</span><div class="pl-detail-value">' + esc(item.location || '—') + '</div></div>');
+    h.push('<div class="pl-detail-section"><span class="pl-detail-label">Location</span><div class="pl-detail-value">' + esc(item.location || '—') + '</div><button type="button" class="pm-btn pl-pin-location" data-pl-detail-act="pin-item" data-pl-id="' + esc(item.id) + '">Pin Location</button></div>');
     var assigns = state.itemAssignments[item.id] || [];
     var assignedNames = assigns.length ? assigns.map(function (a) { return a.name; }).join(', ') : 'Unassigned';
     h.push('<div class="pl-detail-section"><span class="pl-detail-label">Assigned To</span><div class="pl-detail-assign-row">' +
@@ -822,7 +822,6 @@
     var isComplete = item.status === 'completed';
     h.push('<div class="pl-detail-actions">',
       '<button type="button" class="pm-btn" data-pl-detail-act="edit-item" data-pl-id="' + esc(item.id) + '">Edit</button>',
-      '<button type="button" class="pm-btn" data-pl-detail-act="pin-item" data-pl-id="' + esc(item.id) + '">Pin Location</button>',
       '<button type="button" class="pm-btn" data-pl-detail-act="toggle-complete" data-pl-id="' + esc(item.id) + '">' + (isComplete ? 'Reopen' : 'Mark Complete') + '</button>',
       '</div>');
     h.push('<div class="pl-detail-footer">',
