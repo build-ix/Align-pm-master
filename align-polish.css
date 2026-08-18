@@ -1937,3 +1937,13 @@ html[data-theme="light"] body.pl-open .section-header-action:not(.section-header
 
 /* --- Pin Location button now lives inside the Location section --- */
 body.pl-open .pl-detail-section .pl-pin-location { margin-top: 10px; }
+
+/* --- Detail view field labels: sentence case (v2) --- */
+body.pl-open .pl-detail-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--align-muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+body.pl-open .pl-detail-value { color: var(--align-text); }
