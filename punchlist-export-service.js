@@ -38,7 +38,7 @@ async function imageToDataUrl(filePath, maxDim) {
     const buf = await sharp(filePath)
       .rotate()
       .resize(maxDim, maxDim, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 82 })
+      .jpeg({ quality: 88 })
       .toBuffer();
     return 'data:image/jpeg;base64,' + buf.toString('base64');
   } catch (e) {
@@ -147,7 +147,7 @@ async function generatePunchlistPdf(opts) {
       if (it.firstImg) {
         const f = db.prepare('SELECT stored_path, mime_type FROM files WHERE id = ?').get(it.firstImg.fileId);
         if (f && fs.existsSync(f.stored_path)) {
-          it.photoDataUrl = await imageToDataUrl(f.stored_path, 1200);
+          it.photoDataUrl = await imageToDataUrl(f.stored_path, 1600);
         }
       }
     }
@@ -235,9 +235,9 @@ body { margin: 0; color: #17212b; background: #fff; font: 12px/1.45 Arial, Helve
 .item-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .item-number { color: #52606d; font-weight: 700; text-transform: uppercase; }
 .item-title { margin: 6px 0 12px; color: #17212b; font-size: 19px; }
-.item-photo-wrap { display: flex; align-items: center; justify-content: center; width: 100%; height: 240px; overflow: hidden; border-radius: 6px; background: #eef2f5; }
+.item-photo-wrap { display: flex; align-items: center; justify-content: center; width: 100%; height: 400px; overflow: hidden; border-radius: 6px; background: #eef2f5; }
 .item-photo { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; }
-.item-photo-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 240px; color: #6b7785; background: #eef2f5; }
+.item-photo-placeholder { display: flex; align-items: center; justify-content: center; width: 100%; height: 400px; color: #6b7785; background: #eef2f5; }
 .item-details { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; margin: 14px 0 0; }
 .item-details div { min-width: 0; }
 .item-details dt { color: #607080; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
