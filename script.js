@@ -2,7 +2,7 @@
 // Each key matches the data-section attribute on the tile in index.html.
 const sections = {
   "drawings":    { title: "Drawings",    content: `<p>View and manage all project drawings here.</p>`, render: function(el) { if (window.AlignDrawings) window.AlignDrawings.render(el); } },
-  "daily-logs":  { title: "Daily Logs",  content: `<p>Record and review daily site activity logs here.</p>`, render: function(el) { if (window.AlignDailyLogs) window.AlignDailyLogs.render(el); } },
+  "daily-logs":  { title: "Daily Logs",  content: `<p>Record and review daily site activity logs here.</p>`, render: function(el, chrome) { if (window.AlignDailyLogs) window.AlignDailyLogs.render(el, chrome); } },
   "specs":       { title: "Specs",       content: `<p>Access all project specifications and technical documents here.</p>`, render: function(el, chrome) { if (window.AlignSpecs) window.AlignSpecs.render(el, chrome); } },
   "rfis":        { title: "RFIs",        content: `<p>Submit and track Requests for Information (RFIs) here.</p>`, render: function(el, chrome) { if (window.AlignRfis) window.AlignRfis.render(el, chrome); } },
   "punchlist":   { title: "Punchlist",   content: `<p>Manage and close out punchlist items here.</p>`, render: function(el, chrome) { if (window.AlignPunchlist) window.AlignPunchlist.render(el, chrome); } },

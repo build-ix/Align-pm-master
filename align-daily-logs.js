@@ -18,7 +18,7 @@
     return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token };
   }
 
-  var state = { container: null, projectId: null, selectedDate: null, currentLogData: null, dayRecords: [], editing: false };
+  var state = { container: null, chrome: null, projectId: null, selectedDate: null, currentLogData: null, dayRecords: [], editing: false };
 
   /* ── Helpers ──────────────────────────────────────────────────────── */
   function esc(s)  { return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -39,9 +39,11 @@
   function canGoForward(iso) { return iso < today(); }
 
   /* ── Public API ────────────────────────────────────────────────────── */
-  function render(container) {
+  function render(container, chrome) {
     if (!container) return;
     state.container = container;
+    state.chrome = chrome || null;
+    _setHeader();
     state.projectId = null;
     state.selectedDate = null;
     state.currentLogData = null;
@@ -82,6 +84,79 @@
     } catch(_e) {}
 
     _renderDailyLogView();
+  }
+
+  /* ── Header actions (Export PDF / Copy Text) ───────────────────────── */
+  function _setHeader() {
+    if (!state.chrome || !state.chrome.setHeader) return;
+    state.chrome.setHeader({
+      title: 'Daily Logs',
+      backLabel: 'Back',
+      actions: [
+        { id: 'dlog-hdr-export-pdf', label: 'Export PDF', variant: 'primary', onClick: _handleExportClick },
+        { id: 'dlog-hdr-copy-text', label: 'Copy Text', variant: 'secondary', onClick: _handleCopyClick }
+      ]
+    });
+  }
+
+  function _handleExportClick() {
+    if (!state.projectId) return;
+    var pid = state.projectId;
+    var isPast = state.selectedDate < today();
+    if (isPast) {
+      var rec = state.currentLogData;
+      if (!rec) {
+        var dayRecs = state.dayRecords || [];
+        for (var i = 0; i < dayRecs.length; i++) {
+          if (dayRecs[i].date === state.selectedDate) { rec = dayRecs[i]; break; }
+        }
+      }
+      if (rec) { _exportDay(pid, rec); }
+      else { alert('No log data for this date.'); }
+      return;
+    }
+    var rec2 = _buildExportRecord();
+    if (!rec2) return;
+    _exportDay(pid, rec2);
+  }
+
+  function _handleCopyClick() {
+    if (!state.projectId) return;
+    var rec = state.currentLogData;
+    if (!rec) {
+      var comps = [];
+      var rows = document.querySelectorAll('#dlog-companies .dlog-company-row');
+      rows.forEach(function(row){
+        var nameEl = row.querySelector('.dlog-company-name');
+        var textEl = row.querySelector('.dlog-company-text');
+        var name = (nameEl && nameEl.style.display !== 'none') ? (nameEl.value || '') : (textEl ? textEl.textContent : '');
+        var count = parseInt((row.querySelector('.dlog-company-count')||{}).value, 10) || 0;
+        var desc = (row.querySelector('.dlog-company-desc')||{}).value || '';
+        name = name.trim();
+        if (name || count) comps.push({ name: name, count: count, description: desc.trim() });
+      });
+      var total = 0;
+      comps.forEach(function(c){ total += c.count; });
+      _copyTextToClipboard(total, comps).then(_showCopyToast);
+      return;
+    }
+    var companies = rec.companies || [];
+    var total2 = 0;
+    companies.forEach(function(c){ total2 += parseInt(c.count,10) || 0; });
+    _copyTextToClipboard(total2, companies).then(_showCopyToast);
+  }
+
+  function _showCopyToast() {
+    var span = document.createElement('span');
+    span.className = 'dlog-copy-toast';
+    span.textContent = 'Copied to clipboard';
+    document.body.appendChild(span);
+    setTimeout(function() {
+      span.classList.add('fade-out');
+      setTimeout(function() {
+        if (span.parentNode) span.parentNode.removeChild(span);
+      }, 600);
+    }, 1200);
   }
 
   function _resolveProjectId() {
@@ -183,12 +258,6 @@
         } else {
           editBtn.style.display = 'none';
         }
-      }
-
-      // Toggle copy-text button (today only)
-      var copyBtn = document.getElementById('dlog-copy-text');
-      if (copyBtn) {
-        copyBtn.style.display = isPast ? 'none' : '';
       }
 
       // Toggle read-only vs editable
@@ -342,8 +411,6 @@
         '</button>'+
       '</div>'+
       '<div class="dlog-nav-actions">'+
-        '<button class="dlog-export-pdf-btn" id="dlog-export-pdf" title="Save &amp; download latest daily log as PDF">📥 Export PDF</button>'+
-        '<button class="dlog-copy-text-btn" id="dlog-copy-text" title="Copy as formatted text" style="display:none">📋 Copy Text</button>'+
         '<button class="dlog-edit-day-btn" id="dlog-edit-day-btn" style="display:none">✎ Edit Day</button>'+
       '</div>'+
       '<div class="dlog-form-always" id="dlog-form-always">'+
@@ -462,55 +529,6 @@
           loadDay();
         }
       });
-    });
-
-    // PDF export
-    document.getElementById('dlog-export-pdf').addEventListener('click', function(){
-      var isPast = state.selectedDate < today();
-      if (isPast) {
-        // Past dates: export directly from loaded data (no save needed)
-        var rec = state.currentLogData;
-        if (!rec) {
-          var dayRecs = state.dayRecords || [];
-          for (var i=0; i<dayRecs.length; i++) {
-            if (dayRecs[i].date === state.selectedDate) { rec = dayRecs[i]; break; }
-          }
-        }
-        if (rec) { _exportDay(pid, rec); }
-        else { alert('No log data for this date.'); }
-        return;
-      }
-      // Today: gather data directly (synchronous, avoids popup blocking)
-      var rec = _buildExportRecord();
-      if (!rec) return;
-      _exportDay(pid, rec);
-    });
-
-    // Copy text export (today only)
-    document.getElementById('dlog-copy-text').addEventListener('click', function(){
-      var btn = this;
-      var rec = state.currentLogData;
-      if (!rec) {
-        var comps = [];
-        var rows = document.querySelectorAll('#dlog-companies .dlog-company-row');
-        rows.forEach(function(row){
-          var nameEl = row.querySelector('.dlog-company-name');
-          var textEl = row.querySelector('.dlog-company-text');
-          var name = (nameEl && nameEl.style.display !== 'none') ? (nameEl.value || '') : (textEl ? textEl.textContent : '');
-          var count = parseInt((row.querySelector('.dlog-company-count')||{}).value, 10) || 0;
-          var desc = (row.querySelector('.dlog-company-desc')||{}).value || '';
-          name = name.trim();
-          if (name || count) comps.push({ name: name, count: count, description: desc.trim() });
-        });
-        var total = 0;
-        comps.forEach(function(c){ total += c.count; });
-        _copyTextToClipboard(total, comps).then(function(){ _showCopyFeedback(btn); btn.blur(); });
-        return;
-      }
-      var companies = rec.companies || [];
-      var total = 0;
-      companies.forEach(function(c){ total += parseInt(c.count,10) || 0; });
-      _copyTextToClipboard(total, companies).then(function(){ _showCopyFeedback(btn); btn.blur(); });
     });
 
     // Edit Day button (past days only)
@@ -683,6 +701,8 @@
   function _bindCompanyAutocomplete(inputEl) {
     var wrapper = inputEl.closest('.dlog-company-wrapper');
     if (!wrapper) return;
+    inputEl._dlogDdToken = 0;
+    inputEl._dlogSelecting = false;
     var old = wrapper.querySelector('.dlog-company-dropdown');
     if (old) old.remove();
 
@@ -698,8 +718,10 @@
     });
     inputEl.addEventListener('blur', function(){
       setTimeout(function(){
+        if (inputEl._dlogSelecting) return;
+        inputEl._dlogDdToken++;
         var dd = wrapper.querySelector('.dlog-company-dropdown');
-        if (dd && !dd.matches(':hover')) dd.remove();
+        if (dd) dd.remove();
         // Validate against Directory on blur — case-insensitive, auto-correct casing
         var val = inputEl.value.trim();
         if (val) {
@@ -756,6 +778,7 @@
         e.preventDefault();
         if (idx>=0) items[idx].click(); else items[0].click();
       } else if (e.key==='Escape') {
+        inputEl._dlogDdToken++;
         dd.remove();
         inputEl.blur();
       }
@@ -769,6 +792,7 @@
     if (old) old.remove();
 
     var typed = inputEl.value.trim().toLowerCase();
+    var token = ++inputEl._dlogDdToken;
 
     // Gather companies from Directory
     var companies = [];
@@ -777,12 +801,14 @@
       fetch('/api/projects/' + (S().getActiveProject()||{}).id + '/companies')
         .then(function(r) { return r.json(); })
         .then(function(data) {
+          if (token !== inputEl._dlogDdToken) return;
+          if (document.activeElement !== inputEl) return;
           companies = (data.companies || []).map(function(c) { return (c.name || '').trim(); }).filter(Boolean);
           // Cache for save validation
           window._dlogDirCompanies = companies;
           _renderDropdown(wrapper, inputEl, typed, companies);
         })
-        .catch(function() { _renderDropdown(wrapper, inputEl, typed, []); });
+        .catch(function() { if (token === inputEl._dlogDdToken) _renderDropdown(wrapper, inputEl, typed, []); });
       return;
     } catch(e) {}
 
@@ -817,12 +843,27 @@
         li.textContent = c;
       }
       if (idx===0) li.classList.add('active');
-      li.addEventListener('mousedown', function(e){
-        e.preventDefault();
-        inputEl.value = c;
-        ul.remove();
-        _lockCompanyInput(inputEl);
-      });
+      (function(c, li){
+        var handled = false;
+        function selectCompany(e){
+          if (handled) return;
+          handled = true;
+          if (e.cancelable) e.preventDefault();
+          e.stopPropagation();
+          inputEl._dlogSelecting = true;
+          inputEl._dlogDdToken++;
+          inputEl.value = c;
+          if (ul.parentNode) ul.parentNode.removeChild(ul);
+          _lockCompanyInput(inputEl);
+          setTimeout(function(){ inputEl._dlogSelecting = false; }, 400);
+        }
+        if (window.PointerEvent) {
+          li.addEventListener('pointerdown', selectCompany);
+        } else {
+          li.addEventListener('touchstart', selectCompany);
+          li.addEventListener('mousedown', selectCompany);
+        }
+      })(c, li);
       ul.appendChild(li);
     });
 

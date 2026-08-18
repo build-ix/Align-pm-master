@@ -2230,6 +2230,18 @@ html[data-theme="light"] #ct-perms-section{ background:#f8fafc; border-color:rgb
 html[data-theme="light"] .ct-ribbon-count{ color: #475569; }
 .ct-ribbon.ct-unassigned .ct-ribbon-count{ margin-left: 0; }
 
+/* Copy-text toast (header action feedback) */
+.dlog-copy-toast{
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+  z-index: 9999; background: #142337; color: var(--align-text);
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 999px;
+  padding: 9px 18px; font: 600 13px var(--font);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  opacity: 1; transition: opacity .6s; pointer-events: none;
+}
+.dlog-copy-toast.fade-out{ opacity: 0; }
+html[data-theme="light"] .dlog-copy-toast{ background: #fff; border-color: rgba(14,27,44,0.12); box-shadow: 0 8px 24px rgba(14,27,44,0.14); }
+
 /* Edit icon: small blue pencil at end of name (replaces the text button) */
 .ct-ribbon-edit{
   display:inline-flex; align-items:center; justify-content:center;
