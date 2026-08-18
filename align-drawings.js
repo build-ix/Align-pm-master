@@ -1394,10 +1394,6 @@
     h.push('<button class="pm-btn small dr-mv-back-btn" id="dr-mv-back">← Back to Drawings</button>');
     h.push('<h3 class="dr-mv-title">' + esc(file.meta.name) + '</h3>');
     h.push('<span class="dr-mv-meta">' + fmtSize(file.meta.size) + ' · ' + fmtDate(file.meta.updatedAt) + '</span>');
-    if (isImage) {
-      h.push('<button class="dr-mv-markup-toggle" id="dr-mv-markup-toggle">✏️ Markup Drawing</button>');
-    }
-    h.push('<button class="dr-mv-tool-btn" id="dr-mv-toggle" title="Toggle markups on/off">👁️ Markups</button>');
     h.push('</div>');
 
     // ── Toolbar (hidden by default; slides in when "Markup Drawing" clicked) ──
