@@ -309,7 +309,7 @@
       h.push('<option value="' + s + '"' + (r.status === s ? ' selected' : '') + '>' + statusLabel(s) + '</option>');
     });
     h.push('</select></div>');
-    h.push('<div class="rf-form-f"><label class="rf-fl" for="rf-assigned">Assigned To</label><select class="rf-sel" id="rf-assigned">');
+    h.push('<div class="rf-form-f"><label class="rf-fl" for="rf-assigned">Assigned to</label><select class="rf-sel" id="rf-assigned">');
     h.push('<option value="">— Unassigned —</option>');
     if (r.assignedTo) h.push('<option value="' + esc(r.assignedTo) + '" selected>' + esc(r.assignedTo) + '</option>');
     h.push('</select></div>');
@@ -317,8 +317,8 @@
 
     // Due date + Answered date
     h.push('<div class="rf-form-r">');
-    h.push('<div class="rf-form-f"><label class="rf-fl" for="rf-due">Due Date</label><input type="date" class="rf-inp" id="rf-due" value="' + esc(r.dueDate || '') + '"></div>');
-    h.push('<div class="rf-form-f"><label class="rf-fl" for="rf-answered">Answered Date</label><input type="date" class="rf-inp" id="rf-answered" value="' + esc(r.answeredDate || '') + '"></div>');
+    h.push('<div class="rf-form-f"><label class="rf-fl" for="rf-due">Due date</label><input type="date" class="rf-inp" id="rf-due" value="' + esc(r.dueDate || '') + '"></div>');
+    h.push('<div class="rf-form-f"><label class="rf-fl" for="rf-answered">Answered date</label><input type="date" class="rf-inp" id="rf-answered" value="' + esc(r.answeredDate || '') + '"></div>');
     h.push('</div>');
 
     // Answer (existing RFIs only)

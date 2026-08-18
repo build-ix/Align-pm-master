@@ -968,13 +968,13 @@
 
     // Header with Add button + Select Multiple toggle
     h.push('<div class="dr-header">');
-    h.push('<h3 class="dr-title">Project Drawings</h3>');
+    h.push('<h3 class="dr-title">Project drawings</h3>');
     h.push('<div class="dr-header-actions">');
-    h.push('<button class="pm-btn primary" id="dr-add-btn">+ Add Drawing</button>');
+    h.push('<button class="pm-btn primary" id="dr-add-btn">+ Add drawing</button>');
     // Select Multiple toggle (only when there are drawings)
     if (drawings.length > 0) {
       var selActive = state.selectMode ? ' active' : '';
-      h.push('<button class="dr-select-toggle-btn' + selActive + '" id="dr-select-toggle-btn">☑ Select Multiple</button>');
+      h.push('<button class="dr-select-toggle-btn' + selActive + '" id="dr-select-toggle-btn">☑ Select multiple</button>');
     }
     h.push('</div>');
     h.push('</div>');

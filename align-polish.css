@@ -2232,6 +2232,323 @@ html[data-theme="light"] .sk-block::after, html[data-theme="light"] .sk-line::af
   .sk-block::after, .sk-line::after { animation: none; display: none; }
 }
 
+/* ============================================================
+   DRAWINGS — v2 restyle
+   ============================================================ */
+
+/* --- In-body header as a v2 card row --- */
+.dr-header{
+  display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;
+  padding:14px 16px; margin-bottom:16px;
+  background:linear-gradient(180deg,#182a42,#142337);
+  border:1px solid rgba(255,255,255,0.07); border-radius:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.05);
+}
+html[data-theme="light"] .dr-header{
+  background:#fff; border-color:rgba(14,27,44,0.08);
+  box-shadow:0 1px 2px rgba(14,27,44,0.06),0 8px 24px rgba(14,27,44,0.06);
+}
+.dr-title{
+  margin:0; font-family:var(--align-font); font-size:17px; font-weight:600;
+  color:var(--align-text); text-transform:none; letter-spacing:0;
+}
+.dr-header-actions{ display:flex; align-items:center; gap:8px; }
+
+#dr-add-btn{
+  background:linear-gradient(180deg,#f07a38,#e8641b,#d95a13); color:#fff;
+  border:1px solid rgba(0,0,0,0.15); border-radius:10px; padding:8px 14px;
+  font-family:var(--align-font); font-size:13px; font-weight:600; cursor:pointer;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),inset 0 1px 0 rgba(255,255,255,0.18);
+}
+#dr-add-btn:hover{ filter:brightness(1.06); }
+
+.dr-select-toggle-btn{
+  background:transparent; color:var(--align-text); border:1px solid rgba(255,255,255,0.14);
+  border-radius:10px; padding:8px 14px; font-family:var(--align-font); font-size:13px; font-weight:600; cursor:pointer;
+}
+.dr-select-toggle-btn:hover{ border-color:rgba(255,255,255,0.28); }
+html[data-theme="light"] .dr-select-toggle-btn{ border-color:rgba(14,27,44,0.16); }
+html[data-theme="light"] .dr-select-toggle-btn:hover{ border-color:rgba(14,27,44,0.32); }
+
+/* --- Selection bar (v2 card) --- */
+.dr-selection-bar{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:10px 16px; margin-bottom:14px;
+  background:linear-gradient(180deg,#182a42,#142337);
+  border:1px solid rgba(255,255,255,0.07); border-radius:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.05);
+}
+html[data-theme="light"] .dr-selection-bar{
+  background:#fff; border-color:rgba(14,27,44,0.08);
+  box-shadow:0 1px 2px rgba(14,27,44,0.06),0 8px 24px rgba(14,27,44,0.06);
+}
+.dr-selection-count{ font-family:var(--align-font); font-size:13px; font-weight:600; color:var(--align-text); }
+.dr-selection-actions{ display:flex; gap:8px; }
+
+/* --- Grid --- */
+.dr-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; }
+
+/* --- Drawing card --- */
+.dr-card{
+  position:relative; padding:10px;
+  background:linear-gradient(180deg,#182a42,#142337);
+  border:1px solid rgba(255,255,255,0.07); border-radius:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.05);
+  cursor:pointer; transition:transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.dr-card:hover{
+  transform:translateY(-2px); border-color:rgba(255,255,255,0.14);
+  box-shadow:0 2px 4px rgba(0,0,0,0.28),0 14px 32px rgba(0,0,0,0.24),inset 0 1px 0 rgba(255,255,255,0.05);
+}
+html[data-theme="light"] .dr-card{
+  background:#fff; border-color:rgba(14,27,44,0.08);
+  box-shadow:0 1px 2px rgba(14,27,44,0.06),0 8px 24px rgba(14,27,44,0.06);
+}
+html[data-theme="light"] .dr-card:hover{
+  border-color:rgba(14,27,44,0.16);
+  box-shadow:0 2px 4px rgba(14,27,44,0.08),0 14px 32px rgba(14,27,44,0.10);
+}
+.dr-card-check{ position:absolute; top:10px; left:10px; z-index:2; }
+
+/* --- Thumbnail (nested surface, aspect box) --- */
+.dr-thumb{
+  display:block; width:100%; aspect-ratio:4/3; object-fit:cover; overflow:hidden;
+  background:#0f1e31; border:1px solid rgba(255,255,255,0.06); border-radius:10px;
+}
+.dr-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+html[data-theme="light"] .dr-thumb{ background:#fff; border-color:rgba(14,27,44,0.10); }
+.dr-thumb-icon{ display:flex; align-items:center; justify-content:center; object-fit:unset; }
+.dr-thumb-icon svg{ width:40px; height:40px; color:var(--align-muted); opacity:0.7; }
+
+/* --- Card info --- */
+.dr-card-info{ padding:10px 4px 2px; }
+.dr-card-name{
+  font-family:var(--align-font); font-size:15px; font-weight:600; color:var(--align-text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.dr-card-meta{ margin-top:2px; font-family:var(--align-font); font-size:13px; color:var(--align-muted); }
+
+/* --- Empty state (v2 card) --- */
+.dr-empty{
+  padding:48px 24px; text-align:center; font-family:var(--align-font); font-size:15px; color:var(--align-muted);
+  background:linear-gradient(180deg,#182a42,#142337);
+  border:1px solid rgba(255,255,255,0.07); border-radius:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.05);
+}
+html[data-theme="light"] .dr-empty{
+  background:#fff; border-color:rgba(14,27,44,0.08);
+  box-shadow:0 1px 2px rgba(14,27,44,0.06),0 8px 24px rgba(14,27,44,0.06);
+}
+.dr-empty-icon{ font-size:32px; opacity:0.5; margin-bottom:10px; }
+
+/* --- Load more --- */
+#dr-load-more{ display:flex; justify-content:center; margin-top:16px; }
+
+/* ============================================================
+   RFIs — v2 restyle (body only; header handled by chrome)
+   ============================================================ */
+
+/* --- Stat filter pills --- */
+.rf-stats{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+.rf-stat-btn{
+  display:inline-flex; align-items:baseline; gap:6px; padding:6px 12px;
+  background:transparent; border:1px solid rgba(255,255,255,0.12); border-radius:999px;
+  font-family:var(--align-font); font-size:13px; color:var(--align-muted); cursor:pointer;
+  transition:border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.rf-stat-btn:hover{ border-color:rgba(255,255,255,0.26); }
+html[data-theme="light"] .rf-stat-btn{ border-color:rgba(14,27,44,0.14); }
+html[data-theme="light"] .rf-stat-btn:hover{ border-color:rgba(14,27,44,0.30); }
+.rf-stat-count{ font-size:13px; font-weight:600; color:var(--align-text); }
+.rf-stat-label{ font-size:13px; }
+.rf-stat-btn.active{ background:rgba(232,100,27,0.14); border-color:#e8641b; color:var(--align-orange-ink); }
+.rf-stat-btn.active .rf-stat-count{ color:var(--align-orange-ink); }
+html[data-theme="light"] .rf-stat-btn.active{ background:rgba(232,100,27,0.10); color:#d95a13; }
+html[data-theme="light"] .rf-stat-btn.active .rf-stat-count{ color:#d95a13; }
+
+/* --- List --- */
+.rf-list{ display:flex; flex-direction:column; gap:12px; }
+
+/* --- RFI card --- */
+.rf-card{
+  padding:14px 16px;
+  background:linear-gradient(180deg,#182a42,#142337);
+  border:1px solid rgba(255,255,255,0.07); border-radius:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.05);
+  cursor:pointer; transition:transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.rf-card:hover{
+  transform:translateY(-2px); border-color:rgba(255,255,255,0.14);
+  box-shadow:0 2px 4px rgba(0,0,0,0.28),0 14px 32px rgba(0,0,0,0.24),inset 0 1px 0 rgba(255,255,255,0.05);
+}
+html[data-theme="light"] .rf-card{
+  background:#fff; border-color:rgba(14,27,44,0.08);
+  box-shadow:0 1px 2px rgba(14,27,44,0.06),0 8px 24px rgba(14,27,44,0.06);
+}
+html[data-theme="light"] .rf-card:hover{
+  border-color:rgba(14,27,44,0.16);
+  box-shadow:0 2px 4px rgba(14,27,44,0.08),0 14px 32px rgba(14,27,44,0.10);
+}
+.rf-card.rf-overdue{ border-color:rgba(224,82,82,0.45); }
+html[data-theme="light"] .rf-card.rf-overdue{ border-color:rgba(224,82,82,0.40); }
+
+/* --- Card top row --- */
+.rf-card-top{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.rf-card-number{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11px;
+  letter-spacing:0.04em; color:var(--align-muted);
+}
+
+/* --- Status pills --- */
+.rf-pill{
+  display:inline-block; padding:3px 10px; border-radius:999px;
+  font-family:var(--align-font); font-size:11px; font-weight:600; line-height:1.4;
+  border:1px solid transparent;
+}
+.rf-pill-draft{ background:rgba(154,171,186,0.14); border-color:rgba(154,171,186,0.28); color:#9aabba; }
+.rf-pill-submitted{ background:rgba(59,130,246,0.15); border-color:rgba(59,130,246,0.35); color:#3B82F6; }
+.rf-pill-answered{ background:rgba(34,197,94,0.14); border-color:rgba(34,197,94,0.35); color:#22c55e; }
+.rf-pill-closed{ background:rgba(154,171,186,0.10); border-color:rgba(154,171,186,0.22); color:#9aabba; opacity:0.85; }
+html[data-theme="light"] .rf-pill-draft, html[data-theme="light"] .rf-pill-closed{ color:#475569; }
+html[data-theme="light"] .rf-pill-submitted{ color:#2563eb; }
+html[data-theme="light"] .rf-pill-answered{ color:#16a34a; }
+
+/* --- Subject + description --- */
+.rf-card-subject{ margin:0 0 4px; font-family:var(--align-font); font-size:15px; font-weight:600; color:var(--align-text); }
+.rf-card-desc{
+  margin:0 0 10px; font-family:var(--align-font); font-size:13px; color:var(--align-muted);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+
+/* --- Foot: assignee + dates --- */
+.rf-card-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.rf-assignee{ display:flex; align-items:center; gap:8px; min-width:0; }
+.rf-avatar{
+  width:28px; height:28px; border-radius:50%;
+  background:linear-gradient(180deg,#f07a38,#d95a13); color:#fff;
+  font-family:var(--align-font); font-size:11px; font-weight:600;
+  display:inline-flex; align-items:center; justify-content:center; flex:0 0 28px;
+}
+.rf-avatar-empty{ background:transparent; border:1px dashed rgba(255,255,255,0.25); color:var(--align-muted); }
+html[data-theme="light"] .rf-avatar-empty{ border-color:rgba(14,27,44,0.25); }
+.rf-assignee-name{
+  font-family:var(--align-font); font-size:13px; color:var(--align-text);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.rf-unassigned{ font-family:var(--align-font); font-size:13px; font-style:italic; color:var(--align-muted); }
+.rf-card-dates{ display:flex; gap:10px; flex-shrink:0; }
+.rf-date{ font-family:var(--align-font); font-size:12px; color:var(--align-muted); }
+.rf-date-over{ color:#e05252; font-weight:600; }
+
+/* --- Empty state --- */
+.rf-empty{
+  padding:48px 24px; text-align:center; font-family:var(--align-font); font-size:15px; color:var(--align-muted);
+  background:linear-gradient(180deg,#182a42,#142337);
+  border:1px solid rgba(255,255,255,0.07); border-radius:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.05);
+}
+html[data-theme="light"] .rf-empty{
+  background:#fff; border-color:rgba(14,27,44,0.08);
+  box-shadow:0 1px 2px rgba(14,27,44,0.06),0 8px 24px rgba(14,27,44,0.06);
+}
+
+/* --- Form (second screen) --- */
+.rf-form-wrap{
+  padding:16px;
+  background:linear-gradient(180deg,#182a42,#142337);
+  border:1px solid rgba(255,255,255,0.07); border-radius:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.05);
+}
+html[data-theme="light"] .rf-form-wrap{
+  background:#fff; border-color:rgba(14,27,44,0.08);
+  box-shadow:0 1px 2px rgba(14,27,44,0.06),0 8px 24px rgba(14,27,44,0.06);
+}
+.rf-form-s{ margin-bottom:14px; }
+.rf-form-r{ display:flex; flex-wrap:wrap; gap:12px; margin-bottom:14px; }
+.rf-form-f{ flex:1 1 160px; min-width:0; }
+.rf-fl{
+  display:block; margin-bottom:6px; font-family:var(--align-font); font-size:13px; font-weight:600;
+  color:var(--align-muted); text-transform:none; letter-spacing:0;
+}
+.rf-inp, .rf-txa, .rf-sel{
+  width:100%; box-sizing:border-box; padding:10px 12px;
+  background:#0f1e31; border:1px solid rgba(255,255,255,0.10); border-radius:10px;
+  font-family:var(--align-font); font-size:15px; color:var(--align-text); outline:none;
+}
+.rf-inp:focus, .rf-txa:focus, .rf-sel:focus{ border-color:#e8641b; box-shadow:0 0 0 3px rgba(232,100,27,0.20); }
+html[data-theme="light"] .rf-inp, html[data-theme="light"] .rf-txa, html[data-theme="light"] .rf-sel{
+  background:#fff; border-color:rgba(14,27,44,0.14);
+}
+.rf-txa{ min-height:96px; resize:vertical; }
+.rf-form-danger{ margin-top:8px; padding-top:14px; border-top:1px solid var(--align-line); }
+#rf-form-delete{
+  background:transparent; border:1px solid rgba(224,82,82,0.50); border-radius:10px;
+  padding:8px 14px; font-family:var(--align-font); font-size:13px; font-weight:600; color:#e05252; cursor:pointer;
+}
+#rf-form-delete:hover{ background:rgba(224,82,82,0.10); border-color:#e05252; }
+
+/* ============================================================
+   DAILY LOGS — minimal v2 surface reskin (NO layout/type changes)
+   ============================================================ */
+
+/* Top-level surfaces → v2 card treatment */
+.dlog-nav,
+.dlog-form-always,
+.dlog-history-header,
+.dlog-readonly{
+  background:linear-gradient(180deg,#182a42,#142337);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:16px;
+  box-shadow:0 1px 2px rgba(0,0,0,0.25),0 8px 24px rgba(0,0,0,0.18),inset 0 1px 0 rgba(255,255,255,0.05);
+}
+html[data-theme="light"] .dlog-nav,
+html[data-theme="light"] .dlog-form-always,
+html[data-theme="light"] .dlog-history-header,
+html[data-theme="light"] .dlog-readonly{
+  background:#fff;
+  border-color:rgba(14,27,44,0.08);
+  box-shadow:0 1px 2px rgba(14,27,44,0.06),0 8px 24px rgba(14,27,44,0.06);
+}
+
+/* Nested surfaces (sit INSIDE the cards above) → flat nested color, no gradient */
+.dlog-weather-box,
+.dlog-company-row,
+.dlog-attach-list{
+  background:#0f1e31;
+  border:1px solid rgba(255,255,255,0.06);
+  border-radius:10px;
+  box-shadow:none;
+}
+html[data-theme="light"] .dlog-weather-box,
+html[data-theme="light"] .dlog-company-row,
+html[data-theme="light"] .dlog-attach-list{
+  background:#fff;
+  border-color:rgba(14,27,44,0.10);
+}
+
+/* Inputs → nested surface + control radius (colors/borders only) */
+.dlog-input,
+.dlog-textarea,
+.dlog-field{
+  background:#0f1e31;
+  border:1px solid rgba(255,255,255,0.10);
+  border-radius:10px;
+  color:var(--align-text);
+}
+.dlog-input:focus,
+.dlog-textarea:focus,
+.dlog-field:focus{
+  border-color:#e8641b;
+  outline:none;
+  box-shadow:0 0 0 3px rgba(232,100,27,0.20);
+}
+html[data-theme="light"] .dlog-input,
+html[data-theme="light"] .dlog-textarea,
+html[data-theme="light"] .dlog-field{
+  background:#fff;
+  border-color:rgba(14,27,44,0.14);
+}
+
 /* Edit icon: small blue pencil at end of name (replaces the text button) */
 .ct-ribbon-edit{
   display:inline-flex; align-items:center; justify-content:center;
