@@ -1539,39 +1539,7 @@ html[data-theme="light"] #ps-signout { border-color: rgba(14,27,44,0.14); }
 
 /* ===================== PUNCHLIST V2 — matches project-select "Quiet Site at Night" ===================== */
 
-/* --- Animated background (reuse login/project-select keyframes) --- */
-body.pl-open #section-page::before {
-  content: "";
-  position: fixed;
-  inset: -160px 0 0 -160px;
-  z-index: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(96,138,192,0.07) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96,138,192,0.07) 1px, transparent 1px),
-    linear-gradient(rgba(96,138,192,0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(96,138,192,0.035) 1px, transparent 1px);
-  background-size: 160px 160px, 160px 160px, 32px 32px, 32px 32px;
-  animation: align-grid-drift 90s linear infinite;
-}
-body.pl-open #section-page::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(600px 420px at 85% 10%, rgba(232,100,27,0.13), transparent 70%),
-    radial-gradient(700px 520px at 12% 92%, rgba(36,59,88,0.55), transparent 72%);
-  animation: align-glow-breathe 14s ease-in-out infinite alternate;
-}
-@media (prefers-reduced-motion: reduce) {
-  body.pl-open #section-page::before,
-  body.pl-open #section-page::after { animation: none !important; }
-}
-
-/* --- Stacking: content above the fixed background pseudos --- */
-body.pl-open #section-body { position: relative; z-index: 1; }
+/* (animated grid/glow background removed — kept only on Login/project-select) */
 
 /* --- Summary row (Open / Critical / Closed) --- */
 body.pl-open .summary-row {
