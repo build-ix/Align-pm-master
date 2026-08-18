@@ -79,6 +79,7 @@ function _openSection() {
 function _closeSection() {
   document.body.classList.remove('section-open');
   document.body.classList.remove('ps-open');
+  document.body.classList.remove('pl-open');
   // Abort any in-flight work from the current section
   if (_sectionController) { _sectionController.abort(); _sectionController = null; }
   window._sectionSignal = null;
@@ -233,6 +234,7 @@ function _handleRoute() {
   window._sectionSignal = _sectionController.signal;
   _currentSection = sectionKey;
   document.body.classList.toggle('ps-open', sectionKey === 'project-select');
+  document.body.classList.toggle('pl-open', sectionKey === 'punchlist');
   _navStack = [];
   setSectionHeader({ title: section.title, backLabel: 'Back', actions: [] });
 
@@ -1815,6 +1817,7 @@ function _escHtml(s) {
       // Trigger old home screen: show header + tile grid + dashboard + essentials
       document.body.classList.remove('section-open');
       document.body.classList.remove('ps-open');
+      document.body.classList.remove('pl-open');
       if (appHeader) appHeader.style.display = '';
       if (tileGrid) tileGrid.style.display = '';
       if (dashboard) dashboard.style.display = '';
