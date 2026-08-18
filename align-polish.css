@@ -1947,3 +1947,121 @@ body.pl-open .pl-detail-label {
   letter-spacing: 0;
 }
 body.pl-open .pl-detail-value { color: var(--align-text); }
+
+/* ===================== ALL TOOLS V2 — bottom sheet matches "Quiet Site at Night" ===================== */
+
+/* Sheet */
+#bn-tools-sheet {
+  background: #0e1b2c;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -12px 32px rgba(0,0,0,0.35);
+}
+
+/* Drag handle (decorative) */
+#bn-tools-sheet::before {
+  content: "";
+  display: block;
+  width: 36px; height: 4px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+  margin: 10px auto 0;
+}
+
+/* Header */
+#bn-tools-sheet .bn-tools-header { padding: 14px 16px 10px; }
+#bn-tools-sheet .bn-tools-title {
+  font: 700 20px/1.2 var(--font);
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--align-text, #e8eef4);
+}
+#bn-tools-sheet .bn-tools-close {
+  width: 32px; height: 32px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #9aabba;
+  font-size: 20px; line-height: 1;
+}
+#bn-tools-sheet .bn-tools-close:active { background: rgba(255,255,255,0.12); }
+
+/* Rule: quiet hairline, no orange */
+#bn-tools-sheet .bn-tools-rule {
+  height: 1px; border: 0;
+  background: rgba(255,255,255,0.07);
+  margin: 0 16px;
+}
+
+/* Grid */
+#bn-tools-sheet .bn-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Tiles — v2 card language */
+#bn-tools-sheet .bn-tools-tile {
+  background: linear-gradient(180deg, #182a42, #142337);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25),
+              0 8px 24px rgba(0,0,0,0.18),
+              inset 0 1px 0 rgba(255,255,255,0.05);
+  aspect-ratio: auto;
+  min-height: 96px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 8px;
+  padding: 14px 6px 12px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+#bn-tools-sheet .bn-tools-tile::before { content: none; }
+
+#bn-tools-sheet .bn-tools-tile-icon { color: #f07a38; }
+#bn-tools-sheet .bn-tools-tile-label {
+  font: 600 12px/1.3 var(--font);
+  color: var(--align-text, #e8eef4);
+}
+
+#bn-tools-sheet .bn-tools-tile:active {
+  transform: translateY(1px) scale(0.98);
+  border-color: rgba(255,255,255,0.12);
+}
+@media (hover: hover) {
+  #bn-tools-sheet .bn-tools-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.25),
+                0 12px 32px rgba(0,0,0,0.22),
+                inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+}
+
+/* ---- Light mode ---- */
+html[data-theme="light"] #bn-tools-sheet {
+  background: #f3f5f7;
+  border-top-color: rgba(14,27,44,0.08);
+  box-shadow: 0 -12px 32px rgba(14,27,44,0.10);
+}
+html[data-theme="light"] #bn-tools-sheet::before { background: rgba(14,27,44,0.18); }
+html[data-theme="light"] #bn-tools-sheet .bn-tools-close {
+  background: rgba(14,27,44,0.05);
+  border-color: rgba(14,27,44,0.08);
+  color: #475569;
+}
+html[data-theme="light"] #bn-tools-sheet .bn-tools-rule { background: rgba(14,27,44,0.08); }
+html[data-theme="light"] #bn-tools-sheet .bn-tools-tile {
+  background: #fff;
+  border-color: rgba(14,27,44,0.08);
+  box-shadow: 0 1px 2px rgba(14,27,44,0.06);
+}
+html[data-theme="light"] #bn-tools-sheet .bn-tools-tile-icon { color: #e8641b; }
+html[data-theme="light"] #bn-tools-sheet .bn-tools-tile-label { color: var(--align-text, #0e1b2c); }
+
+/* ---- Reduced motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  #bn-tools-sheet .bn-tools-tile { transition: none; }
+  #bn-tools-sheet .bn-tools-tile:active,
+  #bn-tools-sheet .bn-tools-tile:hover { transform: none; }
+}
