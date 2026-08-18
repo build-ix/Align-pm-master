@@ -1,59 +1,6 @@
 /* Align professional interface layer
-   Precise construction titleblock language. Loaded after every module stylesheet. */
-
-:root,
-html[data-theme="dark"] {
-  --align-navy: #0e1b2c;
-  --align-navy-2: #16263c;
-  --align-navy-3: #243b58;
-  --align-orange: #e8641b;
-  --align-orange-ink: #f07a38;
-  --align-action: #b9470f;
-  --align-paper: #0c1724;
-  --align-surface: #142337;
-  --align-surface-2: #192b42;
-  --align-text: #eef3f8;
-  --align-muted: #9aabba;
-  --align-line: #31445c;
-  --align-line-strong: #61758e;
-  --align-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
-  --align-radius: 4px;
-  --align-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-
-  --bg: var(--align-paper);
-  --card: var(--align-surface);
-  --ink: var(--align-text);
-  --muted: var(--align-muted);
-  --line: var(--align-line);
-  --brand: #315f8c;
-  --brand-glow: rgba(49, 95, 140, 0.24);
-  --radius-sm: 3px;
-  --radius-lg: var(--align-radius);
-  --shadow-sm: var(--align-shadow);
-  --shadow-lg: var(--align-shadow);
-}
-
-html[data-theme="light"] {
-  --align-paper: #f3f5f7;
-  --align-surface: #ffffff;
-  --align-surface-2: #e9eef3;
-  --align-text: #142337;
-  --align-muted: #475569;
-  --align-line: #ccd6e0;
-  --align-line-strong: #7b8c9f;
-  --align-orange-ink: #b9470f;
-  --align-shadow: 0 2px 8px rgba(14, 27, 44, 0.08);
-
-  --bg: var(--align-paper);
-  --card: var(--align-surface);
-  --ink: var(--align-text);
-  --muted: var(--align-muted);
-  --line: var(--align-line);
-  --brand: #173f67;
-  --brand-glow: rgba(23, 63, 103, 0.16);
-  --shadow-sm: var(--align-shadow);
-  --shadow-lg: var(--align-shadow);
-}
+   Precise construction titleblock language. Loaded after every module stylesheet.
+   Design tokens live in tokens.css (loaded first). */
 
 body {
   background-color: var(--align-paper);

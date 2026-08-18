@@ -1,0 +1,104 @@
+/* ============================================
+   Align PM — Design Tokens (v2)
+   Single source of truth. Load FIRST, before
+   every module stylesheet.
+   Dark is the default; light overrides via
+   html[data-theme="light"].
+   ============================================ */
+
+:root, html[data-theme="dark"] {
+  /* ---- Surfaces ---- */
+  --align-navy: #0e1b2c;
+  --align-navy-2: #16263c;
+  --align-navy-3: #243b58;
+  --align-paper: #0c1724;        /* page background */
+  --align-surface: #142337;      /* card surface */
+  --align-surface-2: #192b42;    /* nested surface (inputs, sub-cards) */
+
+  /* ---- Brand (orange) ---- */
+  --align-orange: #e8641b;
+  --align-orange-ink: #f07a38;
+  --align-orange-deep: #d95a13;
+  --align-action: #b9470f;
+  --align-brand-grad: linear-gradient(180deg, #f07a38, #e8641b, #d95a13);
+  --align-brand-tint: rgba(232, 100, 27, 0.12);
+
+  /* ---- Text ---- */
+  --align-text: #eef3f8;
+  --align-muted: #9aabba;
+
+  /* ---- Lines ---- */
+  --align-line: #31445c;
+  --align-line-strong: #61758e;
+
+  /* ---- Radius ---- */
+  --align-radius: 4px;             /* legacy small */
+  --align-radius-card: 16px;       /* cards */
+  --align-radius-control: 10px;    /* buttons, inputs */
+  --align-radius-chip: 999px;      /* pills */
+
+  /* ---- Shadow ---- */
+  --align-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);   /* legacy */
+  --align-shadow-card: 0 1px 2px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.05);
+  --align-shadow-pop: 0 4px 8px rgba(0,0,0,0.30), 0 16px 40px rgba(0,0,0,0.28);
+
+  /* ---- Spacing ---- */
+  --align-sp-1: 4px;
+  --align-sp-2: 8px;
+  --align-sp-3: 12px;
+  --align-sp-4: 16px;
+  --align-sp-5: 20px;
+  --align-sp-6: 24px;
+  --align-sp-8: 32px;
+
+  /* ---- Typography ---- */
+  --align-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --align-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --align-fs-title: 17px;
+  --align-fs-body: 15px;
+  --align-fs-small: 13px;
+  --align-fs-micro: 11px;
+
+  /* ---- Generic aliases (used by legacy CSS) ---- */
+  --bg: var(--align-paper);
+  --card: var(--align-surface);
+  --ink: var(--align-text);
+  --muted: var(--align-muted);
+  --line: var(--align-line);
+  --font: var(--align-font);
+  --brand: #315f8c;                /* legacy navy brand */
+  --brand-glow: rgba(49, 95, 140, 0.24);
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --radius-sm: 3px;
+  --radius-lg: var(--align-radius);
+  --shadow-sm: var(--align-shadow);
+  --shadow-lg: var(--align-shadow);
+}
+
+html[data-theme="light"] {
+  --align-paper: #f3f5f7;
+  --align-surface: #ffffff;
+  --align-surface-2: #e9eef3;
+  --align-text: #142337;
+  --align-muted: #475569;
+  --align-line: #ccd6e0;
+  --align-line-strong: #7b8c9f;
+  --align-orange-ink: #b9470f;
+  --align-shadow: 0 2px 8px rgba(14, 27, 44, 0.08);
+  --align-shadow-card: 0 1px 2px rgba(14,27,44,0.06), 0 8px 24px rgba(14,27,44,0.06);
+  --align-shadow-pop: 0 4px 8px rgba(14,27,44,0.10), 0 16px 40px rgba(14,27,44,0.12);
+  --align-brand-tint: rgba(232, 100, 27, 0.10);
+
+  --bg: var(--align-paper);
+  --card: var(--align-surface);
+  --ink: var(--align-text);
+  --muted: var(--align-muted);
+  --line: var(--align-line);
+  --font: var(--align-font);
+  --brand: #173f67;
+  --brand-glow: rgba(23, 63, 103, 0.16);
+  --shadow-sm: var(--align-shadow);
+  --shadow-lg: var(--align-shadow);
+}
