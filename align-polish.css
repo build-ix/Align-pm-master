@@ -1846,11 +1846,11 @@ html[data-theme="light"] body.pl-open .pl-empty { background: #fff; border-color
   box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 6px 16px rgba(232,100,27,0.25);
 }
 .section-header-action--primary:hover { filter: brightness(1.06); }
-html[data-theme="light"] .section-header-action {
+html[data-theme="light"] .section-header-action:not(.section-header-action--primary) {
   border-color: rgba(14,27,44,0.12);
   color: #475569;
 }
-html[data-theme="light"] .section-header-action:hover { color: #142337; border-color: rgba(14,27,44,0.22); }
+html[data-theme="light"] .section-header-action:not(.section-header-action--primary):hover { color: #142337; border-color: rgba(14,27,44,0.22); }
 
 /* --- Pin Location button now lives inside the Location section --- */
 body.pl-open .pl-detail-section .pl-pin-location { margin-top: 10px; }
