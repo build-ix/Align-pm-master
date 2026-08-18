@@ -158,9 +158,8 @@ function _listHtml(){
       var displayName=co?co.name:(key==='none'?'Unassigned':key);
       var isUnassigned=!co;
       h.push('<div class="ct-ribbon'+(isUnassigned?' ct-unassigned':'')+'">');
-      h.push('<span class="ct-ribbon-name">'+esc(displayName)+'</span>');
+      h.push('<span class="ct-ribbon-name">'+esc(displayName)+(co?'<button class="ct-ribbon-edit" data-coid="'+esc(key)+'" aria-label="Edit company"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button>':'')+'</span>');
       if(co&&co.trade)h.push('<span class="ct-ribbon-trade">'+esc(co.trade)+'</span>');
-      if(co)h.push('<button class="ct-ribbon-edit" data-coid="'+esc(key)+'">Edit</button>');
       h.push('<span class="ct-ribbon-count">'+group.length+(group.length===1?' person':' people')+'</span>');
       h.push('</div>');
       h.push('<div class="ct-grid">');
@@ -173,9 +172,8 @@ function _listHtml(){
     fCompanies.forEach(function(co){
       if(!seenIds[co.id]){
         h.push('<div class="ct-ribbon">');
-        h.push('<span class="ct-ribbon-name">'+esc(co.name)+'</span>');
+        h.push('<span class="ct-ribbon-name">'+esc(co.name)+'<button class="ct-ribbon-edit" data-coid="'+esc(co.id)+'" aria-label="Edit company"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg></button></span>');
         if(co.trade)h.push('<span class="ct-ribbon-trade">'+esc(co.trade)+'</span>');
-        h.push('<button class="ct-ribbon-edit" data-coid="'+esc(co.id)+'">Edit</button>');
         h.push('<span class="ct-ribbon-count">No contacts</span>');
         h.push('</div>');
         h.push('<div class="ct-empty-co">No people at this company yet.</div>');

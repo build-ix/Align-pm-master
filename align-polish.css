@@ -2228,4 +2228,15 @@ html[data-theme="light"] #ct-perms-section{ background:#f8fafc; border-color:rgb
 }
 .ct-ribbon-count{ color: var(--align-muted, #9aabba); }
 html[data-theme="light"] .ct-ribbon-count{ color: #475569; }
-.ct-ribbon-count:nth-child(2){ margin-left: 0; }
+.ct-ribbon.ct-unassigned .ct-ribbon-count{ margin-left: 0; }
+
+/* Edit icon: small blue pencil at end of name (replaces the text button) */
+.ct-ribbon-edit{
+  display:inline-flex; align-items:center; justify-content:center;
+  width:22px; height:22px; padding:0; margin-left:6px;
+  border:0; border-radius:6px;
+  background:transparent; color:#3B82F6;
+  vertical-align:middle; cursor:pointer;
+}
+.ct-ribbon-edit:hover{ background:rgba(59,130,246,0.14); color:#60a5fa; }
+.ct-ribbon-edit svg{ display:block; }
