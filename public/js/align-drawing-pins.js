@@ -148,10 +148,41 @@
         g.setAttribute('transform',
           `translate(${screenPoint.x} ${screenPoint.y}) scale(${MARKER_SCALE}) translate(-18 -46)`);
 
-        g.addEventListener('click', (e) => {
-          e.stopPropagation();
-          this._onPinClick(pin);
-        });
+        // --- Pin activation: click for mouse, direct touchend for iOS ---
+        // (Viewer calls preventDefault() on touchstart/touchend, which suppresses
+        // the synthetic click on iOS Safari, so we handle touch directly.)
+        (function (g, pin, self) {
+          var tapStart = null;
+
+          g.addEventListener('click', function (e) {
+            e.stopPropagation();
+            self._onPinClick(pin);
+          });
+
+          g.addEventListener('touchstart', function (e) {
+            if (e.touches.length !== 1) { tapStart = null; return; } // 2nd finger = pinch, abort tap
+            tapStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+          }, { passive: true });
+
+          g.addEventListener('touchcancel', function () { tapStart = null; });
+
+          g.addEventListener('touchend', function (e) {
+            var s = tapStart;
+            tapStart = null;
+            if (!s) return;
+            if (e.touches.length > 0) return;                 // other fingers still down = pinch
+            var t = e.changedTouches && e.changedTouches[0];
+            if (!t) return;
+            var dx = t.clientX - s.x;
+            var dy = t.clientY - s.y;
+            if ((dx * dx + dy * dy) > 100) return;            // moved > 10px = pan, let viewer handle it
+            if ((Date.now() - s.t) > 500) return;             // long press, not a tap
+
+            e.preventDefault();   // suppress synthetic click (no double-fire with click handler)
+            e.stopPropagation();  // viewer's _mvTouchEnd never runs for this tap
+            self._onPinClick(pin);
+          }, { passive: false }); // must be non-passive so preventDefault() works
+        })(g, pin, this);
 
         this.overlay.appendChild(g);
       });
