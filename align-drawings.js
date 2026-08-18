@@ -43,6 +43,17 @@
     T:  'Telecommunications'
   };
 
+  // Fixed display order for category filter chips (A,S,E,M,P,C,FP,L,T).
+  var SHEET_CAT_ORDER = ['A', 'S', 'E', 'M', 'P', 'C', 'FP', 'L', 'T'];
+
+  // Derive the discipline code + label from a drawing name via its sheet-number prefix.
+  function drawingCategory(name) {
+    var m = /^(FP|A|S|E|M|P|C|L|T)-?(\d+)/i.exec(name || '');
+    if (!m) return null;
+    var code = m[1].toUpperCase();
+    return { code: code, label: SHEET_CATEGORIES[code] || code };
+  }
+
   // Metadata record shape per scanned page:
   // { pageIndex, sheetNumber, basePrefix, baseNumber, revision, title, category, status, reviewReason, labeledManually }
   function _blankPageMeta(pageIndex) {
@@ -74,7 +85,10 @@
     pdfSplitInfo: null,     // { pageCount, pages } when splitting a PDF
     selectMode: false,      // true when checkboxes are visible for bulk actions
     selectedIds: {},        // set-like object: { drawingId: true }
-    drawingType: ''         // selected drawing type (plan, section, elevation, detail, 3d)
+    drawingType: '',        // selected drawing type (plan, section, elevation, detail, 3d)
+    activeCategory: 'all',  // category filter: 'all' | 'other' | a discipline code (A,S,E,...)
+    maxVisible: 20,         // how many cards to render before "Load More"
+    drawingsCache: null     // last-fetched drawings list (avoids re-fetch on filter)
   };
 
   /** Always-fresh project-id lookup — never stale. Tries multiple paths. */
@@ -920,6 +934,9 @@
     state.selectMode = false;
     state.selectedIds = {};
     state.drawingType = '';
+    state.activeCategory = 'all';
+    state.maxVisible = 20;
+    state.drawingsCache = null;
     _resolveProjectId();
 
     try { _paint(); } catch(e) {
@@ -950,15 +967,23 @@
     c.innerHTML = '<div class="dr-empty">Loading drawings…</div>';
     
     getDrawingsList().then(function (drawings) {
-      c.innerHTML = _mainViewHtml(drawings);
-      try { _bindMainView(); } catch(e) {
-        fetch('https://ntfy.sh/alfr-hermes-tasks', { method:'POST', body: 'bindMainView crash: ' + e.message + '\n' + (e.stack||'').slice(0,500), headers:{'Title':'Align Crash','Priority':'high'} }).catch(function(){});
-      }
+      state.drawingsCache = drawings;
+      _renderView(drawings);
     }).catch(function(err) {
       console.error('[DRAWINGS] getDrawingsList error:', err);
       c.innerHTML = '<div class="dr-empty"><strong>Error loading drawings</strong><p>' + (err.message || 'Unknown error') + '</p><button id="dr-retry">Retry</button></div>';
       document.getElementById('dr-retry').addEventListener('click', _paint);
     });
+  }
+
+  // Render the main list from an in-memory drawings array + rebind (no re-fetch).
+  function _renderView(drawings) {
+    var c = state.container;
+    if (!c) return;
+    c.innerHTML = _mainViewHtml(drawings);
+    try { _bindMainView(); } catch(e) {
+      fetch('https://ntfy.sh/alfr-hermes-tasks', { method:'POST', body: 'bindMainView crash: ' + e.message + '\n' + (e.stack||'').slice(0,500), headers:{'Title':'Align Crash','Priority':'high'} }).catch(function(){});
+    }
   }
 
   /* ── Main View HTML ─────────────────────────────────────────────────────── */
@@ -978,6 +1003,49 @@
     }
     h.push('</div>');
     h.push('</div>');
+
+    // ── Category filter (chips + count line + filtered list) ──
+    var counts = {};
+    var otherCount = 0;
+    var ci, cc;
+    for (ci = 0; ci < drawings.length; ci++) {
+      cc = drawingCategory(drawings[ci].name);
+      if (cc) { counts[cc.code] = (counts[cc.code] || 0) + 1; }
+      else { otherCount++; }
+    }
+    // safety: if the active category vanished (e.g. file deleted), fall back to All
+    if (state.activeCategory !== 'all' && state.activeCategory !== 'other' && !counts[state.activeCategory]) {
+      state.activeCategory = 'all';
+    }
+    if (state.activeCategory === 'other' && otherCount === 0) {
+      state.activeCategory = 'all';
+    }
+    if (drawings.length > 0) {
+      h.push('<div class="dwg-filter" id="dwg-filter">');
+      h.push('<button type="button" class="dwg-chip' + (state.activeCategory === 'all' ? ' active' : '') + '" data-cat="all">All (' + drawings.length + ')</button>');
+      for (ci = 0; ci < SHEET_CAT_ORDER.length; ci++) {
+        var code = SHEET_CAT_ORDER[ci];
+        if (!counts[code]) continue;
+        h.push('<button type="button" class="dwg-chip' + (state.activeCategory === code ? ' active' : '') + '" data-cat="' + code + '">' + esc(SHEET_CATEGORIES[code]) + ' (' + counts[code] + ')</button>');
+      }
+      if (otherCount > 0) {
+        h.push('<button type="button" class="dwg-chip' + (state.activeCategory === 'other' ? ' active' : '') + '" data-cat="other">Other (' + otherCount + ')</button>');
+      }
+      h.push('</div>');
+    }
+    // filtered list (used by the card loop AND Load More)
+    var filtered = drawings;
+    if (state.activeCategory !== 'all') {
+      filtered = [];
+      for (ci = 0; ci < drawings.length; ci++) {
+        cc = drawingCategory(drawings[ci].name);
+        var fcode = cc ? cc.code : 'other';
+        if (fcode === state.activeCategory) filtered.push(drawings[ci]);
+      }
+    }
+    if (drawings.length > 0) {
+      h.push('<div class="dwg-count">Showing ' + Math.min(filtered.length, state.maxVisible) + ' of ' + filtered.length + ' drawing' + (filtered.length === 1 ? '' : 's') + '</div>');
+    }
 
     // Selection bar (only in select mode with drawings)
     if (state.selectMode && drawings.length > 0) {
@@ -1006,36 +1074,40 @@
       h.push('<p>Drag & drop a drawing file here or click "Add Drawing" to upload one.</p>');
       h.push('</div>');
     } else {
-      h.push('<div class="dr-grid" id="dr-grid">');
-      var MAX_VISIBLE = 20;
-      for (var i = 0; i < drawings.length && i < MAX_VISIBLE; i++) {
-        var d = drawings[i];
+      h.push('<div class="dwg-grid" id="dr-grid">');
+      for (var i = 0; i < filtered.length && i < state.maxVisible; i++) {
+        var d = filtered[i];
         var icon = mimeIcon(d.mimeType);
         var isImage = d.mimeType && d.mimeType.indexOf('image/') === 0;
         var isSelected = state.selectedIds[d.id];
         var selClass = state.selectMode ? ' select-mode' : '';
         if (isSelected) selClass += ' selected';
-        h.push('<div class="dr-card' + selClass + '" data-file-id="' + esc(d.id) + '">');
-        // Checkbox overlay in select mode
+        var cat = drawingCategory(d.name);
+        var catCode = cat ? cat.code : 'other';
+
+        h.push('<div class="dwg-card' + selClass + '" data-file-id="' + esc(d.id) + '" data-cat="' + catCode + '">');
         h.push('<div class="dr-card-check" data-check-id="' + esc(d.id) + '"></div>');
         if (isImage) {
-          h.push('<div class="dr-thumb" data-thumb-id="' + esc(d.id) + '"></div>');
+          h.push('<div class="dwg-thumb">');
+          h.push('<img src="/api/files/' + encodeURIComponent(d.id) + '?thumb=1" alt="' + esc(d.name) + '" loading="lazy" onerror="this.style.display=\'none\'">');
         } else {
-          h.push('<div class="dr-thumb dr-thumb-icon">' + icon + '</div>');
+          h.push('<div class="dwg-thumb dwg-thumb-icon">');
+          h.push('<span class="dwg-icon">' + icon + '</span>');
         }
-        h.push('<div class="dr-card-info">');
-        h.push('<div class="dr-card-name" title="' + esc(d.name) + '">' + esc(d.name) + '</div>');
-        h.push('<div class="dr-card-meta">');
-        h.push(fmtSize(d.size) + ' · ' + fmtDate(d.updatedAt));
-        h.push('</div>');
-        h.push('</div>');
-        h.push('</div>');
+        if (cat) {
+          h.push('<span class="dwg-tag"><span class="dwg-dot" data-cat="' + cat.code + '"></span>' + esc(cat.label) + '</span>');
+        }
+        h.push('</div>'); // .dwg-thumb
+        h.push('<div class="dwg-body">');
+        h.push('<div class="dwg-name" title="' + esc(d.name) + '">' + esc(d.name) + '</div>');
+        h.push('<div class="dwg-meta">' + fmtSize(d.size) + ' · ' + fmtDate(d.updatedAt) + '</div>');
+        h.push('</div>'); // .dwg-body
+        h.push('</div>'); // .dwg-card
       }
       h.push('</div>');
-      // Load More button when there are more drawings than visible
-      if (drawings.length > MAX_VISIBLE) {
-        var remaining = drawings.length - MAX_VISIBLE;
-        h.push('<button class="pm-btn small" id="dr-load-more" style="margin-top:12px;display:block;width:100%;">Load More (' + remaining + ' more)</button>');
+      if (filtered.length > state.maxVisible) {
+        var remaining = filtered.length - state.maxVisible;
+        h.push('<button class="pm-btn" id="dr-load-more">Load More (' + remaining + ' more)</button>');
       }
     }
 
@@ -1057,37 +1129,30 @@
       });
     }
 
+    // ── Category filter chips ─────────────────────────────────────────────
+    var filterBar = document.getElementById('dwg-filter');
+    if (filterBar) {
+      filterBar.addEventListener('click', function (e) {
+        var t = e.target;
+        while (t && t !== filterBar && String(t.className || '').indexOf('dwg-chip') === -1) {
+          t = t.parentNode;
+        }
+        if (!t || t === filterBar) return;
+        var cat = t.getAttribute('data-cat');
+        if (cat && cat !== state.activeCategory) {
+          state.activeCategory = cat;
+          state.maxVisible = 20;
+          if (state.drawingsCache) _renderView(state.drawingsCache);
+        }
+      });
+    }
+
     // ── Load More button ──────────────────────────────────────────────────
     var loadMoreBtn = document.getElementById('dr-load-more');
     if (loadMoreBtn) {
       loadMoreBtn.addEventListener('click', function () {
-        // Fetch all drawings again and re-render without limit
-        getDrawingsList().then(function(drawings) {
-          var grid = document.getElementById('dr-grid');
-          if (!grid) return;
-          // Remove the Load More button
-          if (loadMoreBtn.parentNode) loadMoreBtn.parentNode.removeChild(loadMoreBtn);
-          // Render remaining drawings
-          var h = '';
-          for (var i = 20; i < drawings.length; i++) {
-            var d = drawings[i];
-            var icon = mimeIcon(d.mimeType);
-            var isImage = d.mimeType && d.mimeType.indexOf('image/') === 0;
-            var selClass = state.selectMode ? ' select-mode' : '';
-            h += '<div class=\"dr-card' + selClass + '\" data-file-id=\"' + esc(d.id) + '\">';
-            h += '<div class=\"dr-card-check\" data-check-id=\"' + esc(d.id) + '\"></div>';
-            if (isImage) {
-              h += '<div class=\"dr-thumb\" data-thumb-id=\"' + esc(d.id) + '\"></div>';
-            } else {
-              h += '<div class=\"dr-thumb dr-thumb-icon\">' + icon + '</div>';
-            }
-            h += '<div class=\"dr-card-info\">';
-            h += '<div class=\"dr-card-name\" title=\"' + esc(d.name) + '\">' + esc(d.name) + '</div>';
-            h += '<div class=\"dr-card-meta\">' + fmtSize(d.size) + ' · ' + fmtDate(d.updatedAt) + '</div>';
-            h += '</div></div>';
-          }
-          grid.insertAdjacentHTML('beforeend', h);
-        });
+        state.maxVisible = 100000; // show all
+        if (state.drawingsCache) _renderView(state.drawingsCache);
       });
     }
 
@@ -1153,7 +1218,7 @@
     }
 
     // ── Card clicks ────────────────────────────────────────────────────────
-    var cards = document.querySelectorAll('.dr-card');
+    var cards = document.querySelectorAll('.dwg-card');
     cards.forEach(function (card) {
       var fileId = card.getAttribute('data-file-id');
 
@@ -1206,23 +1271,6 @@
       });
     });
 
-    // Lazy-load image thumbnails
-    var thumbs = document.querySelectorAll('.dr-thumb[data-thumb-id]');
-    thumbs.forEach(function (thumb) {
-      var fileId = thumb.getAttribute('data-thumb-id');
-      if (fileId) {
-        _loadDrawingForViewer(state.projectId, fileId).then(function (viewData) {
-          if (viewData && viewData.content) {
-            var img = document.createElement('img');
-            img.src = viewData.content;
-            img.alt = viewData.meta.name;
-            img.className = 'dr-thumb-img';
-            thumb.innerHTML = '';
-            thumb.appendChild(img);
-          }
-        });
-      }
-    });
   }
 
   /**
