@@ -1363,7 +1363,7 @@ body.ps-open #section-page::after {
   border-left: none;
   overflow: visible;
 }
-.ps-logo { width: 160px; height: auto; display: block; }
+.ps-logo { width: 160px; height: auto; }
 .ps-header-actions {
   order: 2;
   display: flex;
