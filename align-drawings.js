@@ -1338,6 +1338,52 @@
     _mvTransformListeners.forEach(function (cb) {
       try { cb(ev); } catch (err) { console.error('[AlignDrawings] transform listener failed:', err); }
     });
+    _mvPersistState();
+  }
+
+  /* ── Viewer state persistence (survives WKWebView content-process kill) ── */
+  var MV_STATE_KEY = 'alignpm.mv.state.v1';
+  var MV_STATE_MAX_AGE_MS = 10 * 60 * 1000;
+  var _mvStateTimer = null;
+
+  function _mvWriteStateNow() {
+    try {
+      if (!_mv || !_mv._pdfDoc) { localStorage.removeItem(MV_STATE_KEY); return; }
+      localStorage.setItem(MV_STATE_KEY, JSON.stringify({
+        projectId: _mv.projectId,
+        drawingId: _mv.drawingId,
+        page: _mv._pdfPageNum,
+        zoom: _mv.zoom,
+        panX: _mv.panX,
+        panY: _mv.panY,
+        ts: Date.now()
+      }));
+    } catch (e) {}
+  }
+  function _mvPersistState() {
+    if (_mvStateTimer) return;
+    _mvStateTimer = setTimeout(function () { _mvStateTimer = null; _mvWriteStateNow(); }, 400);
+  }
+  window.addEventListener('pagehide', _mvWriteStateNow);
+  var _mvRestoreOpts = null;
+
+  // Best-effort restore after a WKWebView content-process kill. Call from app boot.
+  function _mvTryRestoreState() {
+    var raw = null;
+    try { raw = localStorage.getItem(MV_STATE_KEY); } catch (e) {}
+    if (!raw) return false;
+    var st = null;
+    try { st = JSON.parse(raw); } catch (e) { return false; }
+    if (!st || !st.drawingId || !st.projectId || (Date.now() - st.ts) > MV_STATE_MAX_AGE_MS) {
+      try { localStorage.removeItem(MV_STATE_KEY); } catch (e) {}
+      return false;
+    }
+    try { localStorage.removeItem(MV_STATE_KEY); } catch (e) {}
+    state.projectId = st.projectId;
+    _loadDrawingForViewer(st.projectId, st.drawingId).then(function (file) {
+      if (file) _viewDrawing(file, { restore: st });
+    }).catch(function () {});
+    return true;
   }
 
   function _mvScreenToNormalized(clientX, clientY) {
@@ -1414,12 +1460,15 @@
   }
 
   /* ── Viewer entry point ────────────────────────────────────────────────── */
-  function _viewDrawing(file) {
+  function _viewDrawing(file, opts) {
     var isImage = file.meta.mimeType && file.meta.mimeType.indexOf('image/') === 0;
     var isPdf = file.meta.mimeType && file.meta.mimeType === 'application/pdf';
     var content = file.content || '';
     var pid = state.projectId;
     var did = file.meta.id;
+
+    // Restore opts (from a content-process kill) get applied after the viewer is ready
+    _mvRestoreOpts = (opts && opts.restore) || null;
 
     // Capture any pending list-map mode (crop / pin) set by openListCrop/openListPin
     var modeArgs = _mvModeArgs || null;
@@ -1788,6 +1837,7 @@
             showMarkups: true,
             markupMode: false,
             zoom: 1,
+            _committedZoom: 1,     // zoom at which canvas CSS size was last committed
             panX: 0,
             panY: 0,
             drawing: false,
@@ -1814,7 +1864,12 @@
             _pdfContent: content,
             _fitMode: 'width',  // 'width' or 'page'
             mode: modeArgs ? modeArgs.mode : null,
-            modeArgs: modeArgs
+            modeArgs: modeArgs,
+            // Phase 0 viewer state
+            _renderedKey: null,     // pageNum@WxH of the last committed backing store
+            _rafPending: false,     // touchmove rAF coalescing flag
+            _pendingTouches: null,  // latest touch snapshot awaiting rAF
+            _specTimer: null        // debounced mid-gesture speculative render timer
           };
 
           _loadMarkups(pid, did).then(function (strokes) {
@@ -1825,6 +1880,20 @@
             requestAnimationFrame(function () {
               _mvFitToViewport();
               _mvSyncCanvas();
+              // Apply restore opts (reopening after a content-process kill)
+              if (_mvRestoreOpts) {
+                var r = _mvRestoreOpts;
+                _mvRestoreOpts = null;
+                if (_mv._pdfDoc && r.page && r.page >= 1 && r.page <= _mv._pdfNumPages) {
+                  _mv._pdfPageNum = r.page;
+                }
+                if (r.zoom) _mv.zoom = Math.max(MV_ZOOM_MIN, Math.min(MV_ZOOM_MAX, r.zoom));
+                if (typeof r.panX === 'number') _mv.panX = r.panX;
+                if (typeof r.panY === 'number') _mv.panY = r.panY;
+                _mvApplyTransform();
+                _mvUpdateToolbarUI();
+                if (_mv._pdfDoc) _mvRerenderPdf();
+              }
               // Pre-render adjacent pages for instant page turning
               _mvPreRenderAdjacent();
               _mvStartMode();
@@ -2089,8 +2158,7 @@
     }
 
     if (isPdf) {
-      _mvUpdateCanvasSizes();
-      _mvApplyTransform();
+      _mvCommitZoomCss();
       _mvRerenderPdf();
     } else {
       _mvApplyTransform();
@@ -2378,7 +2446,7 @@
     if (w && h) {
       canvas.width = w;
       canvas.height = h;
-      // CSS size follows zoom for PDF (handled in _mvUpdateCanvasSizes)
+      // CSS size follows zoom for PDF (handled in _mvCommitZoomCss)
       if (!_mv._pdfDoc) {
         canvas.style.width = w + 'px';
         canvas.style.height = h + 'px';
@@ -2774,11 +2842,26 @@
 
   function _mvTouchMove(e) {
     e.stopPropagation();
-    if (e.touches.length === 2 && _mv._twoFinger) {
-      var cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-      var cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-      var dx = e.touches[0].clientX - e.touches[1].clientX;
-      var dy = e.touches[0].clientY - e.touches[1].clientY;
+    if (e.cancelable) e.preventDefault();
+    var snap = [];
+    for (var i = 0; i < e.touches.length; i++) {
+      snap.push({ clientX: e.touches[i].clientX, clientY: e.touches[i].clientY });
+    }
+    _mv._pendingTouches = snap;
+    if (_mv._rafPending) return;   // coalesce to one per frame
+    _mv._rafPending = true;
+    requestAnimationFrame(function () {
+      _mv._rafPending = false;
+      if (_mv._pendingTouches) _mvProcessTouchMove(_mv._pendingTouches);
+    });
+  }
+
+  function _mvProcessTouchMove(touches) {
+    if (touches.length === 2 && _mv._twoFinger) {
+      var cx = (touches[0].clientX + touches[1].clientX) / 2;
+      var cy = (touches[0].clientY + touches[1].clientY) / 2;
+      var dx = touches[0].clientX - touches[1].clientX;
+      var dy = touches[0].clientY - touches[1].clientY;
       var dist = Math.sqrt(dx * dx + dy * dy);
       var distRatio = _mv._pinchDist0 > 0 ? dist / _mv._pinchDist0 : 1;
 
@@ -2804,6 +2887,7 @@
           _mv.panY = my - scale * (my - _mv.panY);
         }
         _mv.zoom = newZoom;
+        _mvScheduleSpeculativeRender();   // Step 4: render early if zoom stabilizes
       } else {
         // Two-finger pan (no significant pinch)
         _mv.panX = _mv.panOrigX + (cx - _mv.panStartX);
@@ -2811,19 +2895,19 @@
       }
       _mvApplyTransform();
       _mvUpdateToolbarUI();
-      e.preventDefault();
       return;
     }
-    if (e.touches.length === 1 && !_mv._twoFinger) {
-      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, preventDefault: function () {}, stopPropagation: function () {} };
+    if (touches.length === 1 && !_mv._twoFinger) {
+      var fake = { clientX: touches[0].clientX, clientY: touches[0].clientY, preventDefault: function () {}, stopPropagation: function () {} };
       _mvMouseMove(fake);
-      e.preventDefault();
     }
   }
 
   function _mvTouchEnd(e) {
     e.stopPropagation();
     e.preventDefault(); // suppress synthetic mouse events after touch (prevents duplicate crop points)
+    if (_mv._specTimer) { clearTimeout(_mv._specTimer); _mv._specTimer = null; }
+    _mv._pendingTouches = null;
     if (_mv._twoFinger) {
       _mv._twoFinger = false;
       _mv._pinching = false;
@@ -2905,39 +2989,50 @@
   function _mvApplyTransform() {
     var stage = document.getElementById('dr-mv-stage');
     if (!stage) return;
-    // For PDF: only translate — canvas CSS sizes handle the scale
-    // For images: use full CSS transform (translate + scale) as before
+    var s;
     if (_mv._pdfDoc) {
-      stage.style.transform = 'translate(' + _mv.panX + 'px,' + _mv.panY + 'px)';
-      stage.style.transformOrigin = '0 0';
-      // Update canvas CSS sizes for current zoom
-      _mvUpdateCanvasSizes();
+      // CSS size is baked at _committedZoom; stage scales the delta only.
+      s = _mv.zoom / (_mv._committedZoom || _mv.zoom || 1);
     } else {
-      stage.style.transform = 'translate(' + _mv.panX + 'px,' + _mv.panY + 'px) scale(' + _mv.zoom + ')';
-      stage.style.transformOrigin = '0 0';
+      s = _mv.zoom;
     }
+    stage.style.transformOrigin = '0 0';
+    stage.style.transform = 'translate3d(' + _mv.panX + 'px,' + _mv.panY + 'px,0) scale(' + s + ')';
     _mvNotifyTransformChanged('transform');
   }
 
-  /* ── Update canvas CSS sizes based on current zoom (PDF only) ──────────── */
-  function _mvUpdateCanvasSizes() {
+  /* ── Commit canvas CSS size at a zoom point (PDF only). Call ONLY at
+     commit points (render complete / gesture end), never per frame. ─────── */
+  function _mvCommitZoomCss() {
     if (!_mv._pdfDoc) return;
     var pdfCanvas = document.getElementById('dr-mv-image');
     var markupCanvas = document.getElementById('dr-mv-canvas');
-    var cssW = Math.round(_mv._pdfLogW * _mv.zoom);
-    var cssH = Math.round(_mv._pdfLogH * _mv.zoom);
-    if (pdfCanvas) {
-      pdfCanvas.style.width  = cssW + 'px';
-      pdfCanvas.style.height = cssH + 'px';
-    }
-    if (markupCanvas) {
-      markupCanvas.style.width  = cssW + 'px';
-      markupCanvas.style.height = cssH + 'px';
-    }
+    var cssW = Math.round(_mv._pdfLogW * _mv.zoom) + 'px';
+    var cssH = Math.round(_mv._pdfLogH * _mv.zoom) + 'px';
+    if (pdfCanvas)    { pdfCanvas.style.width = cssW;    pdfCanvas.style.height = cssH; }
+    if (markupCanvas) { markupCanvas.style.width = cssW; markupCanvas.style.height = cssH; }
+    _mv._committedZoom = _mv.zoom;
+    _mvApplyTransform(); // stage scale collapses back to 1 in the same JS turn
   }
 
   /* ── Guarded single-canvas render (prevents races) ──────────────────── */
   var _mvRenderSeq = 0;
+  var _mvBackCanvas = null;
+
+  function _mvGetBackCanvas() {
+    if (!_mvBackCanvas) _mvBackCanvas = document.createElement('canvas');
+    return _mvBackCanvas;
+  }
+
+  // Quantize zoom to powers of sqrt(2) so re-renders only fire on bucket crossing.
+  function _mvBucketZoom(z) {
+    var HALF_LN2 = Math.LN2 / 2;
+    var idx = Math.round(Math.log(z) / HALF_LN2);
+    var b = Math.pow(2, idx / 2);
+    if (b < MV_ZOOM_MIN) b = MV_ZOOM_MIN;
+    if (b > MV_ZOOM_MAX) b = MV_ZOOM_MAX;
+    return b;
+  }
 
   function _mvRenderPage(pageNum) {
     var seq = ++_mvRenderSeq;
@@ -2945,55 +3040,62 @@
       _mv._renderTask.cancel();
       _mv._renderTask.promise.catch(function() {}); // swallow cancel
     }
+    _mvHighlightPage(pageNum); // keep thumbnail highlight snappy
+
+    var bucketZoom = _mvBucketZoom(_mv.zoom);
 
     return _mv._pdfDoc.getPage(pageNum).then(function (page) {
       if (seq !== _mvRenderSeq) return; // superseded
-      _mv._pdfPageNum = pageNum;
-      _mvHighlightPage(pageNum);
 
-      var pdfCanvas = document.getElementById('dr-mv-image');
-      if (!pdfCanvas) return;
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
-      var renderScale = _mv._pdfBaseScale * _mv.zoom * dpr;
-      var logW = Math.round(_mv._pdfLogW * _mv.zoom);
-      var logH = Math.round(_mv._pdfLogH * _mv.zoom);
-
-      // Clamp to canvas limits
       var pageW = _mv._pdfLogW / _mv._pdfBaseScale;
       var pageH = _mv._pdfLogH / _mv._pdfBaseScale;
-      var clampedScale = _clampRenderScale(_mv._pdfBaseScale * _mv.zoom, pageW, pageH, dpr);
+      var clampedScale = _clampRenderScale(_mv._pdfBaseScale * bucketZoom, pageW, pageH, dpr);
       var renderScale = clampedScale * dpr;
-      var viewportW = Math.round(pageW * renderScale);
-      var viewportH = Math.round(pageH * renderScale);
+      var w = Math.round(pageW * renderScale);
+      var h = Math.round(pageH * renderScale);
 
-      pdfCanvas.width  = viewportW;
-      pdfCanvas.height = viewportH;
-      pdfCanvas.style.width  = logW + 'px';
-      pdfCanvas.style.height = logH + 'px';
-
-      // Sync annotation canvas
-      var annCanvas = document.getElementById('dr-mv-canvas');
-      if (annCanvas) {
-        annCanvas.width  = viewportW;
-        annCanvas.height = viewportH;
-        annCanvas.style.width  = logW + 'px';
-        annCanvas.style.height = logH + 'px';
+      var renderKey = pageNum + '@' + w + 'x' + h;
+      if (renderKey === _mv._renderedKey) {
+        // Backing store already sharp at this bucket; just re-commit CSS at new zoom.
+        _mv._pdfPageNum = pageNum;
+        _mvCommitZoomCss();
+        _mvRedraw();
+        return;
       }
 
-      // Canvas backing dims changed — re-sync crop marker size/viewBox.
-      _mvNotifyTransformChanged('pdf-canvas-resize');
-
-      if (seq !== _mvRenderSeq) return; // superseded during sizing
-
-      var ctx = pdfCanvas.getContext('2d');
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      // Render into the reused offscreen back canvas — the visible canvas
+      // keeps its old bitmap until the sharp one is ready (no blank flash).
+      var back = _mvGetBackCanvas();
+      back.width = w; back.height = h;
+      var bctx = back.getContext('2d');
+      bctx.imageSmoothingEnabled = true;
+      bctx.imageSmoothingQuality = 'high';
       var viewport = page.getViewport({ scale: renderScale });
-      ctx.clearRect(0, 0, viewportW, viewportH);
 
-      var task = page.render({ canvasContext: ctx, viewport: viewport });
+      var task = page.render({ canvasContext: bctx, viewport: viewport });
       _mv._renderTask = task;
+
       return task.promise.then(function () {
+        if (seq !== _mvRenderSeq) return; // superseded — old bitmap stays visible
+        var pdfCanvas = document.getElementById('dr-mv-image');
+        if (!pdfCanvas) return;
+
+        // ATOMIC COMMIT (single JS turn = single paint): resize clears the
+        // visible canvas, then drawImage refills it before the browser paints.
+        _mv._pdfPageNum = pageNum;
+        pdfCanvas.width = w; pdfCanvas.height = h;
+        pdfCanvas.getContext('2d').drawImage(back, 0, 0);
+
+        var annCanvas = document.getElementById('dr-mv-canvas');
+        if (annCanvas && (annCanvas.width !== w || annCanvas.height !== h)) {
+          annCanvas.width = w; annCanvas.height = h;
+          _mvRedraw();
+        }
+
+        _mv._renderedKey = renderKey;
+        _mvCommitZoomCss();                       // CSS size + transform rebase
+        _mvNotifyTransformChanged('pdf-canvas-resize');
         _mvPreRenderAdjacent();
       }).catch(function (e) {
         if (e && e.name !== 'RenderingCancelledException') throw e;
@@ -3008,6 +3110,19 @@
     var pdfCanvas = document.getElementById('dr-mv-image');
     if (!pdfCanvas || !_mv._pdfDoc) return;
     _mvRenderPage(_mv._pdfPageNum);
+  }
+
+  /* ── Speculative mid-gesture render: if pinch zoom is stable ~100ms,
+     render sharp into the back buffer early so release feels instant. ──── */
+  var MV_SPECULATE_MS = 100;
+  function _mvScheduleSpeculativeRender() {
+    if (!_mv._pdfDoc) return;
+    if (_mv._specTimer) clearTimeout(_mv._specTimer);
+    _mv._specTimer = setTimeout(function () {
+      _mv._specTimer = null;
+      if (!_mv._twoFinger) return;      // gesture already ended; touchend handled it
+      _mvRerenderPdf();                 // double-buffered + bucketed => cheap & safe
+    }, MV_SPECULATE_MS);
   }
 
   /* ── Pre-render adjacent PDF pages for instant page turning ──────────── */
@@ -3175,6 +3290,8 @@
   /* ── Cleanup viewer ────────────────────────────────────────────────────── */
   function _mvClose() {
     if (_mvPersistTimer) { clearTimeout(_mvPersistTimer); _mvPersistTimer = null; }
+    if (_mvStateTimer) { clearTimeout(_mvStateTimer); _mvStateTimer = null; }
+    try { localStorage.removeItem(MV_STATE_KEY); } catch (e) {}
     // Flush any pending save
     if (_mv && _mv.strokes && _mv.strokes.length > 0) {
       _saveMarkups(_mv.projectId, _mv.drawingId, _mv.strokes).catch(function () {});
@@ -3806,7 +3923,8 @@
     listDrawings: listDrawingsForProject,
     openListCrop: openListCrop,
     openListPin: openListPin,
-    openLayoutView: openLayoutView
+    openLayoutView: openLayoutView,
+    tryRestoreViewerState: _mvTryRestoreState
   };
 
   if (window.TileRegistry) window.TileRegistry.register({ id: 'drawings', title: 'Drawings', icon: '#', route: 'drawings', roles: ['user','admin'], order: 3 });
