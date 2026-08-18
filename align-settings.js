@@ -529,7 +529,7 @@
           '<button class="pm-btn small primary" data-st-act="proj-add" id="st-proj-add">+ Add Project</button>',
         '</div>',
         '<div class="st-project-list" id="st-proj-list">',
-          '<div class="pm-empty">Loading projects…</div>',
+          (window.AlignSkeleton ? window.AlignSkeleton.html(3) : '<div class="pm-empty">Loading projects…</div>'),
         '</div>',
       '</div>',
     ].join('');

@@ -444,7 +444,7 @@
       '<div class="dlog-history-header">'+
         '<span class="dlog-history-label">Change Log</span>'+
       '</div>'+
-      '<div id="dlog-list" class="dlog-list"><div class="dir-loading">Loading…</div></div>';
+      '<div id="dlog-list" class="dlog-list">' + (window.AlignSkeleton ? window.AlignSkeleton.html(3) : '<div class="dir-loading">Loading…</div>') + '</div>';
 
     // Wire events
     document.getElementById('dlog-nav-prev').addEventListener('click', function(){ changeDay(-1); });

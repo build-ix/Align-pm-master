@@ -717,7 +717,7 @@
         '</div>' +
       '</div>' +
       // People list
-      '<div id="people-list">Loading…</div>';
+      '<div id="people-list">' + (window.AlignSkeleton ? window.AlignSkeleton.html(4) : 'Loading…') + '</div>';
 
       container.innerHTML = html;
 
