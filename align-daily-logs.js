@@ -959,12 +959,42 @@
       list.innerHTML = '<div class="dlog-attach-empty">No files attached</div>';
       return;
     }
-    list.innerHTML = attachments.map(function(a){
-      return '<label class="dlog-attach-item">'+
-        '<input type="checkbox" value="'+esc(a.id)+'" data-name="'+esc(a.name||a.id)+'" checked>'+
-        '<span class="dlog-attach-name">📎 '+esc(a.name||a.id)+'</span>'+
-      '</label>';
-    }).join('');
+    var plain = function(){
+      list.innerHTML = attachments.map(function(a){
+        var id = a.id || a.fileId;
+        return '<label class="dlog-attach-item">'+
+          '<input type="checkbox" value="'+esc(id)+'" data-name="'+esc(a.name||id)+'" checked>'+
+          '<span class="dlog-attach-name">📎 '+esc(a.name||id)+'</span>'+
+        '</label>';
+      }).join('');
+    };
+    // Resolve file status so trashed/deleted files render as tombstones.
+    var ids = attachments.map(function(a){ return a.id || a.fileId; }).filter(Boolean);
+    if (!ids.length) { plain(); return; }
+    var token = localStorage.getItem('align-token') || '';
+    fetch('/api/files/resolve?project_id=' + encodeURIComponent(state.projectId) + '&ids=' + encodeURIComponent(ids.join(',')), { headers: { 'Authorization': 'Bearer ' + token } })
+      .then(function(r){ return r.ok ? r.json() : {}; })
+      .then(function(status){
+        list.innerHTML = attachments.map(function(a){
+          var id = a.id || a.fileId;
+          var st = status[id];
+          if (st && (st.trashed || st.deleted)) {
+            var who = st.deleted ? st.deleted_by : st.trashed_by;
+            var when = st.deleted ? st.deleted_at : st.trashed_at;
+            var dstr = '';
+            try { var d = new Date(when); if (!isNaN(d)) dstr = d.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }); } catch(e) {}
+            return '<div class="dlog-attach-item dlog-attach-tombstone">'+
+              '<span class="dlog-attach-name">🚫 '+esc(a.name||id)+'</span>'+
+              '<span class="dlog-attach-deleted">Deleted by '+(who||'someone')+(dstr ? ' · '+dstr : '')+'</span>'+
+            '</div>';
+          }
+          return '<label class="dlog-attach-item">'+
+            '<input type="checkbox" value="'+esc(id)+'" data-name="'+esc(a.name||id)+'" checked>'+
+            '<span class="dlog-attach-name">📎 '+esc(a.name||id)+'</span>'+
+          '</label>';
+        }).join('');
+      })
+      .catch(plain);
   }
 
   function _showFilePicker() {

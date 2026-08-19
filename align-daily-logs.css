@@ -675,6 +675,25 @@
   white-space: nowrap;
 }
 
+.dlog-attach-tombstone {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  cursor: default;
+  background: var(--card);
+  border: 1px dashed var(--line);
+  opacity: 0.75;
+}
+
+.dlog-attach-tombstone .dlog-attach-name {
+  color: var(--ink-sub);
+}
+
+.dlog-attach-deleted {
+  font-size: 0.7rem;
+  color: var(--ink-sub);
+}
+
 /* ── Form actions ─────────────────────────────────────────────────────── */
 
 .dlog-form-actions {

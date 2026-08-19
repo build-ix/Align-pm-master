@@ -113,6 +113,8 @@
       if ((t = ev.target.closest('[data-ft-seg]'))) { _path = _path.concat([t.getAttribute('data-ft-seg')]); _render(); return; }
       if ((t = ev.target.closest('[data-ft-nf-toggle]'))) { _nfOpen = !_nfOpen; _render(); return; }
       if ((t = ev.target.closest('[data-ft-file-btn]'))) { _submitClassify(t); return; }
+      if ((t = ev.target.closest('[data-ft-nf-delete]'))) { _confirmDelete(t.getAttribute('data-ft-nf-delete')); return; }
+      if ((t = ev.target.closest('[data-ft-delete]'))) { _confirmDelete(t.getAttribute('data-ft-delete')); return; }
       if ((t = ev.target.closest('[data-ft-retry]'))) { refresh(); return; }
       if ((t = ev.target.closest('[data-ft-file]'))) {
         if (_opts && typeof _opts.onOpenFile === 'function') _opts.onOpenFile(t.getAttribute('data-ft-file'));
@@ -224,6 +226,26 @@
       });
   }
 
+  function _confirmDelete(fileId) {
+    fetch('/api/files/' + encodeURIComponent(fileId) + '/references', { headers: authHdr() })
+      .then(function (r) { return r.ok ? r.json() : { count: 0, surfaces: [] }; })
+      .then(function (refs) {
+        var msg = 'Delete this file?\n\n';
+        if (refs.count > 0) {
+          msg += 'It appears in ' + refs.count + ' record(s) and will show as "deleted" there — it won\'t silently disappear.\n';
+        } else {
+          msg += "It isn't referenced anywhere.\n";
+        }
+        msg += 'The file moves to Trash and can be restored.';
+        if (!confirm(msg)) return;
+        fetch('/api/files/' + encodeURIComponent(fileId), { method: 'DELETE', headers: authHdr() })
+          .then(function (r) {
+            if (r.ok) { refresh(); }
+            else return r.json().then(function (e) { alert(e.error || 'Delete failed'); });
+          });
+      });
+  }
+
   /* ── paint + render ── */
   function _paint() {
     if (!_container) return;
@@ -285,10 +307,12 @@
         '<span class="ft-chev">›</span></button>';
     });
     c.files.sort(function (a, b) { return new Date(b.created_at || 0) - new Date(a.created_at || 0); }).forEach(function (f) {
-      rows += '<button type="button" class="ft-row ft-row--file" data-ft-file="' + esc(f.id) + '">' +
+      rows += '<div class="ft-row ft-row--file" data-ft-file="' + esc(f.id) + '" role="button" tabindex="0">' +
         _htmlThumb(f) +
         '<span class="ft-row__name">' + esc(f.name) + '</span>' +
-        '<span class="ft-row__meta">' + esc(fmtSize(f.size)) + '</span></button>';
+        '<span class="ft-row__meta">' + esc(fmtSize(f.size)) + '</span>' +
+        '<button type="button" class="ft-del-btn" data-ft-delete="' + esc(f.id) + '" title="Delete">🗑</button>' +
+        '</div>';
     });
     if (!rows) rows = '<div class="ft-empty">Nothing in here yet.</div>';
 
@@ -341,6 +365,7 @@
         '<input type="date" class="ft-input" data-ft-nf-date value="' + esc(d.date || '') + '"' + (needDate ? '' : ' hidden') + '>' +
         '<select class="ft-input" data-ft-nf-spec' + (_specCache ? ' data-filled="1"' : '') + (needSpec ? '' : ' hidden') + '>' + specOpts + '</select>' +
         '<button type="button" class="ft-file-btn" data-ft-file-btn disabled>File it</button>' +
+        '<button type="button" class="ft-del-btn" data-ft-nf-delete="' + esc(f.id) + '" title="Delete">🗑</button>' +
         '<span class="ft-nf-err"></span>' +
       '</div></li>';
   }
@@ -392,7 +417,9 @@
 '.ft-input{border:1px solid var(--align-line);border-radius:8px;padding:7px 9px;font-size:13px;background:var(--align-surface);color:var(--align-text);min-width:0;flex:1 1 120px}' +
 '.ft-file-btn{border:0;background:var(--align-orange);color:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;flex:0 0 auto}' +
 '.ft-file-btn:disabled{opacity:.4}' +
-'.ft-nf-err{flex-basis:100%;font-size:12px;color:#b3261e}';
+'.ft-nf-err{flex-basis:100%;font-size:12px;color:#b3261e}' +
+'.ft-del-btn{border:0;background:none;color:var(--align-muted);font-size:16px;cursor:pointer;padding:4px;flex:none;opacity:.7}' +
+'.ft-del-btn:active{opacity:1;color:#b3261e}';
     document.head.appendChild(st);
   }
 

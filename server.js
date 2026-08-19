@@ -2850,6 +2850,20 @@ app.post('/api/files/:id/purge', requireAuth, requireFileProjectMember, requireF
   res.json({ ok: true, purged: true });
 });
 
+// ── Batch resolve file status for attachment tombstone rendering ──
+app.get('/api/files/resolve', requireAuth, (req, res) => {
+  const ids = String(req.query.ids || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+  const pid = req.query.project_id || null;
+  if (!ids.length) return res.json({});
+  const placeholders = ids.map(function () { return '?'; }).join(',');
+  const rows = pid
+    ? dbAll('SELECT id, trashed, trashed_by, trashed_at, deleted, deleted_by, deleted_at FROM files WHERE project_id = ? AND id IN (' + placeholders + ')', pid, ...ids)
+    : dbAll('SELECT id, trashed, trashed_by, trashed_at, deleted, deleted_by, deleted_at FROM files WHERE id IN (' + placeholders + ')', ...ids);
+  const map = {};
+  rows.forEach(function (r) { map[r.id] = r; });
+  res.json(map);
+});
+
 // ── Reference lookup for the delete confirm dialog (where a file appears) ──
 app.get('/api/files/:id/references', requireAuth, requireFileProjectMember, requireFileRoom(dbGet, 'r'), (req, res) => {
   const file = dbGet('SELECT id, project_id FROM files WHERE id = ?', req.params.id);
