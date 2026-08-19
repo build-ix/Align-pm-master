@@ -13,6 +13,8 @@
   var _selectAll = false;
   var _activeTab = 'register'; // 'register' | 'folders'
   var _regMounted = false;
+  var _legacyOpen = false;     // inside the Legacy manual-folder browser?
+  var _treeInitialPath = null; // one-shot deep-link path for the tree
 
   function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _fs(size) {
@@ -96,10 +98,24 @@
     if (!_container) return;
     _container.innerHTML = _html();
     _bind();
+    if (_activeTab === 'folders') {
+      if (_legacyOpen) { _loadFolder(_currentFolder); }
+      else { _mountTree(); }
+      return;
+    }
     if (_viewMode === 'trash') {
       _loadTrash();
     } else {
       _loadFolder(_currentFolder);
+    }
+  }
+
+  function _mountTree() {
+    var pane = document.getElementById('af-tree-pane');
+    if (pane && window.AlignFileTree && _pid) {
+      window.AlignFileTree.mount(pane, _pid, {
+        onOpenLegacy: function () { _legacyOpen = true; _paint(); }
+      });
     }
   }
 
@@ -134,12 +150,14 @@
     return '' +
       '<div class="af-tabs">' +
         '<button type="button" class="af-tab' + (_activeTab === 'register' ? ' af-tab-on' : '') + '" id="af-tab-register">Register</button>' +
-        '<button type="button" class="af-tab' + (_activeTab === 'folders' ? ' af-tab-on' : '') + '" id="af-tab-folders">Folders</button>' +
+        '<button type="button" class="af-tab' + (_activeTab === 'folders' ? ' af-tab-on' : '') + '" id="af-tab-folders">Files</button>' +
       '</div>' +
       '<div class="af-search-wrap"><input class="af-search" id="af-search" placeholder="Search documents & files"></div>' +
       '<div id="af-search-results" class="af-search-results" style="display:none"></div>' +
       '<div id="af-register-pane"' + (_activeTab === 'register' ? '' : ' style="display:none"') + '></div>' +
-      '<div id="af-folders-pane"' + (_activeTab === 'folders' ? '' : ' style="display:none"') + '>' +
+      '<div id="af-tree-pane"' + (_activeTab === 'folders' && !_legacyOpen ? '' : ' style="display:none"') + '></div>' +
+      '<div id="af-folders-pane"' + (_activeTab === 'folders' && _legacyOpen ? '' : ' style="display:none"') + '>' +
+        '<div class="fm-legacy-bar"><button type="button" id="af-legacy-back">← Files</button><span>Legacy Folders</span></div>' +
       [
         '<div class="fm-toolbar">',
         '<div class="fm-breadcrumb">', bc, '</div>',
@@ -176,6 +194,7 @@
 
   function _setTab(which) {
     _activeTab = which;
+    if (which === 'folders') _legacyOpen = false;
     _paint();
     if (which === 'register') _mountRegister();
   }
@@ -189,7 +208,7 @@
     if (document.getElementById('af-tab-css')) return;
     var s = document.createElement('style');
     s.id = 'af-tab-css';
-    s.textContent = '.af-tabs{display:flex;gap:8px;padding:12px 16px 0}.af-tab{flex:1;padding:10px 0;border:1px solid var(--align-line);border-radius:10px;background:var(--align-surface);color:var(--align-muted);font-size:14px;font-weight:600;cursor:pointer}.af-tab-on{background:var(--align-navy);color:#fff;border-color:var(--align-navy)}.fm-nudge{display:inline-block;margin-left:8px;color:var(--align-orange);font-size:11px;font-weight:700;border:none;background:none;cursor:pointer;white-space:nowrap}.af-search-wrap{padding:12px 16px 0}.af-search{width:100%;box-sizing:border-box;border:1px solid var(--align-line);border-radius:12px;padding:10px 12px;font-size:15px;background:var(--align-surface);color:var(--align-text)}.af-search-results{position:absolute;left:16px;right:16px;z-index:80;background:var(--align-surface);border:1px solid var(--align-line);border-radius:12px;box-shadow:var(--align-shadow-pop);max-height:60vh;overflow-y:auto;margin-top:4px}.af-sr-group{padding:8px 12px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--align-muted)}.af-sr-row{display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--align-line)}.af-sr-row:last-child{border-bottom:0}.af-sr-row:active{background:var(--align-line)}.af-sr-tag{flex:none;font-size:10px;font-weight:800;text-transform:uppercase;border-radius:5px;padding:2px 6px;background:var(--align-line);color:var(--align-muted)}.af-sr-tag-reg{background:var(--align-navy);color:#fff}.af-sr-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
+    s.textContent = '.af-tabs{display:flex;gap:8px;padding:12px 16px 0}.af-tab{flex:1;padding:10px 0;border:1px solid var(--align-line);border-radius:10px;background:var(--align-surface);color:var(--align-muted);font-size:14px;font-weight:600;cursor:pointer}.af-tab-on{background:var(--align-navy);color:#fff;border-color:var(--align-navy)}.fm-nudge{display:inline-block;margin-left:8px;color:var(--align-orange);font-size:11px;font-weight:700;border:none;background:none;cursor:pointer;white-space:nowrap}.af-search-wrap{padding:12px 16px 0}.af-search{width:100%;box-sizing:border-box;border:1px solid var(--align-line);border-radius:12px;padding:10px 12px;font-size:15px;background:var(--align-surface);color:var(--align-text)}.af-search-results{position:absolute;left:16px;right:16px;z-index:80;background:var(--align-surface);border:1px solid var(--align-line);border-radius:12px;box-shadow:var(--align-shadow-pop);max-height:60vh;overflow-y:auto;margin-top:4px}.af-sr-group{padding:8px 12px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--align-muted)}.af-sr-row{display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--align-line)}.af-sr-row:last-child{border-bottom:0}.af-sr-row:active{background:var(--align-line)}.af-sr-tag{flex:none;font-size:10px;font-weight:800;text-transform:uppercase;border-radius:5px;padding:2px 6px;background:var(--align-line);color:var(--align-muted)}.af-sr-tag-reg{background:var(--align-navy);color:#fff}.af-sr-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fm-legacy-bar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-bottom:1px solid var(--align-line)}.fm-legacy-bar button{border:0;background:none;color:var(--align-orange);font-weight:600;font-size:13px;cursor:pointer;padding:0}.fm-legacy-bar span{font-size:12px;color:var(--align-muted)}';
     document.head.appendChild(s);
   }
 
@@ -236,6 +255,7 @@
       var t = e.target;
       if (t.closest && t.closest('#af-tab-register')) { _setTab('register'); return; }
       if (t.closest && t.closest('#af-tab-folders')) { _setTab('folders'); return; }
+      if (t.closest && t.closest('#af-legacy-back')) { _legacyOpen = false; _paint(); return; }
       var doc = t.closest ? t.closest('[data-sr-doc]') : null;
       if (doc) { _closeSearch(); if (window.AlignDocuments) window.AlignDocuments.openDetail(doc.getAttribute('data-sr-doc')); return; }
       var fil = t.closest ? t.closest('[data-sr-file]') : null;
