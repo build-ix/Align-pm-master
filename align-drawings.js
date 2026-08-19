@@ -4055,7 +4055,7 @@
     });  // close _getSelectedIds().then()
   }
 
-  /** Delete selected drawings. Prompts confirmation first. */
+  /** Delete selected drawings (server-backed soft delete). Prompts confirmation first. */
   function _deleteSelectedDrawings(selectAll) {
     _getSelectedIds(selectAll).then(function (ids) {
     if (ids.length === 0) return;
@@ -4063,39 +4063,36 @@
     var label = ids.length === 1 ? 'this drawing' : ids.length + ' drawings';
     if (!confirm('Delete ' + label + '? This cannot be undone.')) return;
 
-    var pid = state.projectId;
-    var index = _loadDrawingsIndex(pid);
+    var token = localStorage.getItem('align-token') || '';
 
-    // Remove from IndexedDB
+    // Soft-delete each drawing on the server (source of truth).
+    // The old IndexedDB/localStorage + AlignFiles.deleteFile (a stub) never hit
+    // the server, so nothing actually got deleted.
     var delPromises = [];
     for (var i = 0; i < ids.length; i++) {
-      delPromises.push(_deleteDrawingBlob(pid, ids[i]));
+      (function (id) {
+        delPromises.push(
+          fetch('/api/files/' + encodeURIComponent(id), {
+            method: 'DELETE',
+            headers: { 'Authorization': 'Bearer ' + token }
+          }).then(function (r) {
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.json();
+          })
+        );
+      })(ids[i]);
     }
 
     Promise.all(delPromises).then(function () {
-      // Remove from index
-      var keep = [];
-      var deletedSet = {};
-      for (var d = 0; d < ids.length; d++) deletedSet[ids[d]] = true;
-      for (var j = 0; j < index.length; j++) {
-        if (!deletedSet[index[j].id]) keep.push(index[j]);
-      }
-      _saveDrawingsIndex(pid, keep);
-
-      // Also remove from AlignFiles if present
-      var filesAPI = window.AlignFiles || null;
-      if (filesAPI) {
-        for (var k = 0; k < ids.length; k++) {
-          try { filesAPI.deleteFile(pid, ids[k]); } catch(e) { /* best effort */ }
-        }
-      }
-
-      // Clear selection and re-render
+      // Clear selection + cache; _paint() refetches from the server so
+      // trashed drawings drop out.
       state.selectMode = false;
       state.selectedIds = {};
+      state.drawingsCache = null;
       _paint();
     }).catch(function (err) {
       console.warn('[AlignDrawings] Delete failed:', err);
+      alert('Delete failed: ' + (err && err.message ? err.message : 'unknown error'));
     });
     });  // close _getSelectedIds().then()
   }
