@@ -30,6 +30,15 @@
   var MV_ZOOM_MAX = 5;
   var _mvWheelTimer = 0;  // debounce wheel re-renders
 
+  // Phase 1: tile overlay constants (crisp high-zoom)
+  var MV_TILE_CSS = 512;           // tile size in bucket-zoom CSS px
+  var MV_TILE_BLEED = 1;           // CSS px overlap on right/bottom to hide seams
+  var MV_TILE_CACHE_MAX = 24;      // hard cap on live tiles
+  var MV_TILE_POOL_MAX = 8;        // detached canvases kept warm for reuse
+  var MV_TILE_MARGIN = 1;          // extra ring of tiles around viewport
+  var MV_TILE_CONCURRENCY = 2;     // simultaneous PDF.js tile renders
+  var MV_TILE_EPS = 0.999;         // clamp-binding detection epsilon
+
   // Sheet number → category mapping for auto-classification
   var SHEET_CATEGORIES = {
     A:  'Architectural',
@@ -133,13 +142,18 @@
 
   // Clamp render scale to stay within device canvas limits (iOS Safari ~16MP)
   function _clampRenderScale(scale, pageW, pageH, dpr) {
-    var pixW = Math.ceil(pageW * scale * dpr);
-    var pixH = Math.ceil(pageH * scale * dpr);
-    var pixels = pixW * pixH;
-    if (pixels <= MAX_CANVAS_PIXELS && pixW <= MAX_CANVAS_DIM && pixH <= MAX_CANVAS_DIM) return scale;
-    var areaFactor = Math.sqrt(MAX_CANVAS_PIXELS / pixels);
-    var dimFactor  = Math.min(MAX_CANVAS_DIM / pixW, MAX_CANVAS_DIM / pixH);
-    return scale * Math.min(areaFactor, dimFactor, 1);
+    // Min-of-caps form: once clamped, the result is a constant independent of
+    // the input scale, so the render size (and thus renderKey) pins exactly —
+    // the base layer becomes a free no-op at high zoom.
+    return Math.min(
+      scale,
+      Math.sqrt(MAX_CANVAS_PIXELS / (pageW * pageH)) / dpr,
+      MAX_CANVAS_DIM / (Math.max(pageW, pageH) * dpr)
+    );
+  }
+
+  function _mvDpr() {
+    return Math.min(window.devicePixelRatio || 1, 2);
   }
 
   function mimeIcon(mime) {
@@ -1802,7 +1816,7 @@
           return;
         }
         var baseScale = viewW / page.getViewport({ scale: 1 }).width;
-        var dpr = Math.min(window.devicePixelRatio || 1, 2);
+        var dpr = _mvDpr();
         // Clamp scale to stay within iOS canvas limits (4096px, 14MP)
         var pageW = page.getViewport({ scale: 1 }).width;
         var pageH = page.getViewport({ scale: 1 }).height;
@@ -1882,7 +1896,19 @@
             _renderedKey: null,     // pageNum@WxH of the last committed backing store
             _rafPending: false,     // touchmove rAF coalescing flag
             _pendingTouches: null,  // latest touch snapshot awaiting rAF
-            _specTimer: null        // debounced mid-gesture speculative render timer
+            _specTimer: null,       // debounced mid-gesture speculative render timer
+            // Phase 1 tile overlay state
+            _tiles: {},             // key -> { canvas, col, row, bucketIdx, rendered, task, lastUse }
+            _tileCount: 0,
+            _tilePool: [],          // detached canvases for reuse
+            _tileUseSeq: 0,         // LRU counter
+            _tileEpoch: 0,          // invalidation counter (per-tile render guard)
+            _tilesActive: false,
+            _tileBucketIdx: -1,
+            _tilePageNum: 0,
+            _tileQueue: [],
+            _tileRendering: 0,
+            _tileUpdateTimer: null
           };
 
           _loadMarkups(pid, did).then(function (strokes) {
@@ -3043,14 +3069,18 @@
   }
 
   // Quantize zoom to powers of sqrt(2) so re-renders only fire on bucket crossing.
-  function _mvBucketZoom(z) {
+  // Index-based so tiles have a stable integer cache key.
+  function _mvBucketIndex(z) {
     var HALF_LN2 = Math.LN2 / 2;
     var idx = Math.round(Math.log(z) / HALF_LN2);
-    var b = Math.pow(2, idx / 2);
-    if (b < MV_ZOOM_MIN) b = MV_ZOOM_MIN;
-    if (b > MV_ZOOM_MAX) b = MV_ZOOM_MAX;
-    return b;
+    var minIdx = Math.ceil(Math.log(MV_ZOOM_MIN) / HALF_LN2 - 1e-9);
+    var maxIdx = Math.floor(Math.log(MV_ZOOM_MAX) / HALF_LN2 + 1e-9);
+    if (idx < minIdx) idx = minIdx;
+    if (idx > maxIdx) idx = maxIdx;
+    return idx;
   }
+  function _mvBucketFromIndex(idx) { return Math.pow(2, idx / 2); }
+  function _mvBucketZoom(z) { return _mvBucketFromIndex(_mvBucketIndex(z)); }
 
   function _mvRenderPage(pageNum) {
     var seq = ++_mvRenderSeq;
@@ -3066,7 +3096,7 @@
     return _mv._pdfDoc.getPage(pageNum).then(function (page) {
       if (seq !== _mvRenderSeq) return; // superseded
 
-      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var dpr = _mvDpr();
       var pageW = _mv._pdfLogW / _mv._pdfBaseScale;
       var pageH = _mv._pdfLogH / _mv._pdfBaseScale;
       var clampedScale = _clampRenderScale(_mv._pdfBaseScale * bucketZoom, pageW, pageH, dpr);
