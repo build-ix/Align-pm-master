@@ -757,6 +757,40 @@ const MIGRATIONS = [
       });
       tx();
     }
+  },
+  {
+    version: 33,
+    name: 'file_provenance_and_deletion',
+    up(db) {
+      const safeAdd = (sql) => { try { db.exec(sql); } catch (e) { /* already exists */ } };
+
+      // Provenance (immutable — written once at insert)
+      safeAdd("ALTER TABLE files ADD COLUMN original_source_tile TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN original_source_id TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN original_uploaded_by TEXT");
+
+      // Deletion tracking
+      safeAdd("ALTER TABLE files ADD COLUMN trashed_by TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0");
+      safeAdd("ALTER TABLE files ADD COLUMN deleted_at TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN deleted_by TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN delete_reason TEXT");
+
+      // Backfill provenance from the best evidence we have (idempotent).
+      db.exec("UPDATE files SET original_source_tile = COALESCE(source_tile, 'files'), original_source_id = source_id, original_uploaded_by = uploaded_by WHERE original_source_tile IS NULL");
+
+      // Immutability guard: provenance never changes after insert.
+      // NULL-safe comparisons (IS NOT) so a NULL->NULL write never trips it.
+      try {
+        db.exec("CREATE TRIGGER IF NOT EXISTS files_provenance_immutable " +
+          "BEFORE UPDATE ON files " +
+          "WHEN OLD.original_source_tile IS NOT NULL " +
+          " AND (NEW.original_source_tile IS NOT OLD.original_source_tile " +
+          "   OR NEW.original_source_id IS NOT OLD.original_source_id " +
+          "   OR NEW.original_uploaded_by IS NOT OLD.original_uploaded_by) " +
+          "BEGIN SELECT RAISE(ABORT, 'provenance is immutable'); END");
+      } catch (e) { /* trigger unsupported — provenance enforced in code */ }
+    }
   }
 ];
 

@@ -62,24 +62,9 @@ setInterval(() => {
   } catch (e) { /* DB might not be initialized yet */ }
 }, 3600000);
 
-// Purge trashed files older than 30 days (runs hourly)
-function purgeOldTrash() {
-  try {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 30);
-    const trash = dbAll("SELECT * FROM files WHERE trashed = 1 AND trashed_at < ?", cutoff.toISOString());
-    trash.forEach(f => {
-      if (f.type === 'file' && f.stored_path) {
-        try { fs.unlinkSync(f.stored_path); } catch (e) { /* already gone */ }
-      }
-      dbRun('DELETE FROM files WHERE id = ?', f.id);
-    });
-    if (trash.length > 0) console.log('[TRASH] Purged ' + trash.length + ' expired files');
-  } catch (e) { /* DB might not be initialized yet */ }
-}
-setInterval(purgeOldTrash, 3600000);
-// Also run once at startup after DB init
-setTimeout(purgeOldTrash, 5000);
+// NOTE: No auto-purge of trashed files. Trash is permanent until the owner
+// manually purges a file in the Trash view (admin/owner only). Trashed rows
+// stay as reversible soft-deletes indefinitely.
 
 // Fix booleans for better-sqlite3 (throws on true/false)
 function _fix(params) {
@@ -1356,7 +1341,8 @@ app.patch('/api/files/:id/restore', requireAuth, requireFileProjectMember, requi
   const file = dbGet('SELECT * FROM files WHERE id = ?', req.params.id);
   if (!file) return res.status(404).json({ error: 'File not found' });
   if (!file.trashed) return res.status(400).json({ error: 'File is not in trash' });
-  dbRun('UPDATE files SET trashed = 0, trashed_at = NULL WHERE id = ?', req.params.id);
+  dbRun('UPDATE files SET trashed = 0, trashed_at = NULL, trashed_by = NULL WHERE id = ?', req.params.id);
+  logAudit('file_restore', file.id, file.project_id, 'files', { trashed: 1 }, { trashed: 0 }, req.user);
   res.json({ ok: true, restored: true });
 });
 
@@ -2806,16 +2792,20 @@ app.post('/api/files/upload', requireAuth, (req, res) => {
       sourceId: (req.body && req.body.source_id) || null,
       fileType: uploadType
     });
-    dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata, source_tile, source_id, doc_date, spec_section, classify_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, projectId, folderId, uploadType, req.file.filename, originalName, req.file.mimetype, req.file.size, finalPath, ts, (req.user && req.user.username) || '', metadata,
-      cls.source_tile, cls.source_id, cls.doc_date, cls.spec_section, cls.classify_status);
-    res.status(201).json({ file: { id, project_id: projectId, folder_id: folderId, type: uploadType, original_name: originalName, mime_type: req.file.mimetype, size_bytes: req.file.size, created_at: ts, uploaded_by: (req.user && req.user.username) || '', metadata: metadata, source_tile: cls.source_tile, doc_date: cls.doc_date, spec_section: cls.spec_section, classify_status: cls.classify_status } });
+    const uploaderName = (req.user && req.user.username) || '';
+    const origTile = cls.source_tile || 'files';
+    dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata, source_tile, source_id, doc_date, spec_section, classify_status, original_source_tile, original_source_id, original_uploaded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, projectId, folderId, uploadType, req.file.filename, originalName, req.file.mimetype, req.file.size, finalPath, ts, uploaderName, metadata,
+      cls.source_tile, cls.source_id, cls.doc_date, cls.spec_section, cls.classify_status,
+      origTile, cls.source_id, uploaderName);
+    res.status(201).json({ file: { id, project_id: projectId, folder_id: folderId, type: uploadType, original_name: originalName, mime_type: req.file.mimetype, size_bytes: req.file.size, created_at: ts, uploaded_by: uploaderName, metadata: metadata, source_tile: cls.source_tile, doc_date: cls.doc_date, spec_section: cls.spec_section, classify_status: cls.classify_status, original_source_tile: origTile } });
   });
 });
 
 app.get('/api/files/:id', requireAuth, requireFileProjectMember, requireFileRoom(dbGet, 'r'), (req, res) => {
   const file = dbGet('SELECT * FROM files WHERE id = ?', req.params.id);
   if (!file) return res.status(404).json({ error: 'File not found' });
+  if (file.deleted) return res.status(410).json({ error: 'This file was permanently deleted' });
   if (!fs.existsSync(file.stored_path)) return res.status(404).json({ error: 'File missing from disk' });
   const thumbPath = file.stored_path + '.thumb.jpg';
   if (req.query.thumb === '1' && fs.existsSync(thumbPath)) {
@@ -2833,8 +2823,47 @@ app.delete('/api/files/:id', requireAuth, requireFileProjectMember, requireFileR
   const file = dbGet('SELECT * FROM files WHERE id = ?', req.params.id);
   if (!file) return res.status(404).json({ error: 'File not found' });
   if (file.document_id) return res.status(409).json({ error: 'This file is part of a document. Remove it from the register first.' });
-  dbRun('UPDATE files SET trashed = 1, trashed_at = ? WHERE id = ?', nowISO(), req.params.id);
+  const reason = (req.body && req.body.reason) || null;
+  const ts = nowISO();
+  dbRun('UPDATE files SET trashed = 1, trashed_at = ?, trashed_by = ? WHERE id = ?', ts, (req.user && req.user.username) || '', req.params.id);
+  logAudit('file_trash', file.id, file.project_id, 'files', { trashed: 0 }, { trashed: 1, reason: reason }, req.user);
   res.json({ ok: true, trashed: true });
+});
+
+// ── Permanent purge (admin/owner only). Blob is destroyed; the row survives as tombstone. ──
+app.post('/api/files/:id/purge', requireAuth, requireFileProjectMember, requireFileRoom(dbGet, 'rw'), (req, res) => {
+  const file = dbGet('SELECT * FROM files WHERE id = ?', req.params.id);
+  if (!file) return res.status(404).json({ error: 'File not found' });
+  if (req.user.role !== 'admin' && req.user.role !== 'owner')
+    return res.status(403).json({ error: 'Only admins can permanently delete files' });
+  const reason = (req.body && req.body.reason) || null;
+  const ts = nowISO();
+
+  // Unlink blob first (tolerate ENOENT) — then mark the row as a tombstone.
+  if (file.stored_path) {
+    try { fs.unlinkSync(file.stored_path); } catch (e) { if (e.code !== 'ENOENT') return res.status(500).json({ error: 'Could not remove file — safe to retry' }); }
+    try { fs.unlinkSync(file.stored_path + '.thumb.jpg'); } catch (e) { /* no thumb */ }
+  }
+  dbRun('UPDATE files SET deleted = 1, deleted_at = ?, deleted_by = ?, delete_reason = ? WHERE id = ?',
+    ts, (req.user && req.user.username) || '', reason, req.params.id);
+  logAudit('file_purge', file.id, file.project_id, 'files', { stored_path: file.stored_path }, { deleted: 1, reason: reason }, req.user);
+  res.json({ ok: true, purged: true });
+});
+
+// ── Reference lookup for the delete confirm dialog (where a file appears) ──
+app.get('/api/files/:id/references', requireAuth, requireFileProjectMember, requireFileRoom(dbGet, 'r'), (req, res) => {
+  const file = dbGet('SELECT id, project_id FROM files WHERE id = ?', req.params.id);
+  if (!file) return res.status(404).json({ error: 'File not found' });
+  const refs = dbAll(
+    "SELECT id, category, data FROM records WHERE project_id = ? AND (" +
+    "EXISTS (SELECT 1 FROM json_each(records.data, '$.attachments') je WHERE json_extract(je.value, '$.id') = CAST(? AS TEXT)) " +
+    "OR EXISTS (SELECT 1 FROM json_each(records.data, '$.images') je WHERE json_extract(je.value, '$.fileId') = CAST(? AS TEXT)))",
+    file.project_id, file.id, file.id);
+  const surfaces = refs.map(function (r) {
+    let d = {}; try { d = JSON.parse(r.data || '{}'); } catch (e) {}
+    return { category: r.category, record_id: r.id, title: d.title || d.name || d.description || '' };
+  });
+  res.json({ count: surfaces.length, surfaces: surfaces });
 });
 
 // ── Drawing markups (annotation strokes per drawing) ──
