@@ -506,6 +506,24 @@
     callout.style.visibility = 'visible';
   }
 
+  function _itemDisplayNumber(itemId) {
+    // Match the list view's ordering (open sorted by priority, then completed).
+    var openItems = state.items
+      .map(function (item, sourceIndex) { return { item: item, sourceIndex: sourceIndex }; })
+      .filter(function (entry) { return entry.item.status !== 'completed'; })
+      .sort(function (a, b) {
+        var aRank = Object.prototype.hasOwnProperty.call(PRIORITY_RANK, a.item.priority) ? PRIORITY_RANK[a.item.priority] : PRIORITY_RANK.medium;
+        var bRank = Object.prototype.hasOwnProperty.call(PRIORITY_RANK, b.item.priority) ? PRIORITY_RANK[b.item.priority] : PRIORITY_RANK.medium;
+        return (aRank - bRank) || (a.sourceIndex - b.sourceIndex);
+      });
+    var openIdx = -1;
+    for (var i = 0; i < openItems.length; i++) { if (openItems[i].item.id === itemId) { openIdx = i; break; } }
+    if (openIdx >= 0) return openIdx + 1;
+    var completed = state.items.filter(function (i) { return i.status === 'completed'; });
+    for (var j = 0; j < completed.length; j++) { if (completed[j].id === itemId) return openItems.length + j + 1; }
+    return null;
+  }
+
   function _showLayoutPinCallout(detail) {
     if (!detail || detail.punchItemId == null) return;
     _removeLayoutPinCallout(false);
@@ -517,9 +535,8 @@
     var img = (Array.isArray(data.images) && data.images.length) ? data.images[0] : null;
 
     var numLabel = 'Punch item';
-    var idx = -1;
-    for (var k = 0; k < state.items.length; k++) { if (state.items[k].id === detail.punchItemId) { idx = k; break; } }
-    if (idx >= 0) numLabel = 'Punch item ' + String(idx + 1).padStart(2, '0');
+    var displayNum = _itemDisplayNumber(detail.punchItemId);
+    if (displayNum != null) numLabel = 'Punch item ' + String(displayNum).padStart(2, '0');
 
     var callout = document.createElement('section');
     callout.className = 'pin-callout';

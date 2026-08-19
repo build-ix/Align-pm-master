@@ -3415,6 +3415,7 @@
 
   // Cleanup
   function _mvTilesDeactivate() {
+    if (!_mv._tilesActive) return;       // tile engine never activated (image/crop viewer)
     _mv._tileEpoch++;                    // invalidate all in-flight tile renders
     _mv._tileQueue.length = 0;
     _mv._tileRendering = 0;
@@ -3423,13 +3424,15 @@
     _mv._tilesActive = false;
   }
   function _mvTilesTeardown() {          // page change, doc change, _mvClose
+    if (!_mv._tilesActive && !_mv._tiles) return;  // nothing initialized
     _mvTilesDeactivate();
     clearTimeout(_mv._tileUpdateTimer);
     _mv._tileUpdateTimer = null;
-    for (var k in _mv._tiles) {
-      var t = _mv._tiles[k];
-      if (t.task) { try { t.task.cancel(); } catch (e) {} }
-      _mvTileCanvasRelease(t.canvas);
+    var tiles = _mv._tiles || {};
+    for (var k in tiles) {
+      var t = tiles[k];
+      if (t && t.task) { try { t.task.cancel(); } catch (e) {} }
+      if (t) _mvTileCanvasRelease(t.canvas);
     }
     _mv._tiles = {};
     _mv._tileCount = 0;
