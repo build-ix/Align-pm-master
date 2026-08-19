@@ -84,7 +84,15 @@
   function _bind() {
     var root = state.root;
     root.querySelector('#ad-add').onclick = function () { openPromoteSheet(null, {}); };
-    root.querySelector('#ad-export').onclick = function () { window.location.href = '/api/projects/' + state.pid + '/documents/export.csv?token=' + encodeURIComponent(token()); };
+    root.querySelector('#ad-export').onclick = function () {
+      fetch('/api/projects/' + state.pid + '/documents/export.html', { headers: authHeaders() })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          var blob = new Blob([html], { type: 'text/html' });
+          window.open(URL.createObjectURL(blob), '_blank');
+        })
+        .catch(function () { alert('Could not generate export'); });
+    };
     root.onclick = function (ev) {
       var t = ev.target;
       var chip = t.closest ? t.closest('[data-cat]') : null;
@@ -600,6 +608,8 @@
     mount: mount,
     refresh: refresh,
     openDetail: openDetail,
-    openPromoteSheet: openPromoteSheet
+    openPromoteSheet: openPromoteSheet,
+    classifyFilename: classifyFilename,
+    isDrawingName: function (name) { return classifyFilename(name).category === 'drawings'; }
   };
 })(window);

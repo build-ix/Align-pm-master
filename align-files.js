@@ -135,6 +135,8 @@
         '<button type="button" class="af-tab' + (_activeTab === 'register' ? ' af-tab-on' : '') + '" id="af-tab-register">Register</button>' +
         '<button type="button" class="af-tab' + (_activeTab === 'folders' ? ' af-tab-on' : '') + '" id="af-tab-folders">Folders</button>' +
       '</div>' +
+      '<div class="af-search-wrap"><input class="af-search" id="af-search" placeholder="Search documents & files"></div>' +
+      '<div id="af-search-results" class="af-search-results" style="display:none"></div>' +
       '<div id="af-register-pane"' + (_activeTab === 'register' ? '' : ' style="display:none"') + '></div>' +
       '<div id="af-folders-pane"' + (_activeTab === 'folders' ? '' : ' style="display:none"') + '>' +
       [
@@ -186,7 +188,7 @@
     if (document.getElementById('af-tab-css')) return;
     var s = document.createElement('style');
     s.id = 'af-tab-css';
-    s.textContent = '.af-tabs{display:flex;gap:8px;padding:12px 16px 0}.af-tab{flex:1;padding:10px 0;border:1px solid var(--align-line);border-radius:10px;background:var(--align-surface);color:var(--align-muted);font-size:14px;font-weight:600;cursor:pointer}.af-tab-on{background:var(--align-navy);color:#fff;border-color:var(--align-navy)}';
+    s.textContent = '.af-tabs{display:flex;gap:8px;padding:12px 16px 0}.af-tab{flex:1;padding:10px 0;border:1px solid var(--align-line);border-radius:10px;background:var(--align-surface);color:var(--align-muted);font-size:14px;font-weight:600;cursor:pointer}.af-tab-on{background:var(--align-navy);color:#fff;border-color:var(--align-navy)}.fm-nudge{display:inline-block;margin-left:8px;color:var(--align-orange);font-size:11px;font-weight:700;border:none;background:none;cursor:pointer;white-space:nowrap}.af-search-wrap{padding:12px 16px 0}.af-search{width:100%;box-sizing:border-box;border:1px solid var(--align-line);border-radius:12px;padding:10px 12px;font-size:15px;background:var(--align-surface);color:var(--align-text)}.af-search-results{position:absolute;left:16px;right:16px;z-index:80;background:var(--align-surface);border:1px solid var(--align-line);border-radius:12px;box-shadow:var(--align-shadow-pop);max-height:60vh;overflow-y:auto;margin-top:4px}.af-sr-group{padding:8px 12px 4px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--align-muted)}.af-sr-row{display:flex;align-items:center;gap:8px;padding:10px 12px;font-size:14px;cursor:pointer;border-bottom:1px solid var(--align-line)}.af-sr-row:last-child{border-bottom:0}.af-sr-row:active{background:var(--align-line)}.af-sr-tag{flex:none;font-size:10px;font-weight:800;text-transform:uppercase;border-radius:5px;padding:2px 6px;background:var(--align-line);color:var(--align-muted)}.af-sr-tag-reg{background:var(--align-navy);color:#fff}.af-sr-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}';
     document.head.appendChild(s);
   }
 
@@ -196,6 +198,60 @@
     var tabFol = document.getElementById('af-tab-folders');
     if (tabReg) tabReg.addEventListener('click', function () { _setTab('register'); });
     if (tabFol) tabFol.addEventListener('click', function () { _setTab('folders'); });
+
+    // Unified search (register + folders)
+    var searchInput = document.getElementById('af-search');
+    var searchResults = document.getElementById('af-search-results');
+    if (searchInput && searchResults) {
+      var searchTimer = null;
+      searchInput.addEventListener('input', function () {
+        clearTimeout(searchTimer);
+        var q = searchInput.value.trim();
+        if (q.length < 2) { searchResults.style.display = 'none'; searchResults.innerHTML = ''; return; }
+        searchTimer = setTimeout(function () {
+          fetch('/api/projects/' + _pid + '/search?q=' + encodeURIComponent(q), { headers: _authHeaders() })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+              var docs = data.documents || [], files = data.files || [];
+              var html = '';
+              if (docs.length) {
+                html += '<div class="af-sr-group">Register</div>';
+                docs.forEach(function (d) {
+                  html += '<div class="af-sr-row" data-sr-doc="' + d.id + '"><span class="af-sr-tag af-sr-tag-reg">Reg</span>' +
+                    '<span class="af-sr-name">' + _esc((d.number ? d.number + ' · ' : '') + d.title) + '</span></div>';
+                });
+              }
+              if (files.length) {
+                html += '<div class="af-sr-group">Folders</div>';
+                files.forEach(function (f) {
+                  html += '<div class="af-sr-row" data-sr-file="' + f.id + '" data-sr-name="' + _esc(f.original_name) + '"><span class="af-sr-tag">File</span>' +
+                    '<span class="af-sr-name">' + _esc(f.original_name) + '</span></div>';
+                });
+              }
+              if (!html) html = '<div class="af-sr-group">No matches</div>';
+              searchResults.innerHTML = html;
+              searchResults.style.display = 'block';
+            }).catch(function () {});
+        }, 250);
+      });
+      searchResults.addEventListener('click', function (e) {
+        var doc = e.target.closest ? e.target.closest('[data-sr-doc]') : null;
+        if (doc) { searchResults.style.display = 'none'; if (window.AlignDocuments) window.AlignDocuments.openDetail(doc.getAttribute('data-sr-doc')); return; }
+        var fil = e.target.closest ? e.target.closest('[data-sr-file]') : null;
+        if (fil) {
+          searchResults.style.display = 'none';
+          var fid = fil.getAttribute('data-sr-file');
+          var fname = fil.getAttribute('data-sr-name');
+          _setTab('folders');
+          if (window.AlignDocuments) window.AlignDocuments.openPromoteSheet(fid, { filename: fname });
+        }
+      });
+      document.addEventListener('click', function (e) {
+        if (!e.target.closest || (!e.target.closest('#af-search') && !e.target.closest('#af-search-results'))) {
+          searchResults.style.display = 'none';
+        }
+      });
+    }
 
     // Breadcrumb navigation
     var crumbs = _container.querySelectorAll('[data-fm-nav]');
@@ -357,12 +413,15 @@
     var date = (isTrash ? f.trashed_at : f.created_at) || '';
     if (date) date = date.slice(0,10);
     var checked = _selected[f.id] ? ' checked' : '';
+    var nudge = (!isFolder && !isTrash && window.AlignDocuments && window.AlignDocuments.isDrawingName(f.original_name || ''))
+      ? ' <button class="fm-nudge" data-nudge-id="' + f.id + '" data-fm-name="' + _esc(f.original_name || '') + '">→ Register</button>'
+      : '';
 
     return [
       '<div class="fm-item' + (isFolder ? ' fm-folder' : '') + (isTrash ? ' fm-trashed' : '') + '" data-fm-id="' + f.id + '" data-fm-type="' + f.type + '" data-fm-name="' + _esc(f.original_name || '') + '" data-fm-size="' + (f.size_bytes || 0) + '" data-fm-folder="' + (f.folder_id || '') + '" data-fm-ext="' + ext + '" data-fm-mime="' + _esc(f.mime_type || '') + '">',
         '<span class="fm-check"><input type="checkbox" class="fm-checkbox" data-fm-id="' + f.id + '"' + checked + '></span>',
         '<span class="fm-icon">' + icon + '</span>',
-        '<span class="fm-name">' + name + '</span>',
+        '<span class="fm-name">' + name + nudge + '</span>',
         size,
         '<span class="fm-date">' + date + '</span>',
         '<span class="fm-actions-inline">',
@@ -401,6 +460,16 @@
         else { delete _selected[cid]; }
         _selectAll = false;
         _paint(); return;
+      }
+
+      // Nudge ("→ Register") on drawing-classified files
+      if (t.closest && t.closest('.fm-nudge')) {
+        e.stopPropagation(); e.preventDefault();
+        var nb = t.closest('.fm-nudge');
+        var nid = nb.getAttribute('data-nudge-id');
+        var nname = nb.getAttribute('data-fm-name');
+        if (window.AlignDocuments) window.AlignDocuments.openPromoteSheet(nid, { filename: nname });
+        return;
       }
 
       // Menu button (Delete, Rename, etc.)

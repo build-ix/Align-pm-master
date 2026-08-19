@@ -502,6 +502,12 @@ function csvCell(v) {
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
+function hEsc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
 /* ------------------------------------------------------------------ *
  * 4. EXPRESS SETUP
  * ------------------------------------------------------------------ */
@@ -1534,6 +1540,56 @@ app.get('/api/projects/:pid/documents/export.csv', requireAuth, auth.requireProj
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="document-register.csv"');
   res.send(lines.join('\n'));
+});
+
+// ── F1: unified search (register + loose files) ──
+app.get('/api/projects/:pid/search', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'r'), (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.json({ documents: [], files: [] });
+  const like = '%' + q.replace(/[\\%_]/g, function (c) { return '\\' + c; }) + '%';
+  const docs = dbAll(
+    "SELECT id, number, title, category, status FROM documents WHERE project_id = ? AND (number LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\') ORDER BY number LIMIT 20",
+    req.params.pid, like, like);
+  const files = dbAll(
+    "SELECT id, original_name, folder_id FROM files WHERE project_id = ? AND trashed = 0 AND document_id IS NULL AND original_name LIKE ? ESCAPE '\\' LIMIT 20",
+    req.params.pid, like);
+  res.json({ documents: docs, files: files });
+});
+
+// ── F3: register PDF export (print-styled HTML) ──
+app.get('/api/projects/:pid/documents/export.html', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'r'), (req, res) => {
+  const project = dbGet('SELECT name FROM projects WHERE id = ?', req.params.pid);
+  const pname = project ? project.name : '';
+  const docs = dbAll(
+    'SELECT d.*, f.revision AS current_rev, f.original_name AS current_file, f.created_at AS rev_date ' +
+    'FROM documents d LEFT JOIN files f ON f.document_id = d.id AND f.superseded = 0 AND f.trashed = 0 ' +
+    'WHERE d.project_id = ? ORDER BY d.category, COALESCE(d.number, d.title) COLLATE NOCASE', req.params.pid);
+  const rows = docs.map(function (d) {
+    return '<tr>' +
+      '<td>' + hEsc(d.category) + '</td>' +
+      '<td>' + hEsc(d.number || '') + '</td>' +
+      '<td>' + hEsc(d.title || '') + '</td>' +
+      '<td>' + hEsc(d.discipline || '') + '</td>' +
+      '<td>' + hEsc(d.current_rev || '') + '</td>' +
+      '<td>' + hEsc(d.status) + '</td>' +
+      '<td>' + hEsc(d.status_updated_at ? d.status_updated_at.slice(0, 10) : '') + '</td>' +
+    '</tr>';
+  }).join('');
+  const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Document Register</title>' +
+    '<style>body{font:-apple-system,Helvetica,Arial,sans-serif;color:#111;margin:24px}' +
+    'h1{font-size:20px;margin:0 0 2px}.brand{color:#e8641b}.sub{color:#556;margin:0 0 20px;font-size:12px}' +
+    'table{width:100%;border-collapse:collapse;font-size:11px}' +
+    'th{text-align:left;border-bottom:2px solid #0f1a2c;padding:6px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.05em}' +
+    'td{border-bottom:1px solid #d8dde6;padding:6px 8px;vertical-align:top}' +
+    'tr{page-break-inside:avoid}thead{display:table-header-group}' +
+    '@media print{body{margin:0}}</style></head><body>' +
+    '<h1><span class="brand">Align</span> · Document Register</h1>' +
+    '<p class="sub">' + hEsc(pname) + ' · ' + hEsc(new Date().toISOString().slice(0, 10)) + ' · ' + docs.length + ' documents</p>' +
+    '<table><thead><tr><th>Category</th><th>Number</th><th>Title</th><th>Discipline</th><th>Rev</th><th>Status</th><th>Status date</th></tr></thead><tbody>' +
+    rows + '</tbody></table>' +
+    '<script>window.print()</script></body></html>';
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
 });
 
 // ── Photos (server-backed, not localStorage) ──
