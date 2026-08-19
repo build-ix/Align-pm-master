@@ -2870,7 +2870,8 @@
       return;
     }
     if (e.touches.length === 1) {
-      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0, preventDefault: function () {}, stopPropagation: function () {} };
+      // altKey:true forces _mvMouseDown into the pan branch (single-finger pan)
+      var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0, altKey: true, preventDefault: function () {}, stopPropagation: function () {} };
       _mvMouseDown(fake);
       if (e.cancelable) e.preventDefault();
     }
