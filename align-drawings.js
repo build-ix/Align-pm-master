@@ -1496,8 +1496,11 @@
     // Restore opts (from a content-process kill) get applied after the viewer is ready
     _mvRestoreOpts = (opts && opts.restore) || null;
 
-    // Capture any pending list-map mode (crop / pin) set by openListCrop/openListPin
-    var modeArgs = _mvModeArgs || null;
+    // Capture any pending list-map mode (crop / pin) set by openListCrop/openListPin.
+    // Also carry mode forward across re-renders (the state-restore path re-enters
+    // _viewDrawing after _mvModeArgs was already nulled, which previously dropped
+    // the mode and broke the back button + "View Item").
+    var modeArgs = _mvModeArgs || (_mv && _mv.modeArgs) || null;
     _mvModeArgs = null;
 
     // Close any previous viewer + remove old overlay if any

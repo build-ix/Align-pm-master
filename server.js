@@ -1984,8 +1984,37 @@ app.get('/api/projects/:pid/punchlist-lists/:listId/items', requireAuth, auth.re
     WHERE project_id = ? AND category = 'punchlist' AND json_extract(data, '$.listId') = ?
     ORDER BY json_extract(data, '$.createdAt') DESC
   `, pid, listId);
-  
-  res.json({ items: items.map(function(r) { return r.data ? JSON.parse(r.data) : null; }).filter(Boolean) || [] });
+
+  // Attach map pins (punch_item_locations) to each item so the detail view can
+  // offer "Remove from map".
+  var itemIds = items.map(function (r) { return r.id; });
+  var pinsByItem = {};
+  if (itemIds.length) {
+    var ph = itemIds.map(function () { return '?'; }).join(',');
+    var pins = dbAll(`
+      SELECT pil.punch_item_id, pil.drawing_id, pil.sheet_number,
+             COALESCE(json_extract(rd.data, '$.title'), json_extract(rd.data, '$.name')) AS drawing_name
+      FROM punch_item_locations pil
+      LEFT JOIN records rd ON rd.id = pil.drawing_id
+      WHERE pil.punch_item_id IN (` + ph + `)
+    `, ...itemIds);
+    pins.forEach(function (p) {
+      (pinsByItem[p.punch_item_id] = pinsByItem[p.punch_item_id] || []).push({
+        drawing_id: p.drawing_id,
+        drawing_name: p.drawing_name || null,
+        sheet: p.sheet_number
+      });
+    });
+  }
+
+  res.json({ items: items.map(function (r) {
+    if (!r.data) return null;
+    try {
+      var item = JSON.parse(r.data);
+      item.pins = pinsByItem[r.id] || [];
+      return item;
+    } catch (e) { return null; }
+  }).filter(Boolean) || [] });
 });
 
 // POST /api/projects/:pid/punchlist-lists/:listId/items

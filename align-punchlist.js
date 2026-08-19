@@ -439,6 +439,29 @@
     _paint();
   }
 
+  function _removePinFromMap(itemId, drawingId, sheet) {
+    if (!drawingId) return;
+    if (!confirm('Remove this pin from the map?')) return;
+    var sheetNum = sheet != null ? String(sheet) : '0';
+    api('/api/drawings/' + encodeURIComponent(drawingId) + '/punch-items/' + encodeURIComponent(itemId) + '?sheet=' + encodeURIComponent(sheetNum), { method: 'DELETE' })
+      .then(function () {
+        function stripPins(item) {
+          if (!item || !item.pins) return;
+          item.pins = item.pins.filter(function (p) {
+            return !(p.drawing_id === drawingId && String(p.sheet) === sheetNum);
+          });
+        }
+        stripPins(state.detailItem);
+        var listItem = state.items.find(function (i) { return i.id === itemId; });
+        stripPins(listItem);
+        if (window.PinOverlay && typeof window.PinOverlay.removePin === 'function') {
+          try { window.PinOverlay.removePin(itemId); } catch (e) {}
+        }
+        _paint();
+      })
+      .catch(notifyError);
+  }
+
   function _removeLayoutPinCallout(clearSelection) {
     if (_layoutCalloutEl) {
       _layoutCalloutEl.remove();
@@ -706,6 +729,7 @@
       var id = btn.getAttribute('data-pl-id');
       if (act === 'edit-item') { state.editingItem = JSON.parse(JSON.stringify(state.detailItem || state.items.find(function (i) { return i.id === id; }) || {})); state.viewMode = 'item-form'; _paint(); return; }
       if (act === 'pin-item') { _placePin(id); return; }
+      if (act === 'remove-pin') { _removePinFromMap(id, btn.getAttribute('data-pin-drawing'), btn.getAttribute('data-pin-sheet')); return; }
       if (act === 'assign-item') { _openAssignSheet(id); return; }
       if (act === 'notify-item') { _notifyItem(btn); return; }
       if (act === 'toggle-complete') { _toggleComplete(id); return; }
@@ -911,6 +935,16 @@
       h.push('</div></div>');
     }
     h.push('<div class="pl-detail-section"><span class="pl-detail-label">Location</span><div class="pl-detail-value">' + esc(item.location || '—') + '</div><button type="button" class="pm-btn pl-pin-location" data-pl-detail-act="pin-item" data-pl-id="' + esc(item.id) + '">Pin Location</button></div>');
+    var pins = item.pins || [];
+    if (pins.length) {
+      h.push('<div class="pl-detail-section"><span class="pl-detail-label">Pinned on map</span>');
+      pins.forEach(function (pin) {
+        var pinName = pin.drawing_name || (pin.drawing_id ? 'Drawing ' + String(pin.drawing_id).slice(0, 8) : 'Drawing');
+        h.push('<div class="pl-pin-row"><span class="pl-pin-row-label">' + esc(pinName) + ' · Sheet ' + (pin.sheet != null ? esc(String(pin.sheet)) : '—') + '</span>' +
+          '<button type="button" class="pm-btn danger pl-remove-pin" data-pl-detail-act="remove-pin" data-pl-id="' + esc(item.id) + '" data-pin-drawing="' + esc(pin.drawing_id) + '" data-pin-sheet="' + esc(pin.sheet) + '">Remove from map</button></div>');
+      });
+      h.push('</div>');
+    }
     var assigns = state.itemAssignments[item.id] || [];
     var assignedNames = assigns.length ? assigns.map(function (a) { return a.name; }).join(', ') : 'Unassigned';
     h.push('<div class="pl-detail-section"><span class="pl-detail-label">Assigned To</span><div class="pl-detail-assign-row">' +
