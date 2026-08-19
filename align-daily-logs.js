@@ -990,6 +990,8 @@
         var fd = new FormData();
         fd.append('file', file);
         fd.append('project_id', state.projectId);
+        fd.append('source_tile', 'daily-logs');
+        if (state.currentLogData && state.currentLogData.id) fd.append('source_id', state.currentLogData.id);
 
         fetch('/api/files/upload', { method:'POST', headers:{'Authorization':'Bearer '+token}, body:fd })
           .then(function(r){ if (!r.ok) throw new Error('Upload failed: '+r.status); return r.json(); })

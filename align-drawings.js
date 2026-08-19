@@ -765,6 +765,7 @@
       var fd = new FormData();
       fd.append('file', blob, name);
       fd.append('project_id', pid);
+      fd.append('source_tile', 'drawing');
       if (folderId) fd.append('folder_id', folderId);
 
       var token = localStorage.getItem('align-token') || '';
