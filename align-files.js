@@ -11,6 +11,8 @@
   var _viewMode = 'files'; // 'files' | 'trash'
   var _selected = {};      // {id: true} bulk selection
   var _selectAll = false;
+  var _activeTab = 'register'; // 'register' | 'folders'
+  var _regMounted = false;
 
   function _esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function _fs(size) {
@@ -83,7 +85,10 @@
     _viewMode = 'files';
     _selected = {};
     _selectAll = false;
+    _activeTab = 'register';
+    _injectTabCss();
     _paint();
+    _mountRegister();
   }
 
   function _paint() {
@@ -125,8 +130,15 @@
       ? '<button class="pm-btn small" id="fm-btn-back-files">\u2190 Files</button>'
       : '<button class="pm-btn small" id="fm-btn-trash" title="Trash">' + TRASH_ICON + '</button>';
 
-    return [
-      '<div class="fm-toolbar">',
+    return '' +
+      '<div class="af-tabs">' +
+        '<button type="button" class="af-tab' + (_activeTab === 'register' ? ' af-tab-on' : '') + '" id="af-tab-register">Register</button>' +
+        '<button type="button" class="af-tab' + (_activeTab === 'folders' ? ' af-tab-on' : '') + '" id="af-tab-folders">Folders</button>' +
+      '</div>' +
+      '<div id="af-register-pane"' + (_activeTab === 'register' ? '' : ' style="display:none"') + '></div>' +
+      '<div id="af-folders-pane"' + (_activeTab === 'folders' ? '' : ' style="display:none"') + '>' +
+      [
+        '<div class="fm-toolbar">',
         '<div class="fm-breadcrumb">', bc, '</div>',
       '</div>',
       bulkBar,
@@ -153,12 +165,38 @@
       '</div>',
       '<div class="fm-list" id="fm-list"><p style="color:var(--muted);padding:1rem;">Loading...</p></div>',
       '<input type="file" id="fm-file-input" style="display:none" multiple />',
-    ].join('');
+      ].join('') +
+      '</div>';
   }
 
   // ── Event binding ────────────────────────────────────────────────────────
 
+  function _setTab(which) {
+    _activeTab = which;
+    _paint();
+    if (which === 'register') _mountRegister();
+  }
+  function _mountRegister() {
+    var pane = document.getElementById('af-register-pane');
+    if (pane && window.AlignDocuments && _pid) {
+      window.AlignDocuments.mount(pane, _pid);
+    }
+  }
+  function _injectTabCss() {
+    if (document.getElementById('af-tab-css')) return;
+    var s = document.createElement('style');
+    s.id = 'af-tab-css';
+    s.textContent = '.af-tabs{display:flex;gap:8px;padding:12px 16px 0}.af-tab{flex:1;padding:10px 0;border:1px solid var(--align-line);border-radius:10px;background:var(--align-surface);color:var(--align-muted);font-size:14px;font-weight:600;cursor:pointer}.af-tab-on{background:var(--align-navy);color:#fff;border-color:var(--align-navy)}';
+    document.head.appendChild(s);
+  }
+
   function _bind() {
+    // Tabs
+    var tabReg = document.getElementById('af-tab-register');
+    var tabFol = document.getElementById('af-tab-folders');
+    if (tabReg) tabReg.addEventListener('click', function () { _setTab('register'); });
+    if (tabFol) tabFol.addEventListener('click', function () { _setTab('folders'); });
+
     // Breadcrumb navigation
     var crumbs = _container.querySelectorAll('[data-fm-nav]');
     crumbs.forEach(function(c) {
@@ -375,6 +413,7 @@
         var mname = menu ? menu.getAttribute('data-fm-file-name') : '';
         if (menu && menu.parentNode) menu.remove();
         if (act === 'delete') { _trashItem(mid, mname); return; }
+        if (act === 'promote') { if (window.AlignDocuments) window.AlignDocuments.openPromoteSheet(mid, { filename: mname }); return; }
         if (act === 'delete-forever') { _deleteForever(mid, mname); return; }
         if (act === 'restore') { _restoreItem(mid, mname); return; }
         if (act === 'rename') { _renameItem(mid, mname); return; }
@@ -407,6 +446,7 @@
           mi.push('<button data-fm-act="delete-forever" class="fm-menu-danger">Delete Forever</button>');
         } else {
           if (ftype !== 'folder') {
+            mi.push('<button data-fm-act="promote" class="fm-menu-promote">+ Add to Register</button>');
             mi.push('<button data-fm-act="preview">Preview</button>');
             mi.push('<button data-fm-act="download">Download</button>');
             mi.push('<button data-fm-act="share">Copy Link</button>');
