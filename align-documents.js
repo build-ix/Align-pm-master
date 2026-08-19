@@ -236,6 +236,28 @@
     return { category: category, discipline: '', number: '', revision: rev, title: base.replace(/[_\-]+/g, ' ').trim() };
   }
 
+  // Increment a revision label: 1→2, A→B, Z→AA, C02→C03 (padding preserved).
+  function nextRevision(rev) {
+    rev = String(rev == null ? '' : rev).trim().toUpperCase();
+    if (!rev) return 'A';
+    if (/^\d+$/.test(rev)) return String(parseInt(rev, 10) + 1);
+    if (/^[A-Z]+$/.test(rev)) {
+      var c = rev.split(''), i = c.length - 1;
+      while (i >= 0) {
+        if (c[i] === 'Z') { c[i] = 'A'; i--; }
+        else { c[i] = String.fromCharCode(c[i].charCodeAt(0) + 1); return c.join(''); }
+      }
+      return 'A' + c.join('');
+    }
+    var m = rev.match(/^(.*?)(\d+)$/);
+    if (m) {
+      var n = String(parseInt(m[2], 10) + 1);
+      while (n.length < m[2].length) n = '0' + n;
+      return m[1] + n;
+    }
+    return rev + '.1';
+  }
+
   function openSheet(innerHtml) {
     var bg = document.createElement('div');
     bg.className = 'ad-sheet-bg';
@@ -260,8 +282,7 @@
       if (opts.forceDocId) match = docs.find(function (d) { return d.id === opts.forceDocId; });
       else if (guess.number) match = docs.find(function (d) { return d.number && d.number.toUpperCase() === guess.number.toUpperCase(); });
 
-      var revNum = match && match.current_revision ? (parseInt(String(match.current_revision.revision), 10) || 0) + 1 : 1;
-      var nextRev = match ? String(revNum) : (guess.revision || 'A');
+      var nextRev = match ? nextRevision(match.current_revision ? match.current_revision.revision : '') : (guess.revision || 'A');
 
       var matchHtml = match ? '' +
         '<div class="ad-match">' +
@@ -277,7 +298,7 @@
       }).join('');
 
       var sheet = openSheet(
-        '<h3>Add to Register</h3>' +
+        '<div class="ad-sheet-head"><h3>Add to Register</h3><span class="ad-sheet-cancel" id="adCancel">Cancel</span></div>' +
         (opts.filename ? '<div class="ad-links" style="margin:-6px 0 12px">' + esc(opts.filename) + '</div>' : '') +
         matchHtml +
         '<div id="adNewFields"' + (match ? ' style="display:none"' : '') + '>' +
@@ -300,6 +321,7 @@
         '<button class="ad-btn-primary" id="adfGo">' + (match ? 'Add revision' : 'Add to register') + '</button>');
 
       var q = function (sel) { return sheet.root.querySelector(sel); };
+      q('#adCancel').onclick = sheet.close;
       sheet.root.querySelectorAll('[name=ad-mode]').forEach(function (r) {
         r.addEventListener('change', function () {
           var rev = q('[name=ad-mode]:checked').value === 'revision';
@@ -312,7 +334,7 @@
       q('#adfGo').addEventListener('click', function () {
         var btn = q('#adfGo'); btn.disabled = true;
         var asRevision = match && q('[name=ad-mode]:checked').value === 'revision';
-        var doSubmit = function (fileId) {
+        var doSubmit = function (fileId, justUploaded) {
           var p;
           if (asRevision) {
             p = api('POST', '/api/documents/' + match.id + '/revisions', { file_id: fileId, revision: q('#adfRev2').value.trim() })
@@ -332,7 +354,11 @@
             state.docs = null;
             refresh();
             if (opts.onDone) opts.onDone(docId); else openDetail(docId);
-          }).catch(function (e) { btn.disabled = false; alert('Could not file document: ' + e.message); });
+          }).catch(function (e) {
+            btn.disabled = false;
+            if (justUploaded && fileId) { fetch('/api/files/' + fileId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token() } }).catch(function () {}); }
+            alert('Could not file document: ' + e.message);
+          });
         };
 
         if (!fileIdOrNull) {
@@ -347,7 +373,7 @@
             fd.append('project_id', pid);
             fetch('/api/files/upload', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token() }, body: fd })
               .then(function (r) { return r.json(); })
-              .then(function (up) { doSubmit(up.file.id); })
+              .then(function (up) { doSubmit(up.file.id, true); })
               .catch(function (e) { btn.disabled = false; alert('Upload failed: ' + e.message); });
           };
           input.click();
@@ -531,6 +557,9 @@
 '.ad-sheet-in .ad-sheet{transform:none}.ad-sheet-in.ad-sheet-bg{opacity:1}' +
 '.ad-sheet-grab{width:36px;height:4px;border-radius:2px;background:var(--align-line);margin:4px auto 12px}' +
 '.ad-sheet h3{margin:0 0 12px;font-size:16px;color:var(--align-navy)}' +
+'.ad-sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}' +
+'.ad-sheet-head h3{margin:0;font-size:16px;color:var(--align-navy)}' +
+'.ad-sheet-cancel{color:var(--align-orange-ink);font-size:14px;font-weight:600;cursor:pointer}' +
 '.ad-match{border:1px solid var(--align-line);border-left:3px solid var(--align-orange);border-radius:12px;padding:12px;margin-bottom:14px}' +
 '.ad-match-head{font-size:13px;font-weight:700;color:var(--align-navy);margin-bottom:10px}' +
 '.ad-radio{display:flex;gap:10px;align-items:flex-start;padding:8px 0;cursor:pointer;font-size:14px;color:var(--align-text)}' +

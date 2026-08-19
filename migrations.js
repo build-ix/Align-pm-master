@@ -683,6 +683,17 @@ const MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS idx_expected_proj ON expected_documents(project_id);
       `);
     }
+  },
+  {
+    version: 31,
+    name: 'documents_current_revision_guard',
+    up(db) {
+      // Partial unique index: at most one non-superseded, non-trashed file per document.
+      // Belt-and-suspenders behind the revision transaction's supersede-first ordering.
+      try {
+        db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_files_one_current ON files(document_id) WHERE document_id IS NOT NULL AND superseded = 0 AND trashed = 0");
+      } catch (e) { /* partial index unsupported or data violation — skip */ }
+    }
   }
 ];
 

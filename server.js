@@ -1467,7 +1467,7 @@ app.post('/api/documents/:id/status', requireAuth, loadDoc, auth.requireProjectM
 app.get('/api/documents/:id', requireAuth, loadDoc, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'r'), (req, res) => {
   res.json({
     document: req.doc,
-    revisions: dbAll('SELECT id, original_name, mime_type, size_bytes, revision, superseded, uploaded_by, created_at FROM files WHERE document_id = ? AND trashed = 0 ORDER BY superseded ASC, created_at DESC', req.doc.id),
+    revisions: dbAll('SELECT id, original_name, mime_type, size_bytes, revision, superseded, uploaded_by, created_at FROM files WHERE document_id = ? AND trashed = 0 ORDER BY superseded ASC, created_at DESC, id DESC', req.doc.id),
     links: dbAll('SELECT * FROM document_links WHERE document_id = ? ORDER BY created_at', req.doc.id),
     status_history: dbAll('SELECT * FROM document_status_history WHERE document_id = ? ORDER BY changed_at DESC', req.doc.id)
   });
@@ -2620,6 +2620,7 @@ app.get('/api/files/:id', requireAuth, requireFileProjectMember, requireFileRoom
 app.delete('/api/files/:id', requireAuth, requireFileProjectMember, requireFileRoom(dbGet, 'rw'), (req, res) => {
   const file = dbGet('SELECT * FROM files WHERE id = ?', req.params.id);
   if (!file) return res.status(404).json({ error: 'File not found' });
+  if (file.document_id) return res.status(409).json({ error: 'This file is part of a document. Remove it from the register first.' });
   dbRun('UPDATE files SET trashed = 1, trashed_at = ? WHERE id = ?', nowISO(), req.params.id);
   res.json({ ok: true, trashed: true });
 });
