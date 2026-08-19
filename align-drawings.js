@@ -1925,6 +1925,7 @@
                 _mvRestoreOpts = null;
                 if (_mv._pdfDoc && r.page && r.page >= 1 && r.page <= _mv._pdfNumPages) {
                   _mv._pdfPageNum = r.page;
+                  _mv._pdfTargetPageNum = r.page;
                 }
                 if (r.zoom) _mv.zoom = Math.max(MV_ZOOM_MIN, Math.min(MV_ZOOM_MAX, r.zoom));
                 if (typeof r.panX === 'number') _mv.panX = r.panX;
@@ -3043,6 +3044,7 @@
     stage.style.transformOrigin = '0 0';
     stage.style.transform = 'translate3d(' + _mv.panX + 'px,' + _mv.panY + 'px,0) scale(' + s + ')';
     _mvNotifyTransformChanged('transform');
+    _mvScheduleTiles(100);   // debounced tile refresh on pan/zoom stability
   }
 
   /* ── Commit canvas CSS size at a zoom point (PDF only). Call ONLY at
@@ -3057,6 +3059,7 @@
     if (markupCanvas) { markupCanvas.style.width = cssW; markupCanvas.style.height = cssH; }
     _mv._committedZoom = _mv.zoom;
     _mvApplyTransform(); // stage scale collapses back to 1 in the same JS turn
+    _mvScheduleTiles(0); // tiles settle immediately at the committed zoom
   }
 
   /* ── Guarded single-canvas render (prevents races) ──────────────────── */
@@ -3085,6 +3088,7 @@
   function _mvRenderPage(pageNum) {
     var seq = ++_mvRenderSeq;
     _mv._pdfTargetPageNum = pageNum; // synchronous target — pinch can't revert a switch
+    if (pageNum !== _mv._pdfPageNum) _mvTilesTeardown(); // page change: tiles are per-page
     if (_mv._renderTask) {
       _mv._renderTask.cancel();
       _mv._renderTask.promise.catch(function() {}); // swallow cancel
@@ -3095,6 +3099,7 @@
 
     return _mv._pdfDoc.getPage(pageNum).then(function (page) {
       if (seq !== _mvRenderSeq) return; // superseded
+      _mv._pdfPage = page; // cache current page object for the tile renderer
 
       var dpr = _mvDpr();
       var pageW = _mv._pdfLogW / _mv._pdfBaseScale;
@@ -3175,6 +3180,249 @@
       if (!_mv._twoFinger) return;      // gesture already ended; touchend handled it
       _mvRerenderPdf();                 // double-buffered + bucketed => cheap & safe
     }, MV_SPECULATE_MS);
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     Phase 1: hybrid tile overlay (crisp high-zoom)
+     Base layer (#dr-mv-image) stays permanently; tiles sharpen on top
+     only when the 12MP/4096px clamp binds.
+     ═══════════════════════════════════════════════════════════════════ */
+
+  // Tile layer DOM (between #dr-mv-image and #dr-mv-canvas)
+  function _mvEnsureTileLayer() {
+    var layer = document.getElementById('dr-mv-tiles');
+    if (layer) return layer;
+    var stage = document.getElementById('dr-mv-stage');
+    var annCanvas = document.getElementById('dr-mv-canvas');
+    if (!stage || !annCanvas) return null;
+    layer = document.createElement('div');
+    layer.id = 'dr-mv-tiles';
+    layer.style.position = 'absolute';
+    layer.style.left = '0';
+    layer.style.top = '0';
+    layer.style.transformOrigin = '0 0';
+    layer.style.overflow = 'hidden';
+    layer.style.pointerEvents = 'none';
+    layer.style.display = 'none';
+    stage.insertBefore(layer, annCanvas);
+    return layer;
+  }
+
+  // Activation check: does the clamp bind at this bucket?
+  function _mvTilesNeeded(bucket) {
+    if (!_mv._pdfDoc || !_mv._pdfLogW) return false;
+    var dpr = _mvDpr();
+    var pageW = _mv._pdfLogW / _mv._pdfBaseScale;
+    var pageH = _mv._pdfLogH / _mv._pdfBaseScale;
+    var want = _mv._pdfBaseScale * bucket;
+    var clamped = _clampRenderScale(want, pageW, pageH, dpr);
+    return clamped < want * MV_TILE_EPS;
+  }
+
+  // Visible tile keys (grid math in bucket space)
+  function _mvVisibleTileKeys(bucketIdx) {
+    var bucket = _mvBucketFromIndex(bucketIdx);
+    var z = _mv.zoom;
+    var vp = document.getElementById('dr-mv-viewport');
+    var vw = vp ? vp.clientWidth : 0;
+    var vh = vp ? vp.clientHeight : 0;
+
+    // Visible page-logical rect (clamped to page)
+    var lx0 = Math.max(0, (0 - _mv.panX) / z);
+    var ly0 = Math.max(0, (0 - _mv.panY) / z);
+    var lx1 = Math.min(_mv._pdfLogW, (vw - _mv.panX) / z);
+    var ly1 = Math.min(_mv._pdfLogH, (vh - _mv.panY) / z);
+    if (lx1 <= lx0 || ly1 <= ly0) return [];
+
+    var maxCol = Math.max(0, Math.ceil(_mv._pdfLogW * bucket / MV_TILE_CSS) - 1);
+    var maxRow = Math.max(0, Math.ceil(_mv._pdfLogH * bucket / MV_TILE_CSS) - 1);
+
+    var c0 = Math.max(0, Math.floor(lx0 * bucket / MV_TILE_CSS) - MV_TILE_MARGIN);
+    var c1 = Math.min(maxCol, Math.floor((lx1 * bucket - 1e-6) / MV_TILE_CSS) + MV_TILE_MARGIN);
+    var r0 = Math.max(0, Math.floor(ly0 * bucket / MV_TILE_CSS) - MV_TILE_MARGIN);
+    var r1 = Math.min(maxRow, Math.floor((ly1 * bucket - 1e-6) / MV_TILE_CSS) + MV_TILE_MARGIN);
+
+    // Center-out ordering: the tile under the viewport center renders first
+    var cc = ((lx0 + lx1) / 2) * bucket / MV_TILE_CSS;
+    var cr = ((ly0 + ly1) / 2) * bucket / MV_TILE_CSS;
+
+    var out = [];
+    for (var row = r0; row <= r1; row++)
+      for (var col = c0; col <= c1; col++)
+        out.push({ key: bucketIdx + ':' + col + ':' + row, col: col, row: row,
+                   d: Math.abs(col + 0.5 - cc) + Math.abs(row + 0.5 - cr) });
+    out.sort(function (a, b) { return a.d - b.d; });
+    return out;
+  }
+
+  // Pool + LRU
+  function _mvTileCanvasAcquire() {
+    var cv = _mv._tilePool.pop();
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.style.position = 'absolute';
+    }
+    return cv;
+  }
+  function _mvTileCanvasRelease(cv) {
+    if (cv.parentNode) cv.remove();
+    if (_mv._tilePool.length < MV_TILE_POOL_MAX) {
+      _mv._tilePool.push(cv);
+    } else {
+      cv.width = cv.height = 1;   // force the browser to free the bitmap
+    }
+  }
+  function _mvTileEvict(visibleSet) {
+    if (_mv._tileCount <= MV_TILE_CACHE_MAX) return;
+    var victims = [];
+    for (var k in _mv._tiles) {
+      if (!visibleSet.has(k)) victims.push([k, _mv._tiles[k]]);
+    }
+    victims.sort(function (a, b) { return a[1].lastUse - b[1].lastUse; });
+    while (_mv._tileCount > MV_TILE_CACHE_MAX && victims.length) {
+      var pair = victims.shift();
+      var t = pair[1];
+      if (t.task) { try { t.task.cancel(); } catch (e) {} }
+      _mvTileCanvasRelease(t.canvas);
+      delete _mv._tiles[pair[0]];
+      _mv._tileCount--;
+    }
+  }
+
+  // Render one tile (PDF.js transform into a small canvas)
+  async function _mvRenderTile(page, col, row, bucketIdx) {
+    var ep = _mv._tileEpoch;
+    var key = bucketIdx + ':' + col + ':' + row;
+    var t = _mv._tiles[key];
+    if (!t) return;
+
+    var bucket = _mvBucketFromIndex(bucketIdx);
+    var dpr = _mvDpr();
+    var cssSize = MV_TILE_CSS + MV_TILE_BLEED;
+    var backing = Math.round(cssSize * dpr);
+    var cv = t.canvas;
+
+    if (cv.width !== backing) { cv.width = backing; cv.height = backing; }
+    cv.style.width = cssSize + 'px';
+    cv.style.height = cssSize + 'px';
+    cv.style.left = (col * MV_TILE_CSS) + 'px';
+    cv.style.top = (row * MV_TILE_CSS) + 'px';
+
+    var ctx = cv.getContext('2d', { alpha: false });
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, backing, backing);   // PDF pages assume white paper
+
+    if (t.task) { try { t.task.cancel(); } catch (e) {} }
+    var task = page.render({
+      canvasContext: ctx,
+      viewport: page.getViewport({ scale: bucket }),
+      transform: [dpr, 0, 0, dpr, -col * MV_TILE_CSS * dpr, -row * MV_TILE_CSS * dpr]
+    });
+    t.task = task;
+    try { await task.promise; } catch (e) { t.task = null; return; }   // cancelled — fine
+    t.task = null;
+    if (ep !== _mv._tileEpoch || !_mv._tiles[key]) return;            // stale result
+    t.rendered = true;
+  }
+
+  // Orchestrator
+  function _mvScheduleTiles(delay) {
+    clearTimeout(_mv._tileUpdateTimer);
+    _mv._tileUpdateTimer = setTimeout(_mvUpdateTiles, delay == null ? 100 : delay);
+  }
+  function _mvUpdateTiles() {
+    if (!_mv || !_mv._pdfDoc || !_mv._pdfPage) return;
+    var layer = _mvEnsureTileLayer();
+    if (!layer) return;
+
+    var bucketIdx = _mvBucketIndex(_mv._committedZoom);   // settled zoom, not live gesture zoom
+    var bucket = _mvBucketFromIndex(bucketIdx);
+
+    if (!_mvTilesNeeded(bucket)) {                        // clamp not binding → base is crisp
+      if (_mv._tilesActive) _mvTilesDeactivate();
+      return;
+    }
+
+    _mv._tilesActive = true;
+    _mv._tilePageNum = _mv._pdfPageNum;
+    layer.style.transform = 'scale(' + (_mv._committedZoom / bucket) + ')';
+    layer.style.display = 'block';
+
+    // Bucket switch: detach (keep cached) tiles from other buckets
+    if (bucketIdx !== _mv._tileBucketIdx) {
+      for (var k in _mv._tiles) {
+        var t = _mv._tiles[k];
+        if (t.bucketIdx !== bucketIdx && t.canvas.parentNode) t.canvas.remove();
+      }
+      _mv._tileBucketIdx = bucketIdx;
+    }
+
+    var vis = _mvVisibleTileKeys(bucketIdx);
+    var visSet = new Set();
+    var queue = [];
+    for (var i = 0; i < vis.length; i++) visSet.add(vis[i].key);
+
+    for (var j = 0; j < vis.length; j++) {
+      var v = vis[j];
+      var t = _mv._tiles[v.key];
+      if (!t) {
+        t = { canvas: _mvTileCanvasAcquire(), col: v.col, row: v.row,
+              bucketIdx: bucketIdx, rendered: false, task: null, lastUse: 0 };
+        _mv._tiles[v.key] = t;
+        _mv._tileCount++;
+        queue.push(v.key);
+      } else if (!t.rendered && !t.task) {
+        queue.push(v.key);                                 // re-queue interrupted tile
+      }
+      t.lastUse = ++_mv._tileUseSeq;
+      if (!t.canvas.parentNode) {                          // reattach cached tile
+        t.canvas.style.left = (t.col * MV_TILE_CSS) + 'px';
+        t.canvas.style.top = (t.row * MV_TILE_CSS) + 'px';
+        layer.appendChild(t.canvas);
+      }
+    }
+
+    _mvTileEvict(visSet);
+    _mv._tileQueue = queue;                                // already center-out
+    _mvPumpTileQueue();
+  }
+  function _mvPumpTileQueue() {
+    while (_mv._tileRendering < MV_TILE_CONCURRENCY && _mv._tileQueue.length) {
+      var key = _mv._tileQueue.shift();
+      var t = _mv._tiles[key];
+      if (!t || t.rendered || t.task || t.bucketIdx !== _mv._tileBucketIdx) continue;
+      _mv._tileRendering++;
+      _mvRenderTile(_mv._pdfPage, t.col, t.row, t.bucketIdx)
+        .finally(function () { _mv._tileRendering--; _mvPumpTileQueue(); })
+        .catch(function () {});
+    }
+  }
+
+  // Cleanup
+  function _mvTilesDeactivate() {
+    _mv._tileEpoch++;                    // invalidate all in-flight tile renders
+    _mv._tileQueue.length = 0;
+    _mv._tileRendering = 0;
+    var layer = document.getElementById('dr-mv-tiles');
+    if (layer) layer.style.display = 'none';
+    _mv._tilesActive = false;
+  }
+  function _mvTilesTeardown() {          // page change, doc change, _mvClose
+    _mvTilesDeactivate();
+    clearTimeout(_mv._tileUpdateTimer);
+    _mv._tileUpdateTimer = null;
+    for (var k in _mv._tiles) {
+      var t = _mv._tiles[k];
+      if (t.task) { try { t.task.cancel(); } catch (e) {} }
+      _mvTileCanvasRelease(t.canvas);
+    }
+    _mv._tiles = {};
+    _mv._tileCount = 0;
+    _mv._tileBucketIdx = -1;
+    _mv._tilePageNum = 0;
+    var layer = document.getElementById('dr-mv-tiles');
+    if (layer) layer.innerHTML = '';
   }
 
   /* ── Text placement ────────────────────────────────────────────────────── */
@@ -3304,6 +3552,7 @@
     if (_mvStateTimer) { clearTimeout(_mvStateTimer); _mvStateTimer = null; }
     try { localStorage.removeItem(MV_STATE_KEY); } catch (e) {}
     try { sessionStorage.removeItem(MV_OPEN_MARKER); } catch (e) {}
+    if (_mv) _mvTilesTeardown(); // release tile canvases + cancel in-flight tile renders
     // Flush any pending save
     if (_mv && _mv.strokes && _mv.strokes.length > 0) {
       _saveMarkups(_mv.projectId, _mv.drawingId, _mv.strokes).catch(function () {});
