@@ -29,6 +29,12 @@
     scale: 1, tx: 0, ty: 0,
     gesture: null, suppressClickUntil: 0, pendingSingleTap: 0, lastTap: null
   };
+  // Pin callout state (View Layout)
+  var _layoutCalloutEl = null;
+
+  function _clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
 
   function esc(value) {
     return String(value == null ? '' : value)
@@ -412,7 +418,16 @@
       cropRenderStatus: crop.cropRenderStatus,
       cropImage: crop.cropImage,
       cropRenderMeta: crop.cropRenderMeta,
-      onCancel: function () {}
+      onCancel: function () {
+        _removeLayoutPinCallout(false);
+        state.detailItem = null;
+        state.viewMode = 'list';
+        _paint();
+      },
+      onOpenItem: function (itemId) {
+        _removeLayoutPinCallout(false);
+        _openItemFromLayout(itemId);
+      }
     }).catch(notifyError);
   }
 
@@ -424,33 +439,116 @@
     _paint();
   }
 
-  function _closeLayoutCallout() {
-    var el = document.getElementById('pl-layout-callout');
-    if (el) el.remove();
+  function _removeLayoutPinCallout(clearSelection) {
+    if (_layoutCalloutEl) {
+      _layoutCalloutEl.remove();
+      _layoutCalloutEl = null;
+    }
+    if (clearSelection && window.AlignDrawings && typeof window.AlignDrawings.clearLayoutPinSelection === 'function') {
+      window.AlignDrawings.clearLayoutPinSelection();
+    }
+  }
+
+  function _positionLayoutPinCallout(callout, anchorX, anchorY) {
+    var viewportWidth = document.documentElement.clientWidth;
+    var viewportHeight = document.documentElement.clientHeight;
+    var margin = 12;
+    var gap = 14;
+
+    callout.classList.remove('pin-callout--below');
+    callout.style.left = '0px';
+    callout.style.top = '0px';
+    callout.style.visibility = 'hidden';
+
+    var rect = callout.getBoundingClientRect();
+    var width = rect.width;
+    var height = rect.height;
+
+    var left = _clamp(anchorX - width / 2, margin, Math.max(margin, viewportWidth - width - margin));
+
+    var top;
+    var fitsAbove = (anchorY - gap - height) >= margin;
+    if (fitsAbove) {
+      top = anchorY - gap - height;
+    } else {
+      callout.classList.add('pin-callout--below');
+      top = _clamp(anchorY + gap, margin, Math.max(margin, viewportHeight - height - margin));
+    }
+
+    var arrowX = _clamp(anchorX - left, 20, width - 20);
+
+    callout.style.left = Math.round(left) + 'px';
+    callout.style.top = Math.round(top) + 'px';
+    callout.style.setProperty('--pin-callout-arrow-x', Math.round(arrowX) + 'px');
+    callout.style.visibility = 'visible';
   }
 
   function _showLayoutPinCallout(detail) {
-    if (!detail || !detail.pin) return;
-    var pin = detail.pin;
+    if (!detail || detail.punchItemId == null) return;
+    _removeLayoutPinCallout(false);
+
+    var pin = detail.pin || {};
     var data = {};
     try { data = typeof pin.data === 'string' ? JSON.parse(pin.data || '{}') : (pin.data || {}); } catch (e) { data = {}; }
     var title = data.title || 'Untitled item';
     var img = (Array.isArray(data.images) && data.images.length) ? data.images[0] : null;
-    _closeLayoutCallout();
-    var callout = document.createElement('div');
-    callout.id = 'pl-layout-callout';
-    callout.className = 'pl-layout-callout';
-    var thumb = img && img.fileId
-      ? '<img class="pl-layout-callout-thumb" src="/api/files/' + esc(img.fileId) + '?thumb=1" alt="">'
-      : '<span class="pl-layout-callout-thumb pl-layout-callout-thumb--empty"></span>';
-    callout.innerHTML = '<button type="button" class="pl-layout-callout-close" aria-label="Close">&times;</button>' +
-      '<button type="button" class="pl-layout-callout-open">' + thumb + '<span class="pl-layout-callout-title">' + esc(title) + '</span></button>';
-    callout.querySelector('.pl-layout-callout-close').addEventListener('click', function (e) { e.stopPropagation(); _closeLayoutCallout(); });
-    callout.querySelector('.pl-layout-callout-open').addEventListener('click', function () { _closeLayoutCallout(); _openItemFromLayout(pin.punch_item_id); });
+
+    var numLabel = 'Punch item';
+    var idx = -1;
+    for (var k = 0; k < state.items.length; k++) { if (state.items[k].id === detail.punchItemId) { idx = k; break; } }
+    if (idx >= 0) numLabel = 'Punch item ' + String(idx + 1).padStart(2, '0');
+
+    var callout = document.createElement('section');
+    callout.className = 'pin-callout';
+    callout.setAttribute('role', 'dialog');
+    callout.setAttribute('aria-label', numLabel);
+
+    var thumbHtml = img && img.fileId
+      ? '<figure class="pin-callout__thumbnail"><img src="/api/files/' + esc(img.fileId) + '?thumb=1" alt=""></figure>'
+      : '';
+    if (!thumbHtml) callout.classList.add('pin-callout--no-thumbnail');
+
+    callout.innerHTML =
+      '<span class="pin-callout__arrow" aria-hidden="true"></span>' +
+      '<div class="pin-callout__panel">' +
+        '<div class="pin-callout__header">' +
+          thumbHtml +
+          '<div class="pin-callout__content">' +
+            '<p class="pin-callout__eyebrow">' + esc(numLabel) + '</p>' +
+            '<h3 class="pin-callout__title">' + esc(title) + '</h3>' +
+          '</div>' +
+          '<button type="button" class="pin-callout__close" aria-label="Close">&times;</button>' +
+        '</div>' +
+        '<div class="pin-callout__actions">' +
+          '<button type="button" class="pin-callout__primary">View Item</button>' +
+        '</div>' +
+      '</div>';
+
+    callout.querySelector('.pin-callout__close').addEventListener('click', function () {
+      _removeLayoutPinCallout(true);
+    });
+
+    callout.querySelector('.pin-callout__primary').addEventListener('click', function () {
+      var itemId = detail.punchItemId;
+      _removeLayoutPinCallout(false);
+      if (window.AlignDrawings && typeof window.AlignDrawings.openLayoutItem === 'function') {
+        window.AlignDrawings.openLayoutItem(itemId);
+      }
+    });
+
     document.body.appendChild(callout);
+    _layoutCalloutEl = callout;
+
+    requestAnimationFrame(function () {
+      if (_layoutCalloutEl === callout) {
+        _positionLayoutPinCallout(callout, Number(detail.screenX) || 0, Number(detail.screenY) || 0);
+      }
+    });
   }
 
   document.addEventListener('pinClicked', function (event) { _showLayoutPinCallout(event.detail); });
+  document.addEventListener('layoutViewerClosed', function () { _removeLayoutPinCallout(false); });
+  window.addEventListener('resize', function () { _removeLayoutPinCallout(true); });
 
   function _handleListClick(event) {
     var action = event.target.closest('[data-pl-act]');

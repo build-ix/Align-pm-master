@@ -2254,33 +2254,127 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
 .pl-layout-row { padding: 0 0 10px; }
 .pl-layout-row .pm-btn { width: 100%; min-height: 44px; }
 .pl-layout-row .pm-btn:disabled { opacity: 0.5; }
-.pl-layout-callout {
+.pin-callout {
+  --pin-callout-arrow-x: 50%;
   position: fixed;
-  z-index: 10000;
-  bottom: 120px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(320px, calc(100vw - 32px));
-  padding: 10px;
-  border-radius: 12px;
-  background: var(--card, #fff);
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+  z-index: 10050;
+  width: min(340px, calc(100vw - 24px));
+  filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.28));
 }
-.pl-layout-callout-close {
-  position: absolute; top: 6px; right: 6px;
-  width: 28px; height: 28px; border: 0; background: transparent;
-  font-size: 22px; line-height: 1; color: var(--muted, #6b7280); cursor: pointer;
+.pin-callout__panel {
+  position: relative;
+  overflow: hidden;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
 }
-.pl-layout-callout-open {
-  display: flex; align-items: center; gap: 10px;
-  width: 100%; padding: 0 24px 0 0; border: 0; background: transparent;
-  text-align: left; cursor: pointer; color: var(--ink, #17212b);
+.pin-callout__arrow {
+  position: absolute;
+  left: var(--pin-callout-arrow-x);
+  bottom: -8px;
+  width: 16px;
+  height: 16px;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: translateX(-50%) rotate(45deg);
 }
-.pl-layout-callout-thumb {
-  width: 56px; height: 56px; flex: 0 0 56px; border-radius: 8px; object-fit: cover; background: #e8e8e8;
+.pin-callout--below .pin-callout__arrow {
+  top: -8px;
+  bottom: auto;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
 }
-.pl-layout-callout-thumb--empty { display: block; background: #e8e8e8; }
-.pl-layout-callout-title { font-weight: 600; line-height: 1.3; }
+.pin-callout__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 14px 10px;
+}
+.pin-callout__thumbnail {
+  flex: 0 0 72px;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  background: var(--align-surface-2, #e9eef3);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.pin-callout__thumbnail img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.pin-callout__content {
+  min-width: 0;
+  flex: 1;
+  padding-top: 2px;
+}
+.pin-callout__eyebrow {
+  margin: 0 0 5px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.pin-callout__title {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.pin-callout__close {
+  display: inline-grid;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  margin: -8px -8px 0 0;
+  padding: 0;
+  place-items: center;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pin-callout__close:hover { color: var(--ink); background: var(--align-surface-2, #e9eef3); }
+.pin-callout__actions { padding: 0 14px 14px; }
+.pin-callout__primary {
+  display: flex;
+  min-height: 48px;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  color: #fff;
+  background: var(--align-orange, #e8641b);
+  border: 0;
+  border-radius: 11px;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pin-callout__primary:hover { background: var(--align-orange-ink, #f07a38); }
+@media (max-width: 420px) {
+  .pin-callout { width: min(340px, calc(100vw - 24px)); }
+  .pin-callout__header { padding: 12px 12px 9px; }
+  .pin-callout__actions { padding: 0 12px 12px; }
+  .pin-callout__thumbnail { flex-basis: 68px; width: 68px; height: 68px; }
+}
 .pl-item-assigned {
   display: block; width: 100%; min-height: 44px; padding: 9px 11px;
   border: 1px solid var(--line, #d8e0e6); border-radius: 8px;

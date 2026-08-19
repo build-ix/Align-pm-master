@@ -2259,12 +2259,17 @@
     setTimeout(function () { ghost.remove(); }, 1800);
   }
 
-  function _mvEndMode() {
+  function _mvEndMode(action, itemId) {
     if (_cropTool) { try { _cropTool.destroy(); } catch (e) {} _cropTool = null; }
     _mvPinDown = null;
     var args = _mv && _mv.modeArgs;
     _mvClose();
-    if (args && args.onCancel) args.onCancel();
+    if (!args) return;
+    if (action === 'open-item') {
+      if (typeof args.onOpenItem === 'function') args.onOpenItem(itemId);
+      return;
+    }
+    if (typeof args.onCancel === 'function') args.onCancel();
   }
 
   function _mvBindAll() {
@@ -3554,6 +3559,9 @@
 
   /* ── Cleanup viewer ────────────────────────────────────────────────────── */
   function _mvClose() {
+    // Clear any open pin callout + pin selection before teardown.
+    if (window.PinOverlay && typeof window.PinOverlay.clearSelection === 'function') window.PinOverlay.clearSelection();
+    try { document.dispatchEvent(new CustomEvent('layoutViewerClosed')); } catch (e) {}
     if (_mvPersistTimer) { clearTimeout(_mvPersistTimer); _mvPersistTimer = null; }
     if (_mvStateTimer) { clearTimeout(_mvStateTimer); _mvStateTimer = null; }
     try { localStorage.removeItem(MV_STATE_KEY); } catch (e) {}
@@ -4182,12 +4190,23 @@
     });
   }
 
+  function openLayoutItem(itemId) {
+    if (!_mv || !_mv.modeArgs || _mv.modeArgs.mode !== 'list-layout') return;
+    _mvEndMode('open-item', itemId);
+  }
+
+  function clearLayoutPinSelection() {
+    if (window.PinOverlay && typeof window.PinOverlay.clearSelection === 'function') window.PinOverlay.clearSelection();
+  }
+
   global.AlignDrawings = {
     render: render,
     listDrawings: listDrawingsForProject,
     openListCrop: openListCrop,
     openListPin: openListPin,
     openLayoutView: openLayoutView,
+    openLayoutItem: openLayoutItem,
+    clearLayoutPinSelection: clearLayoutPinSelection,
     tryRestoreViewerState: _mvTryRestoreState
   };
 

@@ -213,8 +213,15 @@
       const g = this.overlay.querySelector(`[data-pin-id="${pin.id}"]`);
       if (g) g.classList.add('selected');
 
+      // Pin tip viewport coordinates for callout anchoring.
+      const canvasPoint = this._pinToCanvasPixels(pin);
+      const overlayPoint = this._canvasToOverlayPixels(canvasPoint);
+      const overlayRect = this.overlay.getBoundingClientRect();
+      const screenX = overlayRect.left + overlayPoint.x;
+      const screenY = overlayRect.top + overlayPoint.y;
+
       const event = new CustomEvent('pinClicked', {
-        detail: { pinId: pin.id, punchItemId: pin.punch_item_id, pin: pin },
+        detail: { pinId: pin.id, punchItemId: pin.punch_item_id, pin: pin, screenX: screenX, screenY: screenY },
         bubbles: true
       });
       this.overlay.dispatchEvent(event);
