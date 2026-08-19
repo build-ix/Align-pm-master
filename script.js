@@ -1703,7 +1703,7 @@ function _escHtml(s) {
       .then(function(d) {
         if (seq !== _psSeq) return; // stale
         var projs = d.projects || [];
-        var h = '<div class="ps-page"><div class="ps-header"><div class="ps-logo-wrap"><img class="ps-logo auth-logo-light" src="assets/align-logo-light-v2.png" alt="Align"><img class="ps-logo auth-logo-dark" src="assets/align-logo-dark-v2.png" alt="Align"></div><h1 class="ps-title">Select Project</h1><p class="ps-subtitle">Choose a project to continue</p><div class="ps-header-actions">' + (isAdmin ? '<button class="pm-btn primary ps-new-btn" id="ps-new-project">+ New project</button>' : '') + '<button class="ps-signout-btn" id="ps-signout">Sign out</button></div></div>';
+        var h = '<div class="ps-page"><div class="ps-header"><div class="ps-logo-wrap"><img class="ps-logo auth-logo-light" src="assets/align-logo-light-v3.png" alt="Align"><img class="ps-logo auth-logo-dark" src="assets/align-logo-dark-v3.png" alt="Align"></div><h1 class="ps-title">Select Project</h1><p class="ps-subtitle">Choose a project to continue</p><div class="ps-header-actions">' + (isAdmin ? '<button class="pm-btn primary ps-new-btn" id="ps-new-project">+ New project</button>' : '') + '<button class="ps-signout-btn" id="ps-signout">Sign out</button></div></div>';
 
         if (!projs.length) {
           // #4: Differentiate empty state — admin can create, member can't

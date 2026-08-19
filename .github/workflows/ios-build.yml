@@ -44,7 +44,7 @@ jobs:
           cp *.js www/
           cp *.css www/
           cp -r assets www/
-          cp favicon.png www/
+          cp assets/favicon-v3-512.png www/favicon.png
           cp *.svg www/ 2>/dev/null || true
           echo "www/ ready"
           npx cap add ios
@@ -82,8 +82,8 @@ jobs:
           test -f assets/icon-only.png
           npx capacitor-assets generate \
             --ios \
-            --iconBackgroundColor '#1B2A3D' \
-            --iconBackgroundColorDark '#1B2A3D' \
+            --iconBackgroundColor '#0E1B2C' \
+            --iconBackgroundColorDark '#0E1B2C' \
             --assetPath assets/
           test -s ios/App/App/Assets.xcassets/AppIcon.appiconset/AppIcon-512@2x.png
 
