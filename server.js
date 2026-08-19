@@ -1593,6 +1593,145 @@ app.get('/api/projects/:pid/documents/export.html', requireAuth, auth.requirePro
   res.send(html);
 });
 
+// ── Auto-filing: spec sections (global reference data) ──
+app.get('/api/spec-sections', requireAuth, (req, res) => {
+  const rows = dbAll('SELECT section AS code, division, title FROM spec_sections ORDER BY section');
+  res.json({ sections: rows });
+});
+
+app.get('/api/spec-sections/suggest', requireAuth, (req, res) => {
+  const code = classifyMod.suggestDivision(String(req.query.title || ''));
+  res.json({ code: code || null });
+});
+
+// ── Auto-filing: file tree (flat path-map) ──
+const TILE_LABELS = {
+  'daily-logs': 'Daily Logs',
+  'drawing':    'Drawings',
+  'punchlist':  'Punch List',
+  'rfis':       'RFIs',
+  'submittals': 'Submittals',
+  'tasks':      'Tasks',
+  'contracts':  'Contracts',
+  'specs':      'Specifications'
+};
+
+function _recordLabel(d) {
+  const num = (d.number != null && d.number !== '') ? '#' + d.number + ' ' : '';
+  return (num + (d.title || d.name || d.subject || d.description || 'Record')).slice(0, 80);
+}
+
+app.get('/api/projects/:pid/files/tree', requireAuth, auth.requireProjectMember(dbGet), (req, res) => {
+  const pid = req.params.pid;
+  try {
+    const rows = dbAll(
+      'SELECT id, original_name, mime_type, size_bytes, created_at, folder_id, source_tile, source_id, doc_date, spec_section, classify_status ' +
+      'FROM files WHERE project_id = ? AND trashed = 0', pid);
+
+    // Record labels for source_id segments.
+    const tiles = Object.keys(TILE_LABELS);
+    const placeholders = tiles.map(function () { return '?'; }).join(',');
+    const recRows = dbAll(
+      'SELECT id, category, data FROM records WHERE project_id = ? AND category IN (' + placeholders + ')',
+      pid, ...tiles);
+    const recMap = {};
+    recRows.forEach(function (r) {
+      let d = {};
+      try { d = JSON.parse(r.data || '{}'); } catch (e) {}
+      recMap[r.category + ':' + r.id] = _recordLabel(d);
+    });
+
+    const specMap = {};
+    dbAll('SELECT section AS code, title FROM spec_sections').forEach(function (s) { specMap[s.code] = s.title; });
+
+    const files = [];
+    const needsFiling = [];
+    let legacyCount = 0;
+    const tileCounts = {};
+
+    rows.forEach(function (f) {
+      const slim = {
+        id: f.id, name: f.original_name, mime_type: f.mime_type, size: f.size_bytes,
+        created_at: f.created_at, doc_date: f.doc_date,
+        source_tile: f.source_tile, source_id: f.source_id, spec_section: f.spec_section,
+        thumbUrl: '/api/files/' + f.id + '?thumb=1'
+      };
+
+      if (f.classify_status === 'needs_filing') {
+        needsFiling.push(slim);
+        if (f.folder_id) legacyCount++;
+        return;
+      }
+      if (!f.source_tile || !TILE_LABELS[f.source_tile]) {
+        if (f.folder_id) legacyCount++;
+        return;
+      }
+
+      const path = [];
+      const d = (f.doc_date || String(f.created_at || '').slice(0, 10)) || '';
+
+      if (f.source_tile === 'daily-logs' && d) {
+        path.push({ key: d.slice(0, 4), label: d.slice(0, 4) });
+        path.push({ key: d.slice(0, 7), label: d.slice(0, 7) });
+      } else if (f.source_tile === 'submittals') {
+        if (f.spec_section) {
+          path.push({ key: f.spec_section, label: f.spec_section + ' — ' + (specMap[f.spec_section] || '') });
+        } else {
+          path.push({ key: '_unfiled', label: 'No Spec Section' });
+        }
+      } else if (f.source_tile === 'specs') {
+        if (f.spec_section) {
+          const div = f.spec_section.slice(0, 2);
+          path.push({ key: div, label: 'Div ' + div });
+        }
+      }
+
+      if (f.source_id) {
+        const lbl = recMap[f.source_tile + ':' + f.source_id];
+        if (lbl) path.push({ key: String(f.source_id), label: lbl });
+      }
+
+      files.push(Object.assign(slim, { path: path }));
+      tileCounts[f.source_tile] = (tileCounts[f.source_tile] || 0) + 1;
+    });
+
+    res.json({ files: files, needsFiling: needsFiling, tileCounts: tileCounts, legacyCount: legacyCount });
+  } catch (e) {
+    res.status(500).json({ error: 'tree build failed' });
+  }
+});
+
+// ── Auto-filing: re-classify a file (the "move" operation) ──
+app.patch('/api/files/:id/classify', requireAuth, requireFileProjectMember, requireFileRoom(dbGet, 'rw'), (req, res) => {
+  const b = req.body || {};
+  const tile = String(b.source_tile || '');
+  if (classifyMod.VALID_TILES.indexOf(tile) < 0)
+    return res.status(400).json({ error: 'invalid source_tile' });
+
+  const file = dbGet('SELECT id, project_id FROM files WHERE id = ?', req.params.id);
+  if (!file) return res.status(404).json({ error: 'file not found' });
+
+  const sourceId = b.source_id ? String(b.source_id) : null;
+  if (sourceId) {
+    const rec = dbGet('SELECT id FROM records WHERE id = ? AND project_id = ? AND category = ?', sourceId, file.project_id, tile);
+    if (!rec) return res.status(400).json({ error: 'source record not found in this project' });
+  }
+
+  const docDate = b.doc_date ? String(b.doc_date) : null;
+  if (docDate && !/^\d{4}-\d{2}-\d{2}$/.test(docDate))
+    return res.status(400).json({ error: 'doc_date must be YYYY-MM-DD' });
+
+  const spec = b.spec_section ? String(b.spec_section) : null;
+  if (spec && !dbGet('SELECT section FROM spec_sections WHERE section = ?', spec))
+    return res.status(400).json({ error: 'invalid spec_section' });
+  if (tile === 'submittals' && !spec)
+    return res.status(400).json({ error: 'spec_section required for submittals' });
+
+  dbRun('UPDATE files SET source_tile = ?, source_id = ?, doc_date = ?, spec_section = ?, classify_status = ? WHERE id = ?',
+    tile, sourceId, docDate, spec, 'classified', req.params.id);
+  res.json(dbGet('SELECT id, source_tile, source_id, doc_date, spec_section, classify_status FROM files WHERE id = ?', req.params.id));
+});
+
 // ── Photos (server-backed, not localStorage) ──
 app.get('/api/projects/:pid/photos', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'photos', 'r'), (req, res) => {
   var photos = dbAll('SELECT id, project_id, original_name, mime_type, size_bytes, created_at, uploaded_by, metadata FROM files WHERE project_id = ? AND type = \'photo\' AND trashed = 0 ORDER BY created_at DESC', req.params.pid);
@@ -2497,6 +2636,10 @@ app.post('/api/projects/:pid/:cat', requireAuth, auth.requireProjectMember(dbGet
   var verr = _validateRecord(req.params.cat, data);
   if (verr) return res.status(400).json({ error: verr });
 
+  // Submittals require a valid spec_section (auto-filing)
+  if (req.params.cat === 'submittals' && (!data.spec_section || !dbGet('SELECT section FROM spec_sections WHERE section = ?', data.spec_section)))
+    return res.status(400).json({ error: 'valid spec_section required for submittals' });
+
   // Validate assigned company for punchlist items
   if (req.params.cat === 'punchlist' && data.assignedCompanyId) {
     var company = dbGet('SELECT id FROM companies WHERE id = ? AND project_id = ? AND active = 1',
@@ -2553,6 +2696,10 @@ app.put('/api/projects/:pid/:cat/:rid', requireAuth, auth.requireProjectMember(d
   // Validate merged record
   var verr = _validateRecord(req.params.cat, merged);
   if (verr) return res.status(400).json({ error: verr });
+
+  // Submittals require a valid spec_section (auto-filing)
+  if (req.params.cat === 'submittals' && (!merged.spec_section || !dbGet('SELECT section FROM spec_sections WHERE section = ?', merged.spec_section)))
+    return res.status(400).json({ error: 'valid spec_section required for submittals' });
 
   dbRun('UPDATE records SET data = ?, updated_at = ? WHERE id = ? AND project_id = ? AND category = ?',
     JSON.stringify(merged), ts, req.params.rid, req.params.pid, req.params.cat);
