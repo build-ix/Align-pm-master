@@ -1515,8 +1515,6 @@
     // ── Top bar ──
     h.push('<div class="dr-mv-topbar">');
     h.push('<button class="pm-btn small dr-mv-back-btn" id="dr-mv-back">← Back to Drawings</button>');
-    h.push('<h3 class="dr-mv-title">' + esc(file.meta.name) + '</h3>');
-    h.push('<span class="dr-mv-meta">' + fmtSize(file.meta.size) + ' · ' + fmtDate(file.meta.updatedAt) + '</span>');
     h.push('</div>');
 
     // ── Toolbar (hidden by default; slides in when "Markup Drawing" clicked) ──

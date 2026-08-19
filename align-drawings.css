@@ -639,6 +639,11 @@
   animation: dr-mv-fade-in 0.2s ease;
   overflow: hidden;
 }
+
+.dr-mv-topbar {
+  padding: 12px 12px 0;
+  flex-shrink: 0;
+}
 @keyframes dr-mv-fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
