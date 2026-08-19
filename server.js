@@ -27,6 +27,7 @@ const { runMigrations } = require('./migrations');
 const sessions = require('./align-sessions');
 const auth = require('./align-auth-middleware');
 const invites = require('./align-invites');
+const classifyMod = require('./align-classify');
 
 const PORT = process.env.PORT || 3002;
 const DEV_MODE = process.env.DEV_MODE !== 'false'; // true by default for development
@@ -2651,9 +2652,17 @@ app.post('/api/files/upload', requireAuth, (req, res) => {
     }
     const id = uid(); const ts = nowISO(); const folderId = (req.body && req.body.folder_id) || null;
     const metadata = (req.body && req.body.metadata) || null;
-    dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      id, projectId, folderId, uploadType, req.file.filename, originalName, req.file.mimetype, req.file.size, finalPath, ts, (req.user && req.user.username) || '', metadata);
-    res.status(201).json({ file: { id, project_id: projectId, folder_id: folderId, type: uploadType, original_name: originalName, mime_type: req.file.mimetype, size_bytes: req.file.size, created_at: ts, uploaded_by: (req.user && req.user.username) || '', metadata: metadata } });
+    // Auto-filing classification (Phase 1): derive source_tile + dimension fields.
+    const cls = classifyMod.classify(dbGet, {
+      projectId: projectId,
+      sourceTile: (req.body && req.body.source_tile) || null,
+      sourceId: (req.body && req.body.source_id) || null,
+      fileType: uploadType
+    });
+    dbRun('INSERT INTO files (id, project_id, folder_id, type, filename, original_name, mime_type, size_bytes, stored_path, created_at, uploaded_by, metadata, source_tile, source_id, doc_date, spec_section, classify_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, projectId, folderId, uploadType, req.file.filename, originalName, req.file.mimetype, req.file.size, finalPath, ts, (req.user && req.user.username) || '', metadata,
+      cls.source_tile, cls.source_id, cls.doc_date, cls.spec_section, cls.classify_status);
+    res.status(201).json({ file: { id, project_id: projectId, folder_id: folderId, type: uploadType, original_name: originalName, mime_type: req.file.mimetype, size_bytes: req.file.size, created_at: ts, uploaded_by: (req.user && req.user.username) || '', metadata: metadata, source_tile: cls.source_tile, doc_date: cls.doc_date, spec_section: cls.spec_section, classify_status: cls.classify_status } });
   });
 });
 

@@ -694,6 +694,69 @@ const MIGRATIONS = [
         db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_files_one_current ON files(document_id) WHERE document_id IS NOT NULL AND superseded = 0 AND trashed = 0");
       } catch (e) { /* partial index unsupported or data violation — skip */ }
     }
+  },
+  {
+    version: 32,
+    name: 'auto_filing',
+    up(db) {
+      const safeAdd = (sql) => { try { db.exec(sql); } catch (e) { /* already exists */ } };
+
+      safeAdd("ALTER TABLE files ADD COLUMN source_tile TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN source_id TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN doc_date TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN spec_section TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN classify_status TEXT NOT NULL DEFAULT 'needs_filing'");
+
+      db.exec("CREATE INDEX IF NOT EXISTS idx_files_classify ON files(project_id, classify_status, source_tile, doc_date)");
+
+      db.exec("CREATE TABLE IF NOT EXISTS spec_sections (section TEXT PRIMARY KEY, division TEXT NOT NULL, title TEXT NOT NULL)");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_spec_division ON spec_sections(division)");
+
+      const seed = [
+        ['00 00 00','00','Procurement and Contracting Requirements'],
+        ['01 00 00','01','General Requirements'],
+        ['02 00 00','02','Existing Conditions'],
+        ['03 30 00','03','Cast-in-Place Concrete'],
+        ['04 20 00','04','Unit Masonry'],
+        ['04 40 00','04','Stone Assemblies'],
+        ['05 12 00','05','Structural Steel Framing'],
+        ['05 50 00','05','Metal Fabrications'],
+        ['06 10 00','06','Rough Carpentry'],
+        ['06 40 00','06','Architectural Woodwork'],
+        ['07 21 00','07','Thermal Insulation'],
+        ['07 50 00','07','Membrane Roofing'],
+        ['08 11 00','08','Metal Doors and Frames'],
+        ['08 41 00','08','Entrances and Storefronts'],
+        ['08 51 00','08','Windows'],
+        ['08 70 00','08','Hardware'],
+        ['09 29 00','09','Gypsum Board'],
+        ['09 30 00','09','Tiling'],
+        ['09 51 00','09','Acoustical Ceilings'],
+        ['09 65 00','09','Resilient Flooring'],
+        ['09 91 00','09','Painting'],
+        ['10 00 00','10','Specialties'],
+        ['11 00 00','11','Equipment'],
+        ['12 00 00','12','Furnishings'],
+        ['13 00 00','13','Special Construction'],
+        ['14 00 00','14','Conveying Equipment'],
+        ['21 13 00','21','Fire-Suppression Sprinkler Systems'],
+        ['22 10 00','22','Plumbing Fixtures'],
+        ['22 40 00','22','Plumbing Piping and Fittings'],
+        ['23 00 00','23','HVAC'],
+        ['26 50 00','26','Lighting'],
+        ['26 00 00','26','Electrical'],
+        ['27 00 00','27','Communications'],
+        ['28 00 00','28','Electronic Safety and Security'],
+        ['31 00 00','31','Earthwork'],
+        ['32 00 00','32','Exterior Improvements'],
+        ['33 00 00','33','Utilities']
+      ];
+      const insert = db.prepare("INSERT OR IGNORE INTO spec_sections (section, division, title) VALUES (?, ?, ?)");
+      const tx = db.transaction(function () {
+        seed.forEach(function (s) { insert.run(s[0], s[1], s[2]); });
+      });
+      tx();
+    }
   }
 ];
 
