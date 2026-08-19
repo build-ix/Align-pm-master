@@ -27,7 +27,7 @@
   var MAX_CANVAS_DIM    = 4096;  // iOS single-dimension cap
   // Zoom limits
   var MV_ZOOM_MIN = 0.25;
-  var MV_ZOOM_MAX = 5;
+  var MV_ZOOM_MAX = 8;
   var _mvWheelTimer = 0;  // debounce wheel re-renders
 
   // Phase 1: tile overlay constants (crisp high-zoom)
@@ -3333,6 +3333,10 @@
   }
   function _mvUpdateTiles() {
     if (!_mv || !_mv._pdfDoc || !_mv._pdfPage) return;
+    // Tiles render at settle only — skip while zoom is in flux (mid-gesture).
+    // _mvVisibleTileKeys mixes the settled bucket with the live zoom, which
+    // only agrees at settle. The speculative base render commits zoom + re-schedules.
+    if (Math.abs(_mv.zoom - _mv._committedZoom) > 0.001) return;
     var layer = _mvEnsureTileLayer();
     if (!layer) return;
 
