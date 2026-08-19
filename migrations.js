@@ -618,6 +618,71 @@ const MIGRATIONS = [
         `);
       }
     }
+  },
+  {
+    version: 30,
+    name: 'documents_register',
+    up(db) {
+      const safeAdd = (sql) => { try { db.exec(sql); } catch (e) { /* already exists */ } };
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS documents (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          number TEXT,
+          title TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT 'other',
+          discipline TEXT,
+          status TEXT NOT NULL DEFAULT 'needs-review',
+          status_updated_by TEXT,
+          status_updated_at TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
+        CREATE INDEX IF NOT EXISTS idx_documents_proj_cat ON documents(project_id, category);
+        CREATE INDEX IF NOT EXISTS idx_documents_proj_status ON documents(project_id, status);
+      `);
+
+      safeAdd("ALTER TABLE files ADD COLUMN document_id TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN revision TEXT");
+      safeAdd("ALTER TABLE files ADD COLUMN superseded INTEGER NOT NULL DEFAULT 0");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_files_document ON files(document_id)");
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS document_status_history (
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          changed_by TEXT,
+          changed_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_dsh_doc ON document_status_history(document_id);
+
+        CREATE TABLE IF NOT EXISTS document_links (
+          id TEXT PRIMARY KEY,
+          document_id TEXT NOT NULL,
+          entity_type TEXT NOT NULL,
+          entity_id TEXT NOT NULL,
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          UNIQUE(document_id, entity_type, entity_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_doclinks_doc ON document_links(document_id);
+        CREATE INDEX IF NOT EXISTS idx_doclinks_entity ON document_links(entity_type, entity_id);
+
+        CREATE TABLE IF NOT EXISTS expected_documents (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL,
+          category TEXT NOT NULL,
+          title TEXT NOT NULL,
+          fulfilled_by_document_id TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_expected_proj ON expected_documents(project_id);
+      `);
+    }
   }
 ];
 

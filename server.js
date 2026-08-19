@@ -483,6 +483,25 @@ function requireFileRoom(dbGet, level) {
   };
 }
 
+// ── Document register (Files → Documents redesign) ──
+const DOC_STATUSES = ['needs-review', 'approved', 'approved-as-noted', 'revise-and-resubmit', 'rejected'];
+const DOC_CATEGORIES = ['drawings', 'specs', 'submittals', 'contracts', 'permits', 'reports', 'closeout', 'other'];
+
+// Resolve a document by :id and expose its project for the project-member gate.
+function loadDoc(req, res, next) {
+  const doc = dbGet('SELECT * FROM documents WHERE id = ?', req.params.id);
+  if (!doc) return res.status(404).json({ error: 'document_not_found' });
+  req.doc = doc;
+  req.params.pid = String(doc.project_id);
+  next();
+}
+
+function csvCell(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
 /* ------------------------------------------------------------------ *
  * 4. EXPRESS SETUP
  * ------------------------------------------------------------------ */
@@ -1293,11 +1312,11 @@ app.get('/api/projects/:pid/files', requireAuth, auth.requireProjectMember(dbGet
   let files;
   const trashFilter = showTrash ? 'AND trashed = 1' : 'AND trashed = 0';
   if (folderId && folderId !== 'root') {
-    files = dbAll('SELECT * FROM files WHERE project_id = ? AND folder_id = ? AND type != \'photo\' ' + trashFilter + ' ORDER BY type ASC, original_name ASC', req.params.pid, folderId);
+    files = dbAll('SELECT * FROM files WHERE project_id = ? AND folder_id = ? AND document_id IS NULL AND type != \'photo\' ' + trashFilter + ' ORDER BY type ASC, original_name ASC', req.params.pid, folderId);
   } else if (folderId === 'root' && showTrash) {
     files = dbAll('SELECT * FROM files WHERE project_id = ? AND type != \'photo\' AND trashed = 1 ORDER BY trashed_at DESC', req.params.pid);
   } else {
-    files = dbAll('SELECT * FROM files WHERE project_id = ? AND folder_id IS NULL AND type != \'photo\' ' + trashFilter + ' ORDER BY type ASC, original_name ASC', req.params.pid);
+    files = dbAll('SELECT * FROM files WHERE project_id = ? AND folder_id IS NULL AND document_id IS NULL AND type != \'photo\' ' + trashFilter + ' ORDER BY type ASC, original_name ASC', req.params.pid);
   }
   const result = files.map(f => ({
     id: f.id, project_id: f.project_id, folder_id: f.folder_id, type: f.type,
@@ -1332,6 +1351,189 @@ app.patch('/api/files/:id/restore', requireAuth, requireFileProjectMember, requi
   if (!file.trashed) return res.status(400).json({ error: 'File is not in trash' });
   dbRun('UPDATE files SET trashed = 0, trashed_at = NULL WHERE id = ?', req.params.id);
   res.json({ ok: true, restored: true });
+});
+
+/* ═══════════════════════════════════════════════════════════════════
+ * DOCUMENT REGISTER (Files → Documents redesign)
+ * ═══════════════════════════════════════════════════════════════════ */
+
+// ── List documents (register tab payload) ──
+app.get('/api/projects/:pid/documents', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'r'), (req, res) => {
+  const pid = req.params.pid;
+  let sql = 'SELECT * FROM documents WHERE project_id = ?';
+  const args = [pid];
+  if (req.query.category) { sql += ' AND category = ?'; args.push(req.query.category); }
+  if (req.query.status)   { sql += ' AND status = ?';   args.push(req.query.status); }
+  sql += ' ORDER BY category, COALESCE(number, title) COLLATE NOCASE';
+  const docs = dbAll(sql, ...args);
+
+  docs.forEach(function (d) {
+    d.current_revision = dbGet('SELECT id, original_name, mime_type, size_bytes, revision, created_at FROM files WHERE document_id = ? AND trashed = 0 AND superseded = 0 LIMIT 1', d.id) || null;
+    const rc = dbGet('SELECT COUNT(*) AS c FROM files WHERE document_id = ? AND trashed = 0', d.id);
+    d.revision_count = rc ? rc.c : 0;
+    const lc = dbGet('SELECT COUNT(*) AS c FROM document_links WHERE document_id = ?', d.id);
+    d.link_count = lc ? lc.c : 0;
+  });
+
+  const expected = dbAll('SELECT * FROM expected_documents WHERE project_id = ? ORDER BY category, title', pid);
+  const missing = expected.filter(function (e) { return !e.fulfilled_by_document_id; });
+
+  res.json({
+    documents: docs,
+    expected: expected,
+    counts: {
+      needs_review: docs.filter(function (d) { return d.status === 'needs-review'; }).length,
+      revise_resubmit: docs.filter(function (d) { return d.status === 'revise-and-resubmit'; }).length,
+      missing: missing.length
+    }
+  });
+});
+
+// ── Create document (promote-as-new-document path) ──
+app.post('/api/projects/:pid/documents', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  const b = req.body || {};
+  if (!b.title || !String(b.title).trim()) return res.status(400).json({ error: 'title_required' });
+  if (DOC_CATEGORIES.indexOf(b.category) < 0) return res.status(400).json({ error: 'bad_category' });
+
+  const pid = req.params.pid, docId = uid(), now = nowISO();
+  try {
+    _db.transaction(function () {
+      dbRun('INSERT INTO documents (id, project_id, number, title, category, discipline, status, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        docId, pid, b.number || null, String(b.title).trim(), b.category, b.discipline || null, 'needs-review', req.user.id, now);
+      dbRun('INSERT INTO document_status_history (id, document_id, status, changed_by, changed_at) VALUES (?, ?, ?, ?, ?)',
+        uid(), docId, 'needs-review', req.user.id, now);
+      if (b.file_id) {
+        const f = dbGet('SELECT * FROM files WHERE id = ?', b.file_id);
+        if (!f || f.project_id !== pid || f.type !== 'file' || f.trashed) throw new Error('bad_file');
+        if (f.document_id) throw new Error('file_already_registered');
+        dbRun('UPDATE files SET document_id = ?, revision = ?, folder_id = NULL, superseded = 0 WHERE id = ?', docId, b.revision || 'A', b.file_id);
+      }
+      if (b.expected_document_id) {
+        dbRun('UPDATE expected_documents SET fulfilled_by_document_id = ? WHERE id = ? AND project_id = ?', docId, b.expected_document_id, pid);
+      }
+    })();
+  } catch (e) { return res.status(409).json({ error: e.message }); }
+
+  const doc = dbGet('SELECT * FROM documents WHERE id = ?', docId);
+  doc.current_revision = dbGet('SELECT id, original_name, mime_type, revision, created_at FROM files WHERE document_id = ? AND superseded = 0 AND trashed = 0', docId) || null;
+  res.json({ document: doc });
+});
+
+// ── Edit document metadata ──
+app.patch('/api/documents/:id', requireAuth, loadDoc, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  const b = req.body || {}, sets = [], args = [];
+  if (b.title !== undefined)  { if (!String(b.title).trim()) return res.status(400).json({ error: 'title_required' }); sets.push('title = ?'); args.push(String(b.title).trim()); }
+  if (b.number !== undefined) { sets.push('number = ?'); args.push(b.number || null); }
+  if (b.category !== undefined) { if (DOC_CATEGORIES.indexOf(b.category) < 0) return res.status(400).json({ error: 'bad_category' }); sets.push('category = ?'); args.push(b.category); }
+  if (b.discipline !== undefined) { sets.push('discipline = ?'); args.push(b.discipline || null); }
+  if (!sets.length) return res.status(400).json({ error: 'nothing_to_update' });
+  args.push(req.params.id);
+  dbRun('UPDATE documents SET ' + sets.join(', ') + ' WHERE id = ?', ...args);
+  res.json({ document: dbGet('SELECT * FROM documents WHERE id = ?', req.params.id) });
+});
+
+// ── Attach a file as the new current revision ──
+app.post('/api/documents/:id/revisions', requireAuth, loadDoc, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  const b = req.body || {};
+  if (!b.file_id || !b.revision) return res.status(400).json({ error: 'file_id_and_revision_required' });
+  try {
+    _db.transaction(function () {
+      const f = dbGet('SELECT * FROM files WHERE id = ?', b.file_id);
+      if (!f || f.project_id !== req.doc.project_id || f.type !== 'file' || f.trashed) throw new Error('bad_file');
+      if (f.document_id) throw new Error('file_already_registered');
+      dbRun('UPDATE files SET superseded = 1 WHERE document_id = ? AND superseded = 0', req.doc.id);
+      dbRun('UPDATE files SET document_id = ?, revision = ?, folder_id = NULL, superseded = 0 WHERE id = ?', req.doc.id, String(b.revision).toUpperCase(), b.file_id);
+      const now = nowISO();
+      dbRun('UPDATE documents SET status = ?, status_updated_by = ?, status_updated_at = ? WHERE id = ?', 'needs-review', req.user.id, now, req.doc.id);
+      dbRun('INSERT INTO document_status_history (id, document_id, status, changed_by, changed_at) VALUES (?, ?, ?, ?, ?)', uid(), req.doc.id, 'needs-review', req.user.id, now);
+    })();
+  } catch (e) { return res.status(409).json({ error: e.message }); }
+  res.json({ ok: true });
+});
+
+// ── Set document status ──
+app.post('/api/documents/:id/status', requireAuth, loadDoc, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  const s = (req.body || {}).status;
+  if (DOC_STATUSES.indexOf(s) < 0) return res.status(400).json({ error: 'bad_status' });
+  const now = nowISO();
+  _db.transaction(function () {
+    dbRun('UPDATE documents SET status = ?, status_updated_by = ?, status_updated_at = ? WHERE id = ?', s, req.user.id, now, req.doc.id);
+    dbRun('INSERT INTO document_status_history (id, document_id, status, changed_by, changed_at) VALUES (?, ?, ?, ?, ?)', uid(), req.doc.id, s, req.user.id, now);
+  })();
+  res.json({ document: dbGet('SELECT * FROM documents WHERE id = ?', req.doc.id) });
+});
+
+// ── Document detail payload ──
+app.get('/api/documents/:id', requireAuth, loadDoc, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'r'), (req, res) => {
+  res.json({
+    document: req.doc,
+    revisions: dbAll('SELECT id, original_name, mime_type, size_bytes, revision, superseded, uploaded_by, created_at FROM files WHERE document_id = ? AND trashed = 0 ORDER BY superseded ASC, created_at DESC', req.doc.id),
+    links: dbAll('SELECT * FROM document_links WHERE document_id = ? ORDER BY created_at', req.doc.id),
+    status_history: dbAll('SELECT * FROM document_status_history WHERE document_id = ? ORDER BY changed_at DESC', req.doc.id)
+  });
+});
+
+// ── Remove from register (files return to the shelf, non-destructive) ──
+app.delete('/api/documents/:id', requireAuth, loadDoc, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  _db.transaction(function () {
+    dbRun('UPDATE files SET document_id = NULL, revision = NULL, superseded = 0 WHERE document_id = ?', req.doc.id);
+    dbRun('DELETE FROM document_links WHERE document_id = ?', req.doc.id);
+    dbRun('DELETE FROM document_status_history WHERE document_id = ?', req.doc.id);
+    dbRun('UPDATE expected_documents SET fulfilled_by_document_id = NULL WHERE fulfilled_by_document_id = ?', req.doc.id);
+    dbRun('DELETE FROM documents WHERE id = ?', req.doc.id);
+  })();
+  res.json({ ok: true });
+});
+
+// ── Entity links ──
+app.post('/api/documents/:id/links', requireAuth, loadDoc, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  const b = req.body || {};
+  if (['rfi', 'punchlist', 'submittal', 'task'].indexOf(b.entity_type) < 0 || !b.entity_id) return res.status(400).json({ error: 'bad_link' });
+  try {
+    dbRun('INSERT INTO document_links (id, document_id, entity_type, entity_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)', uid(), req.doc.id, b.entity_type, b.entity_id, req.user.id, nowISO());
+  } catch (e) { return res.status(409).json({ error: 'already_linked' }); }
+  res.json({ ok: true });
+});
+
+app.delete('/api/documents/:id/links/:linkId', requireAuth, loadDoc, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  dbRun('DELETE FROM document_links WHERE id = ? AND document_id = ?', req.params.linkId, req.doc.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/projects/:pid/document-links', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'r'), (req, res) => {
+  if (!req.query.entity_type || !req.query.entity_id) return res.status(400).json({ error: 'entity_required' });
+  const rows = dbAll('SELECT dl.id AS link_id, d.* FROM document_links dl JOIN documents d ON d.id = dl.document_id WHERE d.project_id = ? AND dl.entity_type = ? AND dl.entity_id = ?', req.params.pid, req.query.entity_type, req.query.entity_id);
+  res.json({ documents: rows });
+});
+
+// ── Expected documents ──
+app.get('/api/projects/:pid/expected-documents', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'r'), (req, res) => {
+  res.json({ expected: dbAll('SELECT * FROM expected_documents WHERE project_id = ? ORDER BY category, title', req.params.pid) });
+});
+
+app.post('/api/projects/:pid/expected-documents', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  const b = req.body || {};
+  if (!b.title || DOC_CATEGORIES.indexOf(b.category) < 0) return res.status(400).json({ error: 'bad_expected' });
+  const id = uid();
+  dbRun('INSERT INTO expected_documents (id, project_id, category, title, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)', id, req.params.pid, b.category, String(b.title).trim(), req.user.id, nowISO());
+  res.json({ expected: dbGet('SELECT * FROM expected_documents WHERE id = ?', id) });
+});
+
+app.delete('/api/projects/:pid/expected-documents/:eid', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'rw'), (req, res) => {
+  dbRun('DELETE FROM expected_documents WHERE id = ? AND project_id = ?', req.params.eid, req.params.pid);
+  res.json({ ok: true });
+});
+
+// ── CSV export ──
+app.get('/api/projects/:pid/documents/export.csv', requireAuth, auth.requireProjectMember(dbGet), auth.requireRoom(dbGet, 'files', 'r'), (req, res) => {
+  const docs = dbAll('SELECT d.*, f.revision AS current_rev, f.original_name AS current_file, f.created_at AS rev_date FROM documents d LEFT JOIN files f ON f.document_id = d.id AND f.superseded = 0 AND f.trashed = 0 WHERE d.project_id = ? ORDER BY d.category, COALESCE(d.number, d.title) COLLATE NOCASE', req.params.pid);
+  const lines = ['Category,Number,Title,Discipline,Revision,Status,Status updated,Current file,Rev date'];
+  docs.forEach(function (d) {
+    lines.push([d.category, d.number, d.title, d.discipline, d.current_rev, d.status, d.status_updated_at, d.current_file, d.rev_date].map(csvCell).join(','));
+  });
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="document-register.csv"');
+  res.send(lines.join('\n'));
 });
 
 // ── Photos (server-backed, not localStorage) ──
