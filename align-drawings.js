@@ -1343,6 +1343,7 @@
 
   /* ── Viewer state persistence (survives WKWebView content-process kill) ── */
   var MV_STATE_KEY = 'alignpm.mv.state.v1';
+  var MV_OPEN_MARKER = 'alignpm.mv.open';   // sessionStorage: survives reload, not cold launch
   var MV_STATE_MAX_AGE_MS = 10 * 60 * 1000;
   var _mvStateTimer = null;
 
@@ -1365,10 +1366,20 @@
     _mvStateTimer = setTimeout(function () { _mvStateTimer = null; _mvWriteStateNow(); }, 400);
   }
   window.addEventListener('pagehide', _mvWriteStateNow);
+  window.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'hidden') _mvWriteStateNow();
+  });
   var _mvRestoreOpts = null;
 
   // Best-effort restore after a WKWebView content-process kill. Call from app boot.
   function _mvTryRestoreState() {
+    // Only restore if the viewer was OPEN when the process died. sessionStorage
+    // survives Capacitor's webView.reload() but NOT a cold relaunch, so it
+    // distinguishes "killed mid-view" from "normal relaunch".
+    var wasOpen = false;
+    try { wasOpen = sessionStorage.getItem(MV_OPEN_MARKER) === '1'; } catch (e) {}
+    if (!wasOpen) return false;
+
     var raw = null;
     try { raw = localStorage.getItem(MV_STATE_KEY); } catch (e) {}
     if (!raw) return false;
@@ -1476,6 +1487,7 @@
 
     // Close any previous viewer + remove old overlay if any
     _mvClose();
+    try { sessionStorage.setItem(MV_OPEN_MARKER, '1'); } catch (e) {}
 
     var h = [];
 
@@ -1857,6 +1869,7 @@
             // PDF-specific state for crisp zoom re-renders
             _pdfDoc: pdfDoc,
             _pdfPageNum: 1,
+            _pdfTargetPageNum: 1,   // synchronous target (avoids page-switch race)
             _pdfNumPages: numPages,
             _pdfBaseScale: baseScale,
             _pdfLogW: logW,
@@ -1895,7 +1908,6 @@
                 if (_mv._pdfDoc) _mvRerenderPdf();
               }
               // Pre-render adjacent pages for instant page turning
-              _mvPreRenderAdjacent();
               _mvStartMode();
             });
           });
@@ -2350,7 +2362,7 @@
 
     canvas.addEventListener('touchstart', _mvTouchStart, { passive: false });
     canvas.addEventListener('touchmove', _mvTouchMove, { passive: false });
-    canvas.addEventListener('touchend', _mvTouchEnd);
+    canvas.addEventListener('touchend', _mvTouchEnd, { passive: false });
 
     // Also bind wheel + touch to viewport so zoom/pan work on the whole area
     var viewport = document.getElementById('dr-mv-viewport');
@@ -2358,7 +2370,7 @@
       viewport.addEventListener('wheel', _mvWheel, { passive: false });
       viewport.addEventListener('touchstart', _mvTouchStart, { passive: false });
       viewport.addEventListener('touchmove', _mvTouchMove, { passive: false });
-      viewport.addEventListener('touchend', _mvTouchEnd);
+      viewport.addEventListener('touchend', _mvTouchEnd, { passive: false });
     }
 
     // Also bind wheel to the overlay host so zoom works everywhere in the viewer
@@ -2431,29 +2443,26 @@
     var canvas = document.getElementById('dr-mv-canvas');
     if (!canvas) return;
 
-    // For PDF: use stored logical dimensions
-    var w, h;
+    // PDF: the render pipeline owns the annotation canvas backing + CSS size.
+    // Do NOT touch them here (a manual write would desync _committedZoom and
+    // cause double-scaling). Delegate to the commit path.
     if (_mv._pdfDoc) {
-      w = _mv._pdfLogW;
-      h = _mv._pdfLogH;
-    } else {
-      var img = document.getElementById('dr-mv-image');
-      if (!img) return;
-      w = img.naturalWidth || img.clientWidth;
-      h = img.naturalHeight || img.clientHeight;
+      _mvCommitZoomCss();
+      _mvRedraw();
+      return;
     }
+
+    // Image: use natural dimensions
+    var img = document.getElementById('dr-mv-image');
+    if (!img) return;
+    var w = img.naturalWidth || img.clientWidth;
+    var h = img.naturalHeight || img.clientHeight;
 
     if (w && h) {
       canvas.width = w;
       canvas.height = h;
-      // CSS size follows zoom for PDF (handled in _mvCommitZoomCss)
-      if (!_mv._pdfDoc) {
-        canvas.style.width = w + 'px';
-        canvas.style.height = h + 'px';
-      } else {
-        canvas.style.width  = Math.round(w * _mv.zoom) + 'px';
-        canvas.style.height = Math.round(h * _mv.zoom) + 'px';
-      }
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
     }
     _mvRedraw();
   }
@@ -2830,13 +2839,13 @@
       _mv.panStartY = _mv._pinchCY;
       _mv.panOrigX = _mv.panX;
       _mv.panOrigY = _mv.panY;
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       return;
     }
     if (e.touches.length === 1) {
       var fake = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, button: 0, preventDefault: function () {}, stopPropagation: function () {} };
       _mvMouseDown(fake);
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
     }
   }
 
@@ -2905,7 +2914,7 @@
 
   function _mvTouchEnd(e) {
     e.stopPropagation();
-    e.preventDefault(); // suppress synthetic mouse events after touch (prevents duplicate crop points)
+    if (e.cancelable) e.preventDefault(); // suppress synthetic mouse events after touch (prevents duplicate crop points)
     if (_mv._specTimer) { clearTimeout(_mv._specTimer); _mv._specTimer = null; }
     _mv._pendingTouches = null;
     if (_mv._twoFinger) {
@@ -2914,6 +2923,15 @@
       _mv.panning = false;
       // Re-render at final zoom after pinch ends
       _mvRerenderPdf();
+      // 2→1 transition: if one finger remains, re-seed the single-finger pan
+      // origin so pan continues smoothly from the remaining finger's position.
+      if (e.touches && e.touches.length === 1) {
+        _mv.panning = true;
+        _mv.panStartX = e.touches[0].clientX;
+        _mv.panStartY = e.touches[0].clientY;
+        _mv.panOrigX = _mv.panX;
+        _mv.panOrigY = _mv.panY;
+      }
       return;
     }
     var t = e.changedTouches && e.changedTouches[0];
@@ -3036,6 +3054,7 @@
 
   function _mvRenderPage(pageNum) {
     var seq = ++_mvRenderSeq;
+    _mv._pdfTargetPageNum = pageNum; // synchronous target — pinch can't revert a switch
     if (_mv._renderTask) {
       _mv._renderTask.cancel();
       _mv._renderTask.promise.catch(function() {}); // swallow cancel
@@ -3061,6 +3080,7 @@
         _mv._pdfPageNum = pageNum;
         _mvCommitZoomCss();
         _mvRedraw();
+        _mvNotifyTransformChanged('pdf-canvas-resize');
         return;
       }
 
@@ -3086,17 +3106,19 @@
         _mv._pdfPageNum = pageNum;
         pdfCanvas.width = w; pdfCanvas.height = h;
         pdfCanvas.getContext('2d').drawImage(back, 0, 0);
+        // Free the back canvas backing store (avoid holding two full-size buffers
+        // simultaneously — iOS has a hard total canvas-memory budget).
+        back.width = 0; back.height = 0;
 
         var annCanvas = document.getElementById('dr-mv-canvas');
         if (annCanvas && (annCanvas.width !== w || annCanvas.height !== h)) {
           annCanvas.width = w; annCanvas.height = h;
-          _mvRedraw();
         }
+        _mvRedraw(); // always redraw — clears the previous page's markups
 
         _mv._renderedKey = renderKey;
         _mvCommitZoomCss();                       // CSS size + transform rebase
         _mvNotifyTransformChanged('pdf-canvas-resize');
-        _mvPreRenderAdjacent();
       }).catch(function (e) {
         if (e && e.name !== 'RenderingCancelledException') throw e;
       }).finally(function () {
@@ -3109,7 +3131,7 @@
   function _mvRerenderPdf() {
     var pdfCanvas = document.getElementById('dr-mv-image');
     if (!pdfCanvas || !_mv._pdfDoc) return;
-    _mvRenderPage(_mv._pdfPageNum);
+    _mvRenderPage(_mv._pdfTargetPageNum);
   }
 
   /* ── Speculative mid-gesture render: if pinch zoom is stable ~100ms,
@@ -3123,47 +3145,6 @@
       if (!_mv._twoFinger) return;      // gesture already ended; touchend handled it
       _mvRerenderPdf();                 // double-buffered + bucketed => cheap & safe
     }, MV_SPECULATE_MS);
-  }
-
-  /* ── Pre-render adjacent PDF pages for instant page turning ──────────── */
-  function _mvPreRenderAdjacent() {
-    if (!_mv._pdfDoc || _mv._pdfNumPages <= 1) return;
-    // Initialize cache if needed
-    if (!_mv._pdfPageCache) _mv._pdfPageCache = {};
-    var dpr = Math.min(window.devicePixelRatio || 1, 2);
-    var renderScale = _mv._pdfBaseScale * _mv.zoom * dpr;
-    var logW = Math.round(_mv._pdfLogW * _mv.zoom);
-    var logH = Math.round(_mv._pdfLogH * _mv.zoom);
-
-    // Pre-render next and previous pages
-    var pagesToCache = [];
-    var next = _mv._pdfPageNum + 1;
-    var prev = _mv._pdfPageNum - 1;
-    if (next <= _mv._pdfNumPages) pagesToCache.push(next);
-    if (prev >= 1) pagesToCache.push(prev);
-
-    for (var i = 0; i < pagesToCache.length; i++) {
-      var pn = pagesToCache[i];
-      // Skip if already cached
-      if (_mv._pdfPageCache[pn]) continue;
-      // Create offscreen canvas for this page
-      (function (pageNum) {
-        _mv._pdfDoc.getPage(pageNum).then(function (page) {
-          var viewport = page.getViewport({ scale: renderScale });
-          var offCanvas = document.createElement('canvas');
-          offCanvas.width  = Math.round(logW * dpr);
-          offCanvas.height = Math.round(logH * dpr);
-          var octx = offCanvas.getContext('2d');
-          octx.imageSmoothingEnabled = true;
-          octx.imageSmoothingQuality = 'high';
-          page.render({ canvasContext: octx, viewport: viewport }).promise.then(function () {
-            _mv._pdfPageCache[pageNum] = offCanvas;
-          }).catch(function () {
-            // Pre-render failure is non-critical
-          });
-        }).catch(function () {});
-      })(pn);
-    }
   }
 
   /* ── Text placement ────────────────────────────────────────────────────── */
@@ -3292,6 +3273,7 @@
     if (_mvPersistTimer) { clearTimeout(_mvPersistTimer); _mvPersistTimer = null; }
     if (_mvStateTimer) { clearTimeout(_mvStateTimer); _mvStateTimer = null; }
     try { localStorage.removeItem(MV_STATE_KEY); } catch (e) {}
+    try { sessionStorage.removeItem(MV_OPEN_MARKER); } catch (e) {}
     // Flush any pending save
     if (_mv && _mv.strokes && _mv.strokes.length > 0) {
       _saveMarkups(_mv.projectId, _mv.drawingId, _mv.strokes).catch(function () {});
