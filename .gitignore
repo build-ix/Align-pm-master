@@ -3,6 +3,7 @@ node_modules/
 .env
 data/
 *.bak
+*.bak.*
 *_tmp.png
 *_tmp.*
 demos/
@@ -16,3 +17,22 @@ align-hierarchy.html
 backfill-punchlist-companies.js
 references/
 scripts/
+
+# Generated audit output (tools/reports) — never commit
+tools/reports/
+
+# Databases / local artifacts
+*.db
+*.db-wal
+*.db-shm
+
+# Superseded/orphaned assets and dev experiments
+favicon-v2.png
+align-favicons.png
+logo-lab*.html
+align-contacts-v2.css
+align-contacts-v3.css
+align-contacts-v4.css
+
+# Throwaway diagnostics
+_diag*.mjs
