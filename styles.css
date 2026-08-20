@@ -2575,3 +2575,53 @@ html.pl-viewer-open, body.pl-viewer-open { overflow: hidden; overscroll-behavior
   paint-order: stroke;
   stroke: rgba(0,0,0,0.55);
 }
+
+/* ===== iOS native shell fixes ===== */
+
+html { scrollbar-gutter: auto; }
+
+html, body { height: 100%; }
+
+html, body, #section-page {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+#section-page::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+body {
+  overflow-y: auto;
+  -webkit-user-select: none;
+  user-select: none;
+  overscroll-behavior: none;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+input, textarea, [contenteditable], .selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.app-header {
+  padding-top: env(safe-area-inset-top);
+}
+
+#section-page {
+  overscroll-behavior-y: contain;
+  padding-bottom: calc(84px + max(env(safe-area-inset-bottom), 8px));
+}
+
+#bottom-nav {
+  height: calc(56px + max(env(safe-area-inset-bottom), 8px));
+  padding-top: 2px;
+  padding-bottom: calc(max(env(safe-area-inset-bottom), 8px) - 2px);
+}

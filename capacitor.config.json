@@ -3,10 +3,10 @@
   "appName": "Align PM",
   "webDir": "www",
   "ios": {
-    "contentInset": "automatic",
+    "contentInset": "never",
     "backgroundColor": "#0a0a12",
     "allowsLinkPreview": false,
-    "scrollEnabled": true,
+    "scrollEnabled": false,
     "overScrollEnabled": false,
     "infoPlist": {
       "NSPhotoLibraryUsageDescription": "Align PM uses your photo library to attach images to daily logs, punchlists, and project photos.",

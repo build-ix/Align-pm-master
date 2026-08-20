@@ -70,6 +70,12 @@
     }
     var el = document.documentElement;
     if (el) el.setAttribute('data-theme', resolved);
+    // Keep the native iOS status bar (text + background) in sync with the theme.
+    try {
+      if (global.AlignNative && global.AlignNative.setStatusBar) {
+        global.AlignNative.setStatusBar(resolved === 'dark');
+      }
+    } catch (e) { /* status bar plugin unavailable on web */ }
   }
 
   /* ════════════════════════════════════════════════════════════════════════════
