@@ -1062,22 +1062,32 @@ function _escHtml(s) {
     }
 
     function fallbackIPLocation() {
-      fetch('https://ipapi.co/json/')
+      var controller = new AbortController();
+      var timeout = setTimeout(function () {
+        controller.abort();
+      }, 6000);
+
+      function useNYC() {
+        loadWeather(40.7128, -74.006);
+        if (dashCity) dashCity.textContent = 'New York';
+      }
+
+      fetch('https://ipapi.co/json/', { signal: controller.signal })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.latitude && data.longitude) {
             loadWeather(data.latitude, data.longitude);
-            if (dashCity) dashCity.textContent = data.city || data.region || '';
+            if (dashCity) dashCity.textContent = data.city || data.region || 'New York';
           } else {
-            // Default: New York City
-            loadWeather(40.7128, -74.006);
-            if (dashCity) dashCity.textContent = 'New York';
+            useNYC();
           }
         })
         .catch(function () {
-          // Ultimate fallback
-          loadWeather(40.7128, -74.006);
-          if (dashCity) dashCity.textContent = 'New York';
+          // ipapi.co hung (aborted), errored, or returned no coords → NYC default
+          useNYC();
+        })
+        .then(function () {
+          clearTimeout(timeout);
         });
     }
 
