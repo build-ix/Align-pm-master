@@ -1000,11 +1000,24 @@ app.delete('/api/projects/:id', requireAuth, requireAdmin, (req, res) => {
   // Capture project users before deleting memberships
   var projectUsers = dbAll('SELECT user_id FROM user_projects WHERE project_id = ?', req.params.id);
 
+  // Capture physical file paths (regular uploads, project images, generated
+  // crops/exports) before deleting rows, so we can unlink them from disk.
+  var projectFiles = dbAll('SELECT stored_path FROM files WHERE project_id = ?', req.params.id);
+
   dbRun('DELETE FROM files WHERE project_id = ?', req.params.id);
   dbRun('DELETE FROM records WHERE project_id = ?', req.params.id);
   dbRun('DELETE FROM drawing_markups WHERE project_id = ?', req.params.id);
   dbRun('DELETE FROM user_projects WHERE project_id = ?', req.params.id);
   dbRun('DELETE FROM projects WHERE id = ?', req.params.id);
+
+  // Remove the project's physical files + thumbnails from disk, then its upload dir.
+  projectFiles.forEach(function (f) {
+    if (f && f.stored_path) {
+      try { fs.unlinkSync(f.stored_path); } catch (e) {}
+      try { fs.unlinkSync(f.stored_path + '.thumb.jpg'); } catch (e) {}
+    }
+  });
+  try { fs.rmSync(path.join(UPLOADS_DIR, req.params.id), { recursive: true, force: true }); } catch (e) {}
 
   // Clean up invites orphaned by project deletion (FK sets project_id to NULL)
   dbRun('DELETE FROM invites WHERE project_id IS NULL AND status = ?', 'pending');
