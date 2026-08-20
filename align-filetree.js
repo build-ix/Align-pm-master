@@ -383,12 +383,12 @@
 '.ft-card{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:16px;border:1px solid var(--align-line);border-radius:16px;background:var(--align-surface);cursor:pointer;text-align:left;box-shadow:var(--align-shadow-card)}' +
 '.ft-card:active{background:var(--align-line)}' +
 '.ft-card__icon{font-size:22px;line-height:1}' +
-'.ft-card__label{font-size:14px;font-weight:700;color:var(--align-navy)}' +
+'.ft-card__label{font-size:14px;font-weight:700;color:var(--align-text)}' +
 '.ft-card__count{font-size:12px;color:var(--align-muted)}' +
 '.ft-card--legacy{opacity:.7;border-style:dashed}' +
 '.ft-crumbs{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:4px 0 12px;font-size:13px}' +
 '.ft-crumb{border:0;background:none;color:var(--align-orange);font-weight:600;font-size:13px;cursor:pointer;padding:2px 4px}' +
-'.ft-crumb--here{color:var(--align-navy);font-weight:700}' +
+'.ft-crumb--here{color:var(--align-text);font-weight:700}' +
 '.ft-crumb__sep{color:var(--align-muted)}' +
 '.ft-level{display:flex;flex-direction:column}' +
 '.ft-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--align-line);background:none;border-left:0;border-right:0;border-top:0;cursor:pointer;text-align:left;font-size:14px}' +
@@ -402,7 +402,7 @@
 '.ft-empty{padding:36px 16px;text-align:center;color:var(--align-muted);font-size:14px}' +
 '.ft-error{padding:36px 16px;text-align:center}' +
 '.ft-error p{color:var(--align-muted);margin:0 0 12px}' +
-'.ft-btn{border:1px solid var(--align-line);background:var(--align-surface);color:var(--align-navy);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}' +
+'.ft-btn{border:1px solid var(--align-line);background:var(--align-surface);color:var(--align-text);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer}' +
 '.ft-skel{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}' +
 '.ft-skel__card{height:90px;border-radius:16px;background:var(--align-line);opacity:.5}' +
 '.ft-nf{margin:0 0 12px;border:1px solid #e8d48a;border-radius:14px;overflow:hidden}' +
