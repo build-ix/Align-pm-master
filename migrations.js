@@ -16,7 +16,7 @@ const MIGRATIONS = [
     version: 1,
     name: 'create_users',
     up(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS users (
           id              TEXT PRIMARY KEY,
           username        TEXT UNIQUE,
@@ -41,7 +41,7 @@ const MIGRATIONS = [
     version: 2,
     name: 'create_projects',
     up(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS projects (
           id         TEXT PRIMARY KEY,
           name       TEXT NOT NULL,
@@ -58,7 +58,7 @@ const MIGRATIONS = [
     version: 3,
     name: 'create_user_projects',
     up(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS user_projects (
           user_id     TEXT NOT NULL,
           project_id  TEXT NOT NULL,
@@ -77,7 +77,7 @@ const MIGRATIONS = [
     version: 4,
     name: 'create_records',
     up(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS records (
           id         TEXT NOT NULL,
           project_id TEXT NOT NULL,
@@ -97,7 +97,7 @@ const MIGRATIONS = [
     version: 5,
     name: 'create_sessions',
     up(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
           id         TEXT PRIMARY KEY,
           user_id    TEXT NOT NULL,
@@ -114,7 +114,7 @@ const MIGRATIONS = [
     version: 6,
     name: 'create_files',
     up(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS files (
           id            TEXT PRIMARY KEY,
           project_id    TEXT NOT NULL,
@@ -140,7 +140,7 @@ const MIGRATIONS = [
     version: 7,
     name: 'create_invites',
     up(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS invites (
           id           TEXT PRIMARY KEY,
           code         TEXT NOT NULL UNIQUE,
@@ -192,7 +192,7 @@ const MIGRATIONS = [
     version: 9,
     name: 'add_punchlist_indexes',
     up(db) {
-      const safeIdx = (sql) => { try { db.run(sql); } catch (e) { /* sql.js may not support partial indexes */ } };
+      const safeIdx = (sql) => { try { db.exec(sql); } catch (e) { /* sql.js may not support partial indexes */ } };
 
       safeIdx("CREATE INDEX IF NOT EXISTS idx_rec_pl_status   ON records(json_extract(data, '$.status'))   WHERE category = 'punchlist'");
       safeIdx("CREATE INDEX IF NOT EXISTS idx_rec_pl_trade    ON records(json_extract(data, '$.trade'))    WHERE category = 'punchlist'");
@@ -790,6 +790,70 @@ const MIGRATIONS = [
           "   OR NEW.original_uploaded_by IS NOT OLD.original_uploaded_by) " +
           "BEGIN SELECT RAISE(ABORT, 'provenance is immutable'); END");
       } catch (e) { /* trigger unsupported — provenance enforced in code */ }
+    }
+  },
+  {
+    version: 34,
+    name: 'fold_sql_punchlist_assignments_and_notifications',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS punchlist_assignments (
+          id              INTEGER PRIMARY KEY AUTOINCREMENT,
+          punch_item_id   TEXT NOT NULL,
+          user_id         TEXT NOT NULL,
+          assigned_by     TEXT,
+          assigned_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(punch_item_id, user_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_pa_punch_item ON punchlist_assignments(punch_item_id);
+        CREATE INDEX IF NOT EXISTS idx_pa_user       ON punchlist_assignments(user_id);
+
+        CREATE TABLE IF NOT EXISTS notifications (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          punch_item_id TEXT,
+          punchlist_list_id TEXT,
+          notification_type TEXT NOT NULL DEFAULT 'item_manual',
+          recipient_email TEXT NOT NULL,
+          subject TEXT NOT NULL,
+          body TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          notify_attempts INTEGER NOT NULL DEFAULT 0,
+          notify_error TEXT,
+          sent_at TEXT,
+          attachment_file_id TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_notif_pending ON notifications(status) WHERE status = 'pending';
+        CREATE INDEX IF NOT EXISTS idx_notif_created ON notifications(created_at);
+      `);
+    }
+  },
+  {
+    version: 35,
+    name: 'fold_sql_punch_item_locations',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS punch_item_locations (
+          id TEXT PRIMARY KEY,
+          punch_item_id TEXT NOT NULL,
+          drawing_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          sheet_number INTEGER NOT NULL,
+          x REAL NOT NULL,
+          y REAL NOT NULL,
+          created_at TEXT NOT NULL,
+          created_by TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          updated_by TEXT NOT NULL,
+          UNIQUE(punch_item_id, drawing_id, sheet_number),
+          CHECK(x >= 0 AND x <= 1),
+          CHECK(y >= 0 AND y <= 1),
+          CHECK(sheet_number >= 0)
+        );
+        CREATE INDEX IF NOT EXISTS idx_punch_locations_drawing ON punch_item_locations(drawing_id, sheet_number);
+        CREATE INDEX IF NOT EXISTS idx_punch_locations_item ON punch_item_locations(punch_item_id);
+        CREATE INDEX IF NOT EXISTS idx_punch_locations_project ON punch_item_locations(project_id);
+      `);
     }
   }
 ];

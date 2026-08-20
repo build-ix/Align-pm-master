@@ -4,8 +4,7 @@
   "description": "Align backend — self-hosted SQLite storage, runs on your PC",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "migrate": "node migrate-json-to-sqlite.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "@capacitor/camera": "^8.2.1",
