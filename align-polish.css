@@ -227,7 +227,7 @@ body.auth-overlay-open {
 .app-header {
   min-height: 62px;
   margin: 0 -16px 12px;
-  padding: 10px 16px;
+  padding: max(10px, env(safe-area-inset-top)) 16px 10px;
   background: var(--align-navy);
   border-bottom: 3px solid var(--align-orange);
 }
@@ -752,7 +752,7 @@ html[data-theme="dark"] body.ps-open #section-page {
 .section-page-header {
   min-height: 58px;
   margin-bottom: 14px;
-  padding: 10px 0;
+  padding: max(10px, env(safe-area-inset-top)) 0 10px;
   border-bottom: 2px solid var(--align-navy-3);
   background: var(--align-paper);
 }
