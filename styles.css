@@ -1203,7 +1203,6 @@ html[data-theme="dark"] .logo-dark { display: block; }
   gap: 2px;
   flex: 1;
   height: 56px;
-  padding-bottom: env(safe-area-inset-bottom);
   color: var(--muted);
   text-decoration: none;
   font-size: 10px;
