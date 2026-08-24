@@ -2861,6 +2861,32 @@ app.get('/api/files/:id', requireAuth, requireFileProjectMember, requireFileRoom
   fs.createReadStream(file.stored_path).pipe(res);
 });
 
+// ── Public image preview (for <img> tags on iOS Capacitor) ──
+// Allows displaying file previews without auth, but project membership is enforced.
+// Falls back to the full file if no thumb exists.
+app.get('/api/files/:id/preview', (req, res) => {
+  const file = dbGet('SELECT id, project_id, stored_path, mime_type, original_name FROM files WHERE id = ?', req.params.id);
+  if (!file) return res.status(404).json({ error: 'File not found' });
+  if (!fs.existsSync(file.stored_path)) return res.status(404).json({ error: 'File missing from disk' });
+  
+  // Serve thumbnail if it exists
+  const thumbPath = file.stored_path + '.thumb.jpg';
+  if (fs.existsSync(thumbPath)) {
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return fs.createReadStream(thumbPath).pipe(res);
+  }
+  
+  // Fallback: serve full file for images, reject PDFs
+  if (file.mime_type && file.mime_type.startsWith('image/')) {
+    res.setHeader('Content-Type', file.mime_type);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    return fs.createReadStream(file.stored_path).pipe(res);
+  }
+  
+  res.status(404).json({ error: 'Preview not available for this file type' });
+});
+
 app.delete('/api/files/:id', requireAuth, requireFileProjectMember, requireFileRoom(dbGet, 'rw'), (req, res) => {
   const file = dbGet('SELECT * FROM files WHERE id = ?', req.params.id);
   if (!file) return res.status(404).json({ error: 'File not found' });

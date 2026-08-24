@@ -544,7 +544,7 @@
     callout.setAttribute('aria-label', numLabel);
 
     var thumbHtml = img && img.fileId
-      ? '<figure class="pin-callout__thumbnail"><img src="/api/files/' + esc(img.fileId) + '?thumb=1" alt=""></figure>'
+      ? '<figure class="pin-callout__thumbnail"><img src="/api/files/' + esc(img.fileId) + '/preview" alt=""></figure>'
       : '';
     if (!thumbHtml) callout.classList.add('pin-callout--no-thumbnail');
 
@@ -861,7 +861,7 @@
   }
   function _imageUrl(image) {
     if (image.previewUrl) return image.previewUrl;
-    if (image.fileId) return '/api/files/' + encodeURIComponent(image.fileId) + '?thumb=1';
+    if (image.fileId) return '/api/files/' + encodeURIComponent(image.fileId) + '/preview';
     if (image.data) return image.data; // legacy base64
     return '';
   }
