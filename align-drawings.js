@@ -946,13 +946,17 @@
     if (!container) return;
 
     state.container = container;
-    state.projectId = null;
-    state.drawingsFolderId = null;
-    state.showAddModal = false;
-    state.pendingFiles = [];
-    state.uploadName = '';
-    state.uploadError = null;
-    state.pdfSplitInfo = null;
+    
+    // Don't reset state if we're in the middle of uploading or showing a modal
+    if (!state.uploading && !state.showAddModal) {
+      state.projectId = null;
+      state.drawingsFolderId = null;
+      state.pendingFiles = [];
+      state.uploadName = '';
+      state.uploadError = null;
+      state.pdfSplitInfo = null;
+    }
+    
     state.selectMode = false;
     state.selectedIds = {};
     state.drawingType = '';
