@@ -769,6 +769,10 @@
       if (folderId) fd.append('folder_id', folderId);
 
       var token = localStorage.getItem('align-token') || '';
+      if (!token) {
+        return reject(new Error('No auth token found. Please sign in again.'));
+      }
+      
       fetch('/api/files/upload', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + token },
@@ -778,7 +782,10 @@
         return r.json();
       }).then(function (data) {
         resolve(data.file || { id: drawingId });
-      }).catch(reject);
+      }).catch(function (err) {
+        console.error('[DRAWINGS] Upload error:', err);
+        reject(err);
+      });
     });
   }
 
