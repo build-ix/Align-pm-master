@@ -70,12 +70,33 @@
     }
     var el = document.documentElement;
     if (el) el.setAttribute('data-theme', resolved);
+    
     // Keep the native iOS status bar (text + background) in sync with the theme.
     try {
       if (global.AlignNative && global.AlignNative.setStatusBar) {
         global.AlignNative.setStatusBar(resolved === 'dark');
       }
     } catch (e) { /* status bar plugin unavailable on web */ }
+    
+    // Sync Capacitor status bar for iOS
+    if (global.Capacitor && global.Capacitor.isNativePlatform && global.Capacitor.isNativePlatform()) {
+      try {
+        var CapacitorPlugins = global.CapacitorPlugins || global.Capacitor.Plugins || {};
+        if (CapacitorPlugins.StatusBar) {
+          var StatusBar = CapacitorPlugins.StatusBar;
+          var Style = global.Capacitor.Plugins.StatusBar.Style || { Dark: 'DARK', Light: 'LIGHT' };
+          StatusBar.setStyle({ style: resolved === 'dark' ? Style.Dark : Style.Light });
+          StatusBar.setOverlaysWebView({ overlay: true });
+        }
+      } catch (e) { /* Capacitor not available */ }
+    }
+    
+    // Update theme-color meta for web fallback
+    try {
+      var bgColor = resolved === 'dark' ? '#0a0a12' : '#f5f5f5';
+      var meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) meta.setAttribute('content', bgColor);
+    } catch (e) { /* theme-color meta not found */ }
   }
 
   /* ════════════════════════════════════════════════════════════════════════════

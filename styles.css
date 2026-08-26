@@ -45,7 +45,27 @@ html[data-theme="dark"] body.ps-open #section-page {
 
 /* ── RESET ─────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html { font-size: 16px; -webkit-text-size-adjust: 100%; scrollbar-gutter: stable; background: var(--bg); overscroll-behavior-y: none; }
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  scrollbar-gutter: stable;
+  background: var(--bg);
+  overscroll-behavior-y: none;
+  height: 100%;
+  background-color: #0a0a12;
+}
+html[data-theme="light"] {
+  background-color: #f5f5f5;
+}
+body {
+  min-height: 100%;
+  min-height: 100dvh;
+  margin: 0;
+  background-color: #0a0a12;
+}
+html[data-theme="light"] body {
+  background-color: #f5f5f5;
+}
 html, body {
   max-width: 100%;
   overflow-x: hidden;
@@ -111,7 +131,13 @@ html[data-theme="dark"] .logo-dark { display: block; }
 #project-name { display: inline-block; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
 
 /* ── DASHBOARD ─────────────────────────────────────────────────────────── */
-.dashboard { margin: 0 0 12px; }
+.dashboard {
+  margin: 0 0 12px;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
 .dash-date-row { display: flex; justify-content: space-between; align-items: center; min-height: 28px; }
 .dash-date-day { font-size: 1.4rem; font-weight: 700; }
 .dash-date-full { font-size: 0.85rem; color: var(--muted); margin-left: 8px; }
@@ -556,7 +582,7 @@ html[data-theme="dark"] .logo-dark { display: block; }
   overflow-x: hidden;
   background: var(--bg);
   z-index: 50;
-  padding: 0 16px 32px;
+  padding: env(safe-area-inset-top, 0px) calc(16px + env(safe-area-inset-right, 0px)) calc(32px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px));
   -webkit-overflow-scrolling: touch;
 }
 .section-page-header {
