@@ -781,6 +781,7 @@
         if (!r.ok) return r.json().then(function (d) { reject(new Error(d.error || 'Upload failed')); });
         return r.json();
       }).then(function (data) {
+        console.log('[DRAWINGS] Upload success:', data);
         resolve(data.file || { id: drawingId });
       }).catch(function (err) {
         console.error('[DRAWINGS] Upload error:', err);
@@ -877,6 +878,7 @@
    * Returns: Promise<array of saved drawing entries>
    */
   function addDrawing(fileOrArray, dataUrl, customName) {
+    console.log('[DRAWINGS] addDrawing called with', Array.isArray(fileOrArray) ? fileOrArray.length + ' items' : '1 file');
     var pid = _resolveProjectId();
     if (!pid) {
       var allProjects = Storage() ? Storage().listProjects() : [];
@@ -3868,6 +3870,7 @@
    * Reads them all, then checks for multi-page PDFs.
    */
   function _handleFilesSelected(fileList) {
+    console.log('[DRAWINGS] Files selected:', fileList.length, 'files');
     var files = [];
     for (var i = 0; i < fileList.length; i++) files.push(fileList[i]);
 
