@@ -1300,6 +1300,10 @@
     // Navigate to project selection page — set hash BEFORE firing auth change
     // to avoid flashing the dashboard between overlay removal and navigation.
     authInstance.removeAuthOverlay();
+    // Clear any stale hash from browser history before navigating
+    if (location.hash && location.hash !== '#project-select') {
+      history.replaceState(null, null, window.location.pathname);
+    }
     var _go = function() {
       if (location.hash === '#project-select') {
         window.dispatchEvent(new HashChangeEvent('hashchange'));
