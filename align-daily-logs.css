@@ -860,22 +860,24 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 14px 16px;
-  background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  padding: 14px 0;
+  background: transparent;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  transition: opacity 0.15s;
   cursor: pointer;
 }
 
+.dlog-card:first-child {
+  border-top: none;
+}
+
 .dlog-card:hover {
-  border-color: var(--brand-light);
-  box-shadow: var(--shadow-xs);
+  opacity: 0.85;
 }
 
 .dlog-card-current {
-  border-color: var(--brand-light);
-  border-left: 3px solid var(--brand);
+  border-left: none;
 }
 
 .dlog-card-old {
